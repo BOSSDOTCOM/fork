@@ -23,6 +23,9 @@ if [ -z "$py" ]; then
   done
 fi
 [ -n "$py" ] || { echo "test_spsa_shard.sh: no python found" >&2; exit 1; }
+# $here and $tmp in the form $py takes (DESIGN.md section 1, one path helper): Python calls below get them.
+. "$here/../jobs/paths.sh" || exit 1
+here=$(fork_path_for "$py" "$here") && tmp=$(fork_path_for "$py" "$tmp") || exit 1
 
 # Fake fastchess: its arguments go to $FAKE_DIR/args.<start line>; it plays -rounds pairs, plus winning game
 # one and drawing game two. FAKE_FC=crash (exit 139 at line $FAKE_LINE), short (one game fewer at that
@@ -95,10 +98,10 @@ for rec in r['records']:
         assert abs((p + m) / 2 - theta) <= 0.5 and abs(p - m - 2 * c * s) <= 1, (n, theta, c, p, m)
     assert (rec['plus'], rec['minus']) == (plus, minus)
 EOF
-check "each call: -rounds 1 -repeat, Syzygy, Hash, one thread, -concurrency 1" bash -c "
+check "each call: -rounds 1 -repeat, Syzygy, Hash, one thread, CalibratedScore off, -concurrency 1" bash -c "
   a='$tmp/one.args/args.2000005'
   grep -qx -- -repeat \$a && grep -A1 -x -- -rounds \$a | grep -qx 1 && grep -qx 'option.SyzygyPath=.*' \$a &&
-  grep -qx option.Hash=16 \$a && grep -qx option.Threads=1 \$a && grep -A1 -x -- -concurrency \$a | grep -qx 1"
+  grep -qx option.Hash=16 \$a && grep -qx option.Threads=1 \$a && grep -qx option.CalibratedScore=false \$a && grep -A1 -x -- -concurrency \$a | grep -qx 1"
 check "pentanomial for plus: a win and a draw per pair" test "$(field one "r['ptnml']")" = "[0, 0, 0, 3, 0]"
 check "the driver's own check accepts the shard (a one-shard run)" "$py" -I -B - "$here" "$tmp/one/result.json" "$params" <<'EOF'
 import sys, json

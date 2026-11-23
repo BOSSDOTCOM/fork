@@ -1,0 +1,18 @@
+{
+ "dump": "g4s2val-bl.dump",
+ "positions": 103254,
+ "checks": {
+  "checked": 2066,
+  "xl_mismatch": 0,
+  "xx_mismatch": 0,
+  "pin_mismatch": 0,
+  "disc_mismatch": 0,
+  "pinq_mismatch": 0,
+  "loose_mismatch": 0,
+  "under_mismatch": 0,
+  "pins_seen": 366,
+  "disc_seen": 60,
+  "pinq_seen": 65
+ },
+ "seconds": 14
+}

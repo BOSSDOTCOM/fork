@@ -1,0 +1,139 @@
+{
+ "run": "ld-d20",
+ "generator": {
+  "tool": "fork_datagen (complete games of the label-depth arm ld-d20, labelled by Fork 0.3.0-dev+a4ee674 (s512ppr3), on 3 threads beside the other two arms (layout A), 2 segment(s): segment 1 (seed 2026110900) 2026-11-10 07:31:28 AM EST to 2026-11-10 12:46:24 PM EST; segment 2 (seed 2026110901) 2026-11-10 02:55:03 PM EST to 2026-11-12 01:40:11 AM EST; the last worker of segment 1 split into a held-out file and the rest)",
+  "version": "0.3.0-dev+a4ee674 (WSL clang PGO, clang 21.1.8)",
+  "evaluator": "nnue (s512ppr3)",
+  "arch": "native"
+ },
+ "settings": {
+  "openings": "lichess-2026-09.epd",
+  "openings_count": 13943421,
+  "positions_target": 999000000,
+  "nodes": 20000,
+  "threads": 3,
+  "seed": 2026110900,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 50,
+  "unsaved_nodes": 4000,
+  "check_nodes": 2000,
+  "wall_limit_seconds": 144000,
+  "openings_note": "each segment read a 2.5 M-line file (ld_book.py) giving every game the opening the full lichess-2026-09.epd gives it for that segment's seed",
+  "segments": [
+   {
+    "segment": 1,
+    "run": "ld-d20",
+    "seed": 2026110900,
+    "openings_file": "lichess-2026-09-s2026110900-k2500000.epd",
+    "started": "2026-11-10 07:31:28 AM EST",
+    "stopped": "2026-11-10 12:46:24 PM EST",
+    "seconds": 18896.0,
+    "games": 119282,
+    "positions": 11337168,
+    "unsaved": 5176001,
+    "kept": 3996850,
+    "games_repeating_an_earlier_segment": 0
+   },
+   {
+    "segment": 2,
+    "run": "ld2-d20",
+    "seed": 2026110901,
+    "openings_file": "lichess-2026-09-s2026110901-k2500000.epd",
+    "started": "2026-11-10 02:55:03 PM EST",
+    "stopped": "2026-11-12 01:40:11 AM EST",
+    "seconds": 125108.0,
+    "games": 982376,
+    "positions": 93282045,
+    "unsaved": 42574971,
+    "kept": 32896602,
+    "games_repeating_an_earlier_segment": 0
+   }
+  ]
+ },
+ "openings": {
+  "file": "lichess-2026-09.epd",
+  "sha256": "dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef",
+  "positions": 13943421,
+  "source": "lichess_db_standard_rated_2026-09.pgn.zst",
+  "source_sha256": "1de8eb64fed443f4be310c779e8d60a13bcfc6e3b104bcb39a018eb056edec89"
+ },
+ "games": 1101658,
+ "positions": 104619213,
+ "seconds": 144004.0,
+ "results": {
+  "white": 452830,
+  "draw": 216887,
+  "black": 431941
+ },
+ "ends": "not counted (the run was stopped, not finished)",
+ "part_end": "stopped at the label-depth experiment's 40-hour limit (144004 s of wall time in all; layout A, owner-approved 2026-11-09; docs/research/label-depth/); the arm ld-d20: segment 1 (seed 2026110900) 2026-11-10 07:31:28 AM EST to 2026-11-10 12:46:24 PM EST; segment 2 (seed 2026110901) 2026-11-10 02:55:03 PM EST to 2026-11-12 01:40:11 AM EST, saved searches at 20000 nodes with Hash 1 MB, on 3 threads; every game verified (tools/datagen/verify_games.py with its manifest)",
+ "batches": [
+  [
+   {
+    "file": "ld-d20-s2-w00.vf",
+    "worker": 0,
+    "games": 327658,
+    "positions": 31111178,
+    "bytes": 136240400,
+    "sha256": "5cc67b7de7dfa35b83929648887e60860dadaa8e66298aee5defc521a8820c05"
+   },
+   {
+    "file": "ld-d20-s2-w01.vf",
+    "worker": 1,
+    "games": 327966,
+    "positions": 31140792,
+    "bytes": 136369944,
+    "sha256": "e2ef63dc79e463001b1a54499b991dd1ee7a0483e1eeb0c10c6815ca2a8b4858"
+   },
+   {
+    "file": "ld-d20-s2-w02.vf",
+    "worker": 2,
+    "games": 326752,
+    "positions": 31030075,
+    "bytes": 135883372,
+    "sha256": "459e26a48256cb8d87dcf2f2915379a63a49e9715c9934f2120b41ff91581f51"
+   },
+   {
+    "file": "ld-d20-w00.vf",
+    "worker": 0,
+    "games": 39807,
+    "positions": 3786956,
+    "bytes": 16580876,
+    "sha256": "455e4975a860086043bccda5a133d98a1fdb72b57484763a703a665b1c694713"
+   },
+   {
+    "file": "ld-d20-w01.vf",
+    "worker": 1,
+    "games": 39237,
+    "positions": 3734870,
+    "bytes": 16352012,
+    "sha256": "ce5988e8c28aef3b36acef34ccdb20d58219ad429a35f83b116e66d09d67871e"
+   },
+   {
+    "file": "ld-d20-w02-val.vf",
+    "worker": 2,
+    "games": 746,
+    "positions": 71339,
+    "bytes": 312212,
+    "sha256": "fd2fd483fdd642d9fcc37b25a3946fc5e016417b25c398cc3e588e62d678d1ad"
+   },
+   {
+    "file": "ld-d20-w02.vf",
+    "worker": 2,
+    "games": 39492,
+    "positions": 3744003,
+    "bytes": 16397724,
+    "sha256": "bc8aaf4708dfb30eb30b848ca0f65e35da7101a4cdff9177941bfa240708408f"
+   }
+  ]
+ ],
+ "positions_unsaved": 47750972
+}

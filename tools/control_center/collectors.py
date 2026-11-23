@@ -6,6 +6,7 @@ the WSL probe). The data-generation tab's numbers come from generation_control.p
 collect() returns one snapshot dict per poll; GitHub and Kaggle are asked at most every github_seconds and
 kaggle_seconds, and the large docs are parsed again only when their file changes.
 """
+import calendar
 import glob
 import importlib.util
 import json
@@ -217,7 +218,10 @@ class Collector:
             row = P.ordo(read_text(d / 'ordo.txt') or '')
             run = int(d.name.split('-')[1]) if d.name.split('-')[1].isdigit() else None
             if row and run not in known:
-                gauntlets.append({'date': time.strftime('%Y-%m-%d', time.localtime(d.stat().st_mtime)),
+                # The run's own time from tools/gauntlet/archive.sh's meta.txt, else the folder's.
+                created = re.search(r'^created_at\t(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)\r?$', read_text(d / 'meta.txt') or '', re.M)
+                when = calendar.timegm(time.strptime(created[1], '%Y-%m-%dT%H:%M:%SZ')) if created else d.stat().st_mtime
+                gauntlets.append({'date': time.strftime('%Y-%m-%d', time.localtime(when)),
                                   'rating': row['rating'], 'error': row['error'] or 0,
                                   'title': f'{d.name} (local Ordo table)', 'run': run})
         gauntlets.sort(key=lambda g: g['date'])

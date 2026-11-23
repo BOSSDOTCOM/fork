@@ -125,7 +125,7 @@ def main(argv=None):
         cmd = command(a.fastchess) + [
             '-engine', f'cmd={engine}', 'name=plus', *[f'option.{n}={v}' for n, v in zip(names, plus)], *fixed_opts,
             '-engine', f'cmd={engine}', 'name=minus', *[f'option.{n}={v}' for n, v in zip(names, minus)], *fixed_opts,
-            '-each', f'tc={a.tc}', f'option.Hash={a.hash}', 'option.Threads=1', *each_tb,
+            '-each', f'tc={a.tc}', f'option.Hash={a.hash}', 'option.Threads=1', 'option.CalibratedScore=false', *each_tb,
             '-openings', f'file={book}', 'format=epd', 'order=sequential', f'start={line}',
             '-repeat', '-rounds', str(k), '-concurrency', '1',
             '-resign', 'movecount=5', 'score=1000', 'twosided=true', '-draw', 'movenumber=40', 'movecount=10',

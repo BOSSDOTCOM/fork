@@ -26,11 +26,26 @@ which is a_n * g_i with g_i = r_j signs_ij / (2 c_ik), the simultaneous-perturba
 of a_n c_i^2 (B7: the tuner works in units of c). With c fixed (c_decay 0, as B7 simulated) it is
     x_i += a_n r_j signs_ij / 2,  x_i = theta_i / c_i.
 
+The screen (spec "mode": "screen"; design S1 of docs/research/final-retune-expansion-2026-11-15.md §2.1, the
+owner's approval of 2026-11-22): a zero-gain SPSA, the random-balance fold-over screen. The draws, shards,
+checks and driver are the tune's, but every pair plays theta + c_screen*signs against theta - c_screen*signs
+with theta held at the commit's defaults and never updated, each c_screen = min(2c, the distance from the
+default to the nearer bound). It decides which constants enter a tuning group, never a value. Over all its
+pairs (N of them, r_j the pair's score for theta+ minus 1/2, s_ij its signs):
+    D_i = mean_j(r_j s_ij) / k,   SE_i = sd_j(r_j s_ij) / (k sqrt(N)),   z_i = D_i / SE_i
+D_i the secant E(theta + c_screen) - E(theta - c_screen) in Elo (k = ln 10 / 1600, the score per Elo at
+equality), reported also in c-units (times c / c_screen, exact for a quadratic Elo); z is the same in both.
+The decision map (§2.1): |z| >= 2 important (joins its group); 1 <= |z| < 2 ambiguous (joins if it is a
+never-measured placeholder or its group is under 6 parameters, else frozen); |z| < 1 flat (frozen, logged
+"screened flat" with D +- SE).
+
     spsa.py init NAME --spec FILE --commit SHA [--calibration FILE]
     spsa.py dispatch NAME          the inputs of the next run (key=value lines); writes i<stage>/dispatch.json
     spsa.py step NAME --stage D [--meta wall_minutes=M]
                                    verifies stage D's downloaded results and applies its update
-    spsa.py report NAME            every trajectory and the final values; writes final.json
+    spsa.py report NAME            every trajectory and the final values, flagging step-limited parameters
+                                   and parameters pinned at a bound; writes final.json (a screen: each
+                                   parameter's D +- SE, z and verdict, and the groups)
     spsa.py rewind NAME --to K     back to theta after iteration K (-1: the start); abandons a pending stage
     spsa.py merge FILE... [--json OUT]   a run's shard results summed (the workflow's summary)
 
@@ -54,7 +69,15 @@ SCORE_PER_ELO = math.log(10) / 1600
 # it can never be passed; if it ever becomes one, it belongs here too.
 EXCLUDED_PARAMS = frozenset({'IterationGrowthThirds', 'ForcedMoveFraction', 'AssumedMovesLeft', 'MaxMovesToGo',
                              'HardOverSoft', 'ReserveDivisor', 'DangerZoneOverheads'})
+# The screen (design S1, final-retune-expansion-2026-11-15.md §2.1): c_screen = min(SCREEN_C_FACTOR * c, room);
+# the decision map's z bars and its group-size rule; a screen has no gain, so the gain's keys are refused.
+SCREEN_C_FACTOR = 2
+SCREEN_IMPORTANT_Z = 2.0
+SCREEN_FLAT_Z = 1.0
+SCREEN_SMALL_GROUP = 6
+GAIN_KEYS = ('loss_budget', 'gain_exponent', 'stability_offset', 'clamp_c', 'c_decay', 'average_tail')
 _NAME = re.compile(r'^[A-Za-z][A-Za-z0-9_]*$')
+_SWITCH_ROW = re.compile(r'^\s*X\((\w+),\s*(\w+),\s*(true|false)\)')
 _VALUE = re.compile(r'^[A-Za-z0-9.+-]+$')
 _LABEL = re.compile(r'^spsa-[a-z0-9][a-z0-9.-]*$')
 _TABLE_ROW = re.compile(r'^\s*X\((\w+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\)')
@@ -150,8 +173,14 @@ def gain_at(spec, n):
     return spec['gain_end'] * ((big_a + big_n) / (big_a + n + 1)) ** spec['gain_exponent']
 
 
+def is_screen(spec):
+    return spec.get('mode', 'tune') == 'screen'
+
+
 def c_at(spec, iteration):
-    """c_k = c / (k + 1)^gamma per parameter (Spall 1998; c_decay 0 holds c fixed)."""
+    """c_k = c / (k + 1)^gamma per parameter (Spall 1998; c_decay 0 holds c fixed); a screen's c_screen."""
+    if is_screen(spec):
+        return {p['name']: p['c_screen'] for p in spec['params']}
     return {p['name']: p['c'] / (iteration + 1) ** spec['c_decay'] for p in spec['params']}
 
 
@@ -166,7 +195,10 @@ def pair_scores(ptnml):
 def iteration_step(spec, theta, iteration, records, first_pair):
     """The update of one iteration from its draws, in order: {'theta_after', 'grad_sum', 'z', 'step_raw',
     'step', 'clamped', 'gain_first', 'gain_last', 'pairs'}. Each record has 'signs' ('+-' string, one per
-    tuned parameter in spec order) and 'ptnml' (its pairs, scored for theta+)."""
+    tuned parameter in spec order) and 'ptnml' (its pairs, scored for theta+). A screen never updates
+    (screen_step)."""
+    if is_screen(spec):
+        return screen_step(spec, theta, records, first_pair)
     names = [p['name'] for p in spec['params']]
     c_now, c_next = c_at(spec, iteration), c_at(spec, iteration + 1)
     base_c = {p['name']: p['c'] for p in spec['params']}
@@ -202,6 +234,106 @@ def iteration_step(spec, theta, iteration, records, first_pair):
     return out
 
 
+# ------------------------------------------------------------------ the screen (design S1)
+
+def screen_c(c, start, lowest, highest):
+    """c_screen by design S1's rule: twice c, or the distance from the start to the nearer bound if less."""
+    return min(SCREEN_C_FACTOR * c, start - lowest, highest - start)
+
+
+def screen_step(spec, theta, records, first_pair):
+    """A screen iteration: the sums of iteration_step without an update. theta_after is theta (the defaults),
+    every step 0, nothing clamped; grad_sum (sum of r_j s_ij), z (per iteration, as the tune logs it) and the
+    pairs are what screen_estimates pools."""
+    names = [p['name'] for p in spec['params']]
+    grad = dict.fromkeys(names, 0.0)
+    squares, pairs = 0.0, 0
+    for rec in records:
+        count, total, sq = pair_scores(rec['ptnml'])
+        count = int(round(count))  # the tests give expected scores as fractional counts
+        if count == 0:
+            continue
+        pairs += count
+        squares += sq
+        for name, s in zip(names, rec['signs']):
+            grad[name] += total * (1 if s == '+' else -1)
+    zero = dict.fromkeys(names, 0.0)
+    return {'pairs': pairs, 'grad_sum': grad, 'step_raw': dict(zero), 'step': dict(zero), 'clamped': [],
+            'theta_after': {n: theta[n] for n in names}, 'gain_first': 0.0, 'gain_last': 0.0,
+            'z': {k: (v / math.sqrt(squares) if squares > 0 else 0.0) for k, v in grad.items()}}
+
+
+def screen_estimates(spec, hist):
+    """Each parameter's slope over every applied iteration of a screen (theta never moves, so they pool):
+    {name: {'d': D at c_screen in Elo, 'se': its SE, 'd_c' and 'se_c': the same in c-units (times c / c_screen),
+    'z', 'planned_se_c': the SE the spec's pair_sd gives for all its pairs, in c-units}}. With N pairs, x_ij =
+    r_j s_ij: D = mean(x) / k and SE = sd(x) / (k sqrt N), sd with N - 1 (sum x^2 = sum r^2, as s^2 = 1)."""
+    big_n = sum(h['pairs'] for h in hist)
+    ptnml = [sum(h['ptnml'][i] for h in hist) for i in range(5)]
+    squares = pair_scores(ptnml)[2]
+    out = {}
+    for p in spec['params']:
+        name = p['name']
+        grad = sum(h['grad_sum'][name] for h in hist)
+        mean = grad / big_n if big_n else 0.0
+        var = (squares - big_n * mean ** 2) / (big_n - 1) if big_n > 1 else 0.0
+        d = mean / SCORE_PER_ELO
+        se = math.sqrt(max(var, 0.0) / big_n) / SCORE_PER_ELO if big_n else 0.0
+        scale = p['c'] / p['c_screen']
+        out[name] = {'d': d, 'se': se, 'd_c': d * scale, 'se_c': se * scale, 'z': d / se if se > 0 else 0.0,
+                     'planned_se_c': spec['pair_sd'] / (SCORE_PER_ELO * math.sqrt(spec['total_pairs'])) * scale}
+    return out
+
+
+def screen_verdicts(spec, z):
+    """Design S1's decision map over {name: z}: ({name: (class, joins, why)}, {group: [names joining]}).
+    |z| >= SCREEN_IMPORTANT_Z important (joins); SCREEN_FLAT_Z <= |z| < SCREEN_IMPORTANT_Z ambiguous: joins if
+    the spec marks it a never-measured placeholder, or if its group is under SCREEN_SMALL_GROUP parameters;
+    else frozen; below SCREEN_FLAT_Z flat (frozen, "screened flat"). A group's size for the ambiguous rule is
+    what joins it on its own (its important members and its ambiguous placeholders), counted before any
+    other ambiguous member is added, so the verdicts do not depend on the parameters' order."""
+    klass = {}
+    for p in spec['params']:
+        a = abs(z[p['name']])
+        klass[p['name']] = ('important' if a >= SCREEN_IMPORTANT_Z else 'ambiguous' if a >= SCREEN_FLAT_Z
+                            else 'flat')
+    own = {}
+    for p in spec['params']:
+        own.setdefault(p['group'], 0)
+        if klass[p['name']] == 'important' or (klass[p['name']] == 'ambiguous' and p['placeholder']):
+            own[p['group']] += 1
+    verdicts, groups = {}, {}
+    for p in spec['params']:
+        name, group, k = p['name'], p['group'], klass[p['name']]
+        groups.setdefault(group, [])
+        if k == 'important':
+            v = (k, True, f'joins {group}')
+        elif k == 'ambiguous' and p['placeholder']:
+            v = (k, True, f'joins {group} (a never-measured placeholder)')
+        elif k == 'ambiguous' and own[group] < SCREEN_SMALL_GROUP:
+            v = (k, True, f'joins {group} (its group has {own[group]} without it, under {SCREEN_SMALL_GROUP})')
+        elif k == 'ambiguous':
+            v = (k, False, f'frozen (its group has {own[group]}, not under {SCREEN_SMALL_GROUP})')
+        else:
+            v = (k, False, 'frozen: screened flat')
+        verdicts[name] = v
+        if v[1]:
+            groups[group].append(name)
+    return verdicts, groups
+
+
+def switches_from_header(text):
+    """{option name: default} from src/search/searcher.hpp's FORK_SEARCH_SWITCHES."""
+    rows = {}
+    for line in text.splitlines():
+        m = _SWITCH_ROW.match(line)
+        if m:
+            rows[m.group(2)] = m.group(3) == 'true'
+    if not rows:
+        raise Refused('no FORK_SEARCH_SWITCHES rows in the header')
+    return rows
+
+
 def final_theta(history, tail):
     """The mean of theta over the last ceil(tail * updates) updates (B7 O2 rule 9)."""
     if not history:
@@ -215,6 +347,41 @@ def step_limited(clamp_counts, updates):
     them, not noise-limited."""
     need = math.ceil(2 * updates / 3)
     return sorted(k for k, v in clamp_counts.items() if updates and v >= need)
+
+
+# A theta is at a bound when it lies within this fraction of c of its reachable floor or ceiling. The clamp in
+# iteration_step puts theta exactly on the bound (up to the log's 3-decimal rounding), so any tolerance
+# above that rounding detects a pin; a hundredth of c (at least 0.01, as c >= 1) is one.
+PIN_TOLERANCE_C = 0.01
+
+
+def pinned_at_bound(spec, hist):
+    """Parameters pinned at a bound (final-retune.md §3.3, owner 2026-11-09): theta_after at the reachable
+    floor lowest + c or ceiling highest - c (c of the next iteration, as iteration_step clamps it; within
+    PIN_TOLERANCE_C * c) in at least a third of the updates, or in the last one. The floor or ceiling binds
+    there, not the gradient's noise, so the range hides where the parameter would go; the "step-limited" flag
+    (clamped steps) does not see this. [(name, 'floor' or 'ceiling', bound, updates at it, at the last), ...]
+    in spec order; a parameter at both bounds in different updates is listed for each."""
+    if not hist:
+        return []
+    need = math.ceil(len(hist) / 3)
+    out = []
+    for p in spec['params']:
+        name = p['name']
+        counts, last = {'floor': 0, 'ceiling': 0}, None
+        for h in hist:
+            c_next = c_at(spec, h['iteration'] + 1)[name]
+            theta, tol = h['theta_after'][name], PIN_TOLERANCE_C * c_next
+            side = ('floor' if theta <= p['lowest'] + c_next + tol
+                    else 'ceiling' if theta >= p['highest'] - c_next - tol else None)
+            if side:
+                counts[side] += 1
+            last = side
+        c_end = c_at(spec, hist[-1]['iteration'] + 1)[name]
+        for side, bound in (('floor', p['lowest'] + c_end), ('ceiling', p['highest'] - c_end)):
+            if counts[side] >= need or last == side:
+                out.append((name, side, round(bound, 3), counts[side], last == side))
+    return out
 
 
 # ------------------------------------------------------------------ the spec
@@ -232,14 +399,28 @@ def table_from_header(text):
 
 
 def resolve_spec(raw, table, label, commit):
-    """The spec as the run uses it: every parameter with start, c and bounds, the derived gain, checked."""
+    """The spec as the run uses it: every parameter with start, c and bounds, the derived gain, checked. A
+    screen ("mode": "screen") has no gain keys; each parameter plays at the table's default within the table's
+    range, with c (the tuning c: the report's unit), c_screen (by default screen_c's rule; at least 1 and at
+    most the room to either bound), its group, whether it is a never-measured placeholder, and its switch
+    (checked default-on at the commit by init)."""
     if not _LABEL.match(label):
         raise Refused(f'name {label!r} must match spsa-[a-z0-9][a-z0-9.-]*')
     if not re.fullmatch(r'[0-9a-f]{40}', commit):
         raise Refused('commit must be a full 40-hex SHA')
-    spec = {k: raw[k] for k in ('iterations', 'games', 'shards', 'draw_pairs', 'tc', 'hash', 'loss_budget',
-                                'pair_sd', 'gain_exponent', 'stability_offset', 'clamp_c', 'c_decay',
-                                'average_tail', 'opening_reserve')}
+    mode = raw.get('mode', 'tune')
+    if mode not in ('tune', 'screen'):
+        raise Refused(f'mode must be tune or screen, not {mode!r}')
+    screen = mode == 'screen'
+    keys = ['iterations', 'games', 'shards', 'draw_pairs', 'tc', 'hash', 'loss_budget', 'pair_sd', 'gain_exponent',
+            'stability_offset', 'clamp_c', 'c_decay', 'average_tail', 'opening_reserve']
+    if screen:
+        if any(k in raw for k in GAIN_KEYS):
+            raise Refused(f'a screen has no gain: drop {", ".join(k for k in GAIN_KEYS if k in raw)}')
+        keys = [k for k in keys if k not in GAIN_KEYS]
+    spec = {k: raw[k] for k in keys}
+    if screen:
+        spec['mode'] = 'screen'
     spec.update(label=label, commit=commit, fixed=dict(raw.get('fixed', {})), params=[])
     for k in ('iterations', 'games', 'shards', 'draw_pairs', 'hash', 'opening_reserve'):
         if not isinstance(spec[k], int) or spec[k] < 1:
@@ -261,13 +442,29 @@ def resolve_spec(raw, table, label, commit):
         if any(q['name'] == name for q in spec['params']) or name in spec['fixed']:
             raise Refused(f'{name} is listed twice')
         default, lowest, highest, _ = table[name]
+        if screen and any(k in p for k in ('start', 'lowest', 'highest')):
+            raise Refused(f'{name}: a screen plays the commit\'s default within the table\'s range (no start, '
+                          'lowest or highest)')
         q = {'name': name, 'start': float(p.get('start', default)), 'c': float(p['c']),
              'lowest': int(p.get('lowest', lowest)), 'highest': int(p.get('highest', highest))}
         if q['lowest'] < lowest or q['highest'] > highest or q['lowest'] >= q['highest']:
             raise Refused(f'{name}: bounds {q["lowest"]}-{q["highest"]} not inside the table\'s {lowest}-{highest}')
         if q['c'] < 1:
             raise Refused(f'{name}: c {q["c"]} is below 1 (integer resolution)')
-        if not q['lowest'] + q['c'] <= q['start'] <= q['highest'] - q['c']:
+        if screen:
+            room = min(q['start'] - q['lowest'], q['highest'] - q['start'])
+            q['c_screen'] = float(p.get('c_screen', screen_c(q['c'], q['start'], q['lowest'], q['highest'])))
+            if not 1 <= q['c_screen'] <= room:
+                raise Refused(f'{name}: c_screen {q["c_screen"]:g} must be at least 1 and at most the room to its '
+                              f'bounds, {room:g}')
+            if not isinstance(p.get('group'), str) or not _NAME.match(p['group']):
+                raise Refused(f'{name}: a screen parameter needs its group (a name)')
+            if not isinstance(p.get('placeholder'), bool):
+                raise Refused(f'{name}: a screen parameter needs placeholder (true or false)')
+            if not isinstance(p.get('switch'), str) or not _NAME.match(p['switch']):
+                raise Refused(f'{name}: a screen parameter needs its switch (the option name)')
+            q.update(group=p['group'], placeholder=p['placeholder'], switch=p['switch'])
+        elif not q['lowest'] + q['c'] <= q['start'] <= q['highest'] - q['c']:
             raise Refused(f'{name}: start {q["start"]} must lie at least c = {q["c"]} inside its bounds')
         spec['params'].append(q)
     if not spec['params']:
@@ -275,12 +472,16 @@ def resolve_spec(raw, table, label, commit):
     pairs = shard_plan(spec['games'], spec['shards'], spec['draw_pairs']) * spec['shards']
     spec['total_pairs'] = pairs * spec['iterations']
     # Spall 1998, Sec. III-B: A is much less than the number of iterations, often 10% of it or less.
-    if not 0 <= spec['stability_offset'] <= 0.1 * spec['total_pairs']:
+    if not screen and not 0 <= spec['stability_offset'] <= 0.1 * spec['total_pairs']:
         raise Refused('stability_offset must be at most 10% of the total pairs (Spall 1998, Sec. III-B)')
     # The tuning reserve: lines 2,000,001 to 2,632,036 (the end) of the shuffled UHO book, which no SPRT
     # reaches (an SPRT stage plays from line 1; tools/cloud/run_shard.sh).
     if spec['opening_reserve'] < 2000001 or spec['opening_reserve'] + spec['total_pairs'] - 1 > 2632036:
         raise Refused('the openings must lie in the tuning reserve, lines 2,000,001-2,632,036')
+    if screen:
+        if not isinstance(spec['pair_sd'], (int, float)) or not spec['pair_sd'] > 0:
+            raise Refused('pair_sd must be positive')
+        return spec
     spec['gain_end'] = gain_end(spec)
     return spec
 
@@ -357,6 +558,16 @@ def cmd_init(a):
     if header.returncode:
         raise Refused(f'cannot read src/tune/params.hpp at {a.commit}: {header.stderr.strip()}')
     spec = resolve_spec(read_json(a.spec), table_from_header(header.stdout), a.name, a.commit)
+    if is_screen(spec):
+        hpp = subprocess.run(['git', 'show', f'{a.commit}:src/search/searcher.hpp'], capture_output=True, text=True,
+                             cwd=Path(__file__).resolve().parents[2])
+        if hpp.returncode:
+            raise Refused(f'cannot read src/search/searcher.hpp at {a.commit}: {hpp.stderr.strip()}')
+        switches = switches_from_header(hpp.stdout)
+        off = [f'{p["name"]} ({p["switch"]})' for p in spec['params'] if not switches.get(p['switch'])]
+        if off:
+            raise Refused(f'not a default-on switch at {a.commit}: {", ".join(off)} (a screened parameter\'s '
+                          'feature must be on)')
     if a.calibration:
         spec['calibration_sha256'] = hashlib.sha256(Path(a.calibration).read_bytes()).hexdigest()
     if (folder / 'spec.json').exists():
@@ -371,8 +582,9 @@ def cmd_init(a):
     save_state(a.name, {'iteration': 0, 'stage': 0, 'pairs_done': 0, 'opening_cursor': spec['opening_reserve'],
                         'theta': {p['name']: p['start'] for p in spec['params']}, 'burned': [], 'done': False,
                         'spec_sha256': spec_digest(spec)})
+    gain = 'a screen (theta fixed, no gain)' if is_screen(spec) else f'gain_end {spec["gain_end"]:.5f}'
     print(f'{a.name}: initialised, {len(spec["params"])} parameters, {spec["iterations"]} iterations, '
-          f'{spec["total_pairs"]} pairs, gain_end {spec["gain_end"]:.5f}')
+          f'{spec["total_pairs"]} pairs, {gain}')
     return 0
 
 
@@ -512,7 +724,7 @@ def cmd_step(a):
         state['done'] = state['iteration'] >= spec['iterations']
         save_state(a.name, state)
     print(f'iteration {line["iteration"]} (stage {a.stage}): {out["pairs"]} pairs, ptnml {ptnml}, '
-          f'clamped {",".join(out["clamped"]) or "none"}')
+          f'clamped {",".join(out["clamped"]) or "none"}' + (', a screen: theta fixed' if is_screen(spec) else ''))
     for p in spec['params']:
         n = p['name']
         print(f'  {n}: {theta[n]:.3f} -> {out["theta_after"][n]:.3f} (step {out["step"][n]:+.3f}, '
@@ -522,9 +734,42 @@ def cmd_step(a):
     return 0
 
 
+def report_screen(name, spec, hist):
+    """The screen's report: each parameter's D +- SE at c_screen and in c-units, z, its class and verdict
+    (screen_verdicts), and the groups; final.json holds the same."""
+    if not hist:
+        raise Refused('no iterations yet')
+    est = screen_estimates(spec, hist)
+    verdicts, groups = screen_verdicts(spec, {n: e['z'] for n, e in est.items()})
+    pairs = sum(h['pairs'] for h in hist)
+    print(f'{name}: a screen, {len(hist)} of {spec["iterations"]} iterations, {pairs} pairs (theta fixed at the '
+          'defaults)' + ('' if len(hist) >= spec['iterations'] else '; PARTIAL: not every iteration is in'))
+    print('| parameter | group | default | c | c_screen | D at c_screen (Elo) | D in c-units (Elo) | planned SE '
+          '(c-units) | z | class | verdict |')
+    print('|---|---|---|---|---|---|---|---|---|---|---|')
+    for p in spec['params']:
+        n, e, v = p['name'], est[p['name']], verdicts[p['name']]
+        print(f'| {n} | {p["group"]} | {p["start"]:g} | {p["c"]:g} | {p["c_screen"]:g} | {e["d"]:+.2f} +- '
+              f'{e["se"]:.2f} | {e["d_c"]:+.2f} +- {e["se_c"]:.2f} | {e["planned_se_c"]:.2f} | {e["z"]:+.2f} | '
+              f'{v[0]} | {v[2]} |')
+    for group, names in groups.items():
+        note = ' (under 3: merges with its neighbour, final-retune-expansion section 3.1)' if len(names) < 3 else ''
+        print(f'group {group}: {len(names)} joining{note}: {", ".join(names) or "none"}')
+    write_json(data_dir(name) / 'final.json', {
+        'label': spec['label'], 'commit': spec['commit'], 'mode': 'screen', 'iterations': len(hist),
+        'pairs': pairs, 'groups': groups,
+        'params': {p['name']: dict(est[p['name']], group=p['group'], c=p['c'], c_screen=p['c_screen'],
+                                   default=p['start'], placeholder=p['placeholder'], klass=verdicts[p['name']][0],
+                                   joins=verdicts[p['name']][1], verdict=verdicts[p['name']][2])
+                   for p in spec['params']}})
+    return 0
+
+
 def cmd_report(a):
     spec, state = checked_state(a.name)
     hist = history(a.name)
+    if is_screen(spec):
+        return report_screen(a.name, spec, hist)
     theta = final_theta([h['theta_after'] for h in hist], spec['average_tail'])
     clamps = {p['name']: sum(p['name'] in h['clamped'] for h in hist) for p in spec['params']}
     limited = step_limited(clamps, len(hist))
@@ -538,10 +783,19 @@ def cmd_report(a):
               f'| {p["c"]:g} | {clamps[n]} | {traj} |')
     if limited:
         print(f'step-limited (clamped in at least 2/3 of the updates): {", ".join(limited)}')
+    pinned = pinned_at_bound(spec, hist)
+    if pinned:
+        items = [f'{n} ({side} {bound:g}, {count} of {len(hist)} updates{", at the end" if end else ""})'
+                 for n, side, bound, count, end in pinned]
+        print('pinned at a bound (theta at lowest + c or highest - c in at least 1/3 of the updates, or at the '
+              f'last; widen the range): {", ".join(items)}')
     write_json(data_dir(a.name) / 'final.json', {'label': spec['label'], 'commit': spec['commit'],
                                                   'iterations': len(hist), 'theta': theta,
                                                   'params': {k: round(v) for k, v in theta.items()},
-                                                  'clamped': clamps})
+                                                  'clamped': clamps,
+                                                  'pinned': [{'name': n, 'side': side, 'bound': bound,
+                                                              'updates': count, 'at_end': end}
+                                                             for n, side, bound, count, end in pinned]})
     return 0
 
 

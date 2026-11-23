@@ -111,9 +111,10 @@ std::string score_text(int score) {
 
 fork_web_iteration_hook iteration_hook = nullptr;
 
-// The principal variation of the last finished iteration, kept by a
-// listener (the search reports each iteration; the last one wins), and
-// each finished iteration passed on as it ends.
+// The principal variation of the last exact report, kept by a listener (the
+// search reports each iteration; the last one wins), and each such report
+// passed on as it comes. The last one is the move played's, at the result's
+// depth: a finished iteration, or an unfinished one whose move a stop plays.
 class LineKeeper final : public SearchListener {
  public:
   void on_iteration(const Position& root, const IterationReport& report) override {

@@ -1,26 +1,38 @@
 # Fork CI: the full build and test matrix, from a clean clone.
 #
 # - Linux (ubuntu-latest): every preset that runs on Linux (clang and gcc,
-#   release, debug with ASan+UBSan, v3, avx512, nopext, TSan), MSan against
+#   release, debug with ASan+UBSan, v3, avx512, nopext, scalar, vnni), MSan against
 #   an instrumented libc++, the fuzz targets over their committed seeds, the
-#   PGO builds and the tuning build (FORK_TUNE), and each bake-off entry's
-#   network (netcheck and bench parity, .github/ci/net-check.sh);
+#   PGO builds and the tuning build (FORK_TUNE), each bake-off entry's
+#   network (netcheck and bench parity, .github/ci/net-check.sh), and the
+#   threaded suites under TSan (UCI, TT, datagen, web) on both compilers;
 # - Windows (windows-latest): the local development toolchain (LLVM-MinGW
 #   and WinLibs GCC, pinned in .github/ci/win-tools.sh), the presets
 #   scripts/check.sh full covers plus the full gcc-debug suite;
 # - the TCEC toolchain (Ubuntu 22.04: gcc 11.4, g++-12, clang 16, clang 19,
 #   CMake 3.22) with update.sh;
 # - the slow perft suites, one job each: perft_epd_full (about 2 hours) only
-#   when move generation's files change, and nightly on main (nightly.yml).
-# Every job ends with bench parity, and every ctest job runs the fast suite
+#   when move generation's files change, and nightly on main (nightly.yml);
+# - the full TSan suites (clang-tsan, gcc-tsan; .github/workflows/tsan.yml)
+#   only when threads, the TT or the UCI layer change, and nightly on main
+#   (owner, 2026-11-07); here without `search` and `pruning`, which run
+#   nightly (owner, 2026-11-09).
+# What changed decides which jobs run (the `changes` job,
+# .github/ci/changed-areas.sh): documentation alone skips every build job.
+# The one required check is `CI result`, which passes only if every job
+# passed or was skipped by its own rule. Every job ends with bench parity
+# (except the threaded TSan suites: TSan's bench takes about 25 minutes, and
+# the full TSan run checks it), and every ctest job runs the fast suite
 # (everything not labelled slow). The local equivalent is
 # scripts/check.sh full plus scripts/build.sh (CLAUDE.md).
 #
 # The repository is public, so hosted-runner minutes are free (owner,
 # 2026-10-28: the full matrix on every push to main and audit-1 and on every
 # pull request). A newer push cancels the run it supersedes. Pushes that only
-# touch docs skip the run; pull requests always run it, because a required
-# check that never starts blocks the merge. CPUs a binary needs but the
+# touch docs do not start a run (paths-ignore, so they never cancel a code
+# run); pull requests always start one, because a required check that never
+# starts blocks the merge, and documentation-only ones skip every build job
+# through the `changes` job instead. CPUs a binary needs but the
 # runner lacks (AVX-512 on most hosted runners) are emulated with Intel SDE
 # (.github/ci/sde.sh). Toolchains, SDE, the MSan libc++ and the test data
 # are cached.
@@ -29,6 +41,7 @@ name: ci
 on:
   push:
     branches: [main, audit-1]
+    # Documentation: keep in step with docs_re in .github/ci/changed-areas.sh.
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
@@ -41,6 +54,14 @@ on:
         description: Run the AVX-512 binaries under Intel SDE even where the CPU has AVX-512 (tests the SDE path)
         type: boolean
         default: false
+      force-tsan:
+        description: Run the full TSan suites (a manual run skips them otherwise)
+        type: boolean
+        default: false
+      diff-base:
+        description: Optional commit (SHA or origin/<branch>) to classify the changes against, as a pull request is; empty runs every job but the full TSan suites
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -56,6 +77,8 @@ concurrency:
 jobs:
   tcec-toolchain:
     name: TCEC toolchain (Ubuntu 22.04)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     # A real Ubuntu 22.04 userland, so the build sees CMake 3.22 and the
     # 22.04 compilers rather than the newer tools preinstalled on runners.
@@ -107,20 +130,20 @@ jobs:
 
   linux:
     name: Linux (${{ matrix.preset }})
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
-    # TSan with S-512 takes about 87 minutes on a typical runner and was
-    # about 1.8x slower (over 150) on a slow one.
-    timeout-minutes: ${{ endsWith(matrix.preset, '-tsan') && 240 || 150 }}
+    timeout-minutes: 150
     strategy:
       fail-fast: false
+      # The TSan presets run in tsan-threaded (the threaded suites) and
+      # linux-tsan (everything, when its files change).
       matrix:
-        preset: [clang-release, clang-debug, clang-v3, clang-avx512, clang-nopext, clang-tsan, clang-scalar,
-                 clang-vnni, gcc-release, gcc-debug, gcc-v3, gcc-avx512, gcc-nopext, gcc-tsan, gcc-scalar, gcc-vnni]
+        preset: [clang-release, clang-debug, clang-v3, clang-avx512, clang-nopext, clang-scalar, clang-vnni,
+                 gcc-release, gcc-debug, gcc-v3, gcc-avx512, gcc-nopext, gcc-scalar, gcc-vnni]
     env:
       FORK_CLANG_CXX: clang++
       FORK_GCC_CXX: g++
-      # A TSan report kills the engine and fails the test (.claude/rules/testing.md).
-      TSAN_OPTIONS: halt_on_error=1
     steps:
       - uses: actions/checkout@v7
         with:
@@ -172,7 +195,7 @@ jobs:
           # wrapped in a second SDE under the first one crashes Pin (seen
           # 2026-10-28). Bench parity runs it through its own wrapper.
           bins="$d/fork_tests"
-          for b in fork_alloc_test fork_uci_oom_test fork_uci_hash_oom_test; do [ -f "$d/$b" ] && bins="$bins $d/$b"; done
+          for b in fork_alloc_test fork_uci_oom_test fork_uci_hash_oom_test fork_uci_threads_oom_test; do [ -f "$d/$b" ] && bins="$bins $d/$b"; done
           bash .github/ci/sde.sh inplace ~/sde $bins
           bash .github/ci/sde.sh wrap ~/sde "$d/fork" "$d/fork-sde"
           # Under emulation timings say nothing about Fork: the timing cases
@@ -180,7 +203,6 @@ jobs:
           echo "FORK_GAMES_RUNNING=1" >>"$GITHUB_ENV"
       - name: Fast tests (bench parity, no_alloc)
         run: |
-          case "${{ matrix.preset }}" in *-tsan) export REQUIRE_NO_ALLOC=0 ;; esac
           if [ "${{ steps.cpu.outputs.sde }}" = true ]; then
             d=build/${{ matrix.preset }}
             REQUIRE_BENCH=0 bash .github/ci/run-tests.sh $d -E '^(bench_parity|perft_bench_parity|version_lto|nnue_netcheck|nnue_netcheck_embedded)$'
@@ -206,8 +228,63 @@ jobs:
             bash .github/ci/run-tests.sh build/${{ matrix.preset }}
           fi
 
+  # The suites that start threads, under TSan on both compilers, on every
+  # code change (owner, 2026-11-07): uci_protocol, uci_options and
+  # uci_timing (the UCI layer and its search thread), tt, datagen (worker
+  # threads) and web. About 5 minutes of tests under clang-tsan in run
+  # 42395613034; the full suites (search, pruning and bench parity take 82
+  # of their 88 minutes) run in linux-tsan when threads, the TT or the UCI
+  # layer change, and nightly on main.
+  tsan-threaded:
+    name: TSan, threaded suites (${{ matrix.preset }})
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [clang-tsan, gcc-tsan]
+    env:
+      FORK_CLANG_CXX: clang++
+      FORK_GCC_CXX: g++
+      # A TSan report kills the engine and fails the test (.claude/rules/testing.md).
+      TSAN_OPTIONS: halt_on_error=1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          pkgs="ninja-build"
+          if apt-cache show libclang-rt-dev >/dev/null 2>&1; then pkgs="$pkgs libclang-rt-dev"; fi
+          sudo apt-get install -y -q $pkgs
+          # Sanitizer runtimes need the classic mmap randomization range.
+          sudo sysctl -w vm.mmap_rnd_bits=28
+          cmake --version | head -n 1; clang++ --version | head -n 1; g++ --version | head -n 1
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: Build
+        run: |
+          cmake --preset ${{ matrix.preset }}
+          cmake --build build/${{ matrix.preset }}
+      - name: The threaded suites under TSan (no bench parity; no_alloc and the oom tests are not built)
+        run: |
+          d=build/${{ matrix.preset }}
+          threaded_suites='^(uci_protocol|uci_options|uci_timing|tt|smp|datagen|web)$'
+          # All seven must exist: a renamed suite must not drop out unseen.
+          n=$(ctest --test-dir $d -N -R "$threaded_suites" | grep -cE 'Test +#')
+          [ "$n" -eq 7 ] || { echo "::error::expected the 7 threaded suites, found $n"; exit 1; }
+          REQUIRE_BENCH=0 REQUIRE_NO_ALLOC=0 bash .github/ci/run-tests.sh $d -R "$threaded_suites"
+
   linux-python:
     name: Linux Python suites (datagen, NNUE parity)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -240,9 +317,30 @@ jobs:
           ctest --test-dir build/clang-release -L python --output-on-failure
           .venv/bin/python -I -B -m unittest discover -s tools/datagen -p 'test_*.py'
           .venv/bin/python -I -B -m unittest discover -s tools/nnue -p 'test_*.py'
+          .venv/bin/python -I -B -m unittest discover -s tools/zugzwang -p 'test_*.py'
+      # The SPRT shards' progress uploads (owner, 2026-11-14: display only, no effect on games or verdicts):
+      # the progress parser against a real shard's log, then the same shard played with and without the
+      # watcher, results byte for byte (tools/cloud/test_shard_progress.sh): fake games, then real fixed-node
+      # games of this build with the pinned fastchess and book (tools/cloud/fetch_tools.sh, cached).
+      - name: Cache the match tools (pinned fastchess and book)
+        uses: actions/cache@v6
+        with:
+          path: ~/match-tools
+          key: match-tools-${{ hashFiles('tools/cloud/fetch_tools.sh') }}
+      - name: Shard progress uploads change no result (byte identity)
+        run: |
+          .venv/bin/python -I -B -m unittest discover -s tools/cloud -p 'test_shard_progress.py'
+          bash tools/cloud/fetch_tools.sh ~/match-tools
+          PYTHON="$PWD/.venv/bin/python" bash tools/cloud/test_shard_progress.sh
+          # CalibratedScore off in every harness (owner, 2026-11-13); run_shard.sh sets it off for fastchess.
+          bash .github/ci/score-display-check.sh build/clang-release/fork
+          PYTHON="$PWD/.venv/bin/python" bash tools/cloud/test_shard_progress.sh --real build/clang-release/fork \
+            ~/match-tools/fastchess ~/match-tools/UHO_Lichess_4852_v1.epd
 
   linux-msan:
     name: Linux MSan (clang 21, libc++)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
@@ -282,13 +380,15 @@ jobs:
         run: |
           bash scripts/msan.sh selftest
           bash scripts/msan.sh build
-      - name: Fast tests under MSan (bench parity; no_alloc, uci_oom, uci_hash_oom excluded)
+      - name: Fast tests under MSan (bench parity; no_alloc, uci_oom, uci_hash_oom, uci_threads_oom excluded)
         env:
           REQUIRE_NO_ALLOC: 0
-        run: bash .github/ci/run-tests.sh build/clang-msan-libcxx -E '^(no_alloc|uci_oom|uci_hash_oom)$'
+        run: bash .github/ci/run-tests.sh build/clang-msan-libcxx -E '^(no_alloc|uci_oom|uci_hash_oom|uci_threads_oom)$'
 
   linux-fuzz:
     name: Linux fuzz seeds (clang-fuzz)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -320,6 +420,8 @@ jobs:
 
   linux-pgo:
     name: Linux PGO and tuning builds
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -351,6 +453,8 @@ jobs:
 
   windows:
     name: Windows (${{ matrix.preset }})
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: windows-latest
     timeout-minutes: 90
     strategy:
@@ -398,9 +502,24 @@ jobs:
         run: |
           . .github/ci/win-tools.sh env
           bash .github/ci/run-tests.sh build/${{ matrix.preset }}
+      - name: Tuning build (FORK_TUNE), bench parity and its startup LMR tables
+        # The Linux tuning-build job cannot catch this: LLVM-MinGW clang with
+        # LTO ran two inline variables' dynamic initialisers in reverse order
+        # (2026-11-13; the LMR 64ths table was built from a zero whole-ply
+        # table), which ELF builds do not do.
+        if: matrix.preset == 'clang-release'
+        run: |
+          . .github/ci/win-tools.sh env
+          cmake --preset clang-release -B build/tune -DFORK_TUNE=ON
+          cmake --build build/tune --target fork fork_tests
+          bash .github/ci/bench-parity.sh build/tune/fork.exe
+          build/tune/fork_tests.exe pruning
+          build/tune/fork_tests.exe params
 
   windows-gcc-smoke:
     name: Windows GCC UCI smoke (debug, release, v3, avx512, nopext)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: windows-latest
     timeout-minutes: 90
     defaults:
@@ -459,18 +578,39 @@ jobs:
   # networks are built into Fork in turn (round 1's S-512, the B0 control
   # B0r2, H-512, AF-S, XGR-512), S512r2, the default until S512+PP's
   # promotion (2026-11-06), S512+PP, the default until S512ppr2's
-  # (2026-11-06), and S512ppr2, the default until S512ppr3's (2026-11-07),
-  # each checked against its parity file
-  # (netcheck) and its bench reference. Light on purpose: a clang release
-  # build of `fork` only, no tests and no test data.
+  # (2026-11-06), S512ppr2, the default until S512ppr3's (2026-11-07),
+  # S512ppr3, the default until r8btd90's (2026-11-10), r8btd90, the
+  # default until r8brft1's (2026-11-11), r8brft1, the default until
+  # r8ceplo2's (2026-11-14), and r8ceplo2, the default until r3kr1's (the
+  # same day), each checked against its parity file (netcheck) and its bench
+  # reference. Light on purpose: a clang release build of `fork` only, no
+  # tests and no test data; except r8ceplo2, whose job also runs the nnue
+  # suite: since r3kr1 (architecture 9) is the default, the other jobs no
+  # longer compile architecture 8's own cases (S512+PP's); and r8brft1kr4,
+  # H512+PP's test net (architecture 9, bake-off round 3's option a: r8brft1
+  # with its piece rows copied into every king region, so its bench is
+  # r8brft1's; tools/nnue/extend_weights.py), whose job also runs the nnue
+  # suite (since r3kr1's promotion every default build compiles architecture
+  # 9's cases too); and r8brft1xl, S512+PPXL's test net (architecture 10, bake-off round 3's
+  # x_lower arm: r8brft1 with zero exposure rows, so its bench is r8brft1's),
+  # whose job runs the nnue suite for architecture 10's cases likewise.
   nets:
     name: Network ${{ matrix.net }}
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        net: [s512ppr2, s512pp, s512r2, s512, b0r2, g1h512, g1afs, g1xgr]
+        net: [r8ceplo2, r8brft1kr4, r8brft1xl, r8brft1, r8btd90, s512ppr3, s512ppr2, s512pp, s512r2, s512, b0r2, g1h512, g1afs, g1xgr]
+        include:
+          - net: r8ceplo2
+            suite: nnue
+          - net: r8brft1kr4
+            suite: nnue
+          - net: r8brft1xl
+            suite: nnue
     env:
       FORK_CLANG_CXX: clang++
     steps:
@@ -482,10 +622,14 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q ninja-build
       - name: Build with the network, netcheck and bench parity
+        env:
+          NET_SUITE: ${{ matrix.suite }}
         run: bash .github/ci/net-check.sh ${{ matrix.net }}
 
   slow:
     name: Slow (perft_epd_deep)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -502,33 +646,43 @@ jobs:
       - name: perft_epd_deep and bench parity (clang-release)
         run: bash .github/ci/slow-suite.sh perft_epd_deep
 
-  # perft_epd_full takes about 2 hours, so it runs here only when the push or
-  # pull request changes a file move generation depends on
-  # (.github/ci/movegen-changed.sh), and nightly on main otherwise
-  # (nightly.yml). A job skipped by its condition counts as passed, so as a
-  # required check it binds exactly when it runs (owner, 2026-10-28). If the
-  # changed files cannot be listed, it runs.
-  movegen-changed:
-    name: Move generation changed?
+  # What the change touches decides which jobs run (owner, 2026-11-07;
+  # .github/ci/changed-areas.sh): code=false (documentation only) skips
+  # every build job, tsan gates the full TSan suites, movegen gates
+  # perft_epd_full. A job skipped by its rule counts as passed in ci-result;
+  # if the gate fails, every job runs and ci-result fails. If the changed
+  # files cannot be listed, everything runs.
+  changes:
+    name: What changed?
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
+      code: ${{ steps.diff.outputs.code }}
+      tsan: ${{ steps.diff.outputs.tsan }}
       movegen: ${{ steps.diff.outputs.movegen }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: The classification's own tests
+        run: bash .github/ci/changed-areas-test.sh
       - id: diff
         env:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BEFORE: ${{ github.event.before }}
-        run: bash .github/ci/movegen-changed.sh
+          DIFF_BASE: ${{ inputs.diff-base }}
+          FORCE_TSAN: ${{ inputs.force-tsan && 'true' || 'false' }}
+        run: bash .github/ci/changed-areas.sh
 
+  # perft_epd_full takes about 2 hours, so it runs here only when the push or
+  # pull request changes a file move generation depends on, and nightly on
+  # main otherwise (nightly.yml).
   perft-full:
     name: Slow (perft_epd_full, when move generation changes)
-    needs: movegen-changed
-    if: ${{ !cancelled() && (needs.movegen-changed.result != 'success' || needs.movegen-changed.outputs.movegen == 'true') }}
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.movegen == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 300
     env:
@@ -544,3 +698,68 @@ jobs:
           key: epd-${{ hashFiles('CMakeLists.txt') }}
       - name: perft_epd_full and bench parity (clang-release)
         run: bash .github/ci/slow-suite.sh perft_epd_full
+
+  # The full TSan suites (owner, 2026-11-07): required only when threads, the
+  # TT or the UCI layer change (.github/ci/changed-areas.sh), nightly on main
+  # (nightly.yml), and on demand (dispatch tsan.yml, or this workflow with
+  # force-tsan). Every code change runs tsan-threaded.
+  linux-tsan:
+    name: Linux TSan
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.tsan == 'true') }}
+    uses: ./.github/workflows/tsan.yml
+    # The single-search suites run nightly on main (owner, 2026-11-09): under
+    # gcc-tsan `search` alone takes about 3 hours.
+    with:
+      skip: '^(search|pruning)$'
+
+  # The one required check (branch protection on main): every job above
+  # passed, or was skipped by its own rule (code, tsan or movegen false).
+  # always(), never !cancelled(): a skipped required check counts as passed,
+  # so this job must run, and fail, when the run is cancelled.
+  ci-result:
+    name: CI result
+    needs: [changes, tcec-toolchain, linux, tsan-threaded, linux-python, linux-msan, linux-fuzz, linux-pgo,
+            windows, windows-gcc-smoke, nets, slow, perft-full, linux-tsan]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/workflows/ci.yml
+          sparse-checkout-cone-mode: false
+      - name: Every job passed, or was skipped by its rule
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          CODE: ${{ needs.changes.outputs.code }}
+          TSAN: ${{ needs.changes.outputs.tsan }}
+          MOVEGEN: ${{ needs.changes.outputs.movegen }}
+        run: |
+          set -euo pipefail
+          # Every job in this workflow is in needs, so every job is required.
+          jobs=$(sed -n '/^jobs:/,$p' .github/workflows/ci.yml | grep -E '^  [a-z][a-z0-9-]*:$' | tr -d ' :' | grep -vx ci-result | sort)
+          listed=$(jq -r 'keys[]' <<<"$NEEDS" | sort)
+          if [ "$jobs" != "$listed" ]; then
+            echo "::error::ci-result's needs do not list every job in ci.yml"
+            diff <(echo "$jobs") <(echo "$listed") || true
+            exit 1
+          fi
+          fail=0
+          while read -r job result; do
+            case "$job" in
+              changes) rule="" ;;
+              linux-tsan) rule=$TSAN ;;
+              perft-full) rule=$MOVEGEN ;;
+              *) rule=$CODE ;;
+            esac
+            if [ "$result" = success ]; then
+              echo "passed  $job"
+            elif [ "$result" = skipped ] && [ "$rule" = false ]; then
+              echo "skipped $job (not needed for these changes)"
+            else
+              echo "::error::$job: $result"
+              fail=1
+            fi
+          done < <(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"$NEEDS")
+          exit "$fail"

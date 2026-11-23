@@ -92,10 +92,8 @@ std::size_t available_memory() {
 }
 
 unsigned clear_workers(std::size_t bytes, std::int64_t threads_option) {
-  const std::int64_t hardware = std::max<std::int64_t>(1, std::thread::hardware_concurrency());
-  const std::int64_t wanted = std::max(threads_option, hardware);
   const auto by_size = static_cast<std::int64_t>(std::max<std::size_t>(1, bytes / PageAlign));
-  return static_cast<unsigned>(std::max<std::int64_t>(1, std::min(wanted, by_size)));
+  return static_cast<unsigned>(std::max<std::int64_t>(1, std::min(threads_option, by_size)));
 }
 
 bool HashMemory::fits(std::size_t bytes) const {

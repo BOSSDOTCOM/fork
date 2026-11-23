@@ -7,9 +7,14 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -22,6 +27,7 @@
 #include "search/see.hpp"
 #include "search/time_budget.hpp"
 #include "suite.hpp"
+#include "tune/params.hpp"
 #include "uci/go_limits.hpp"
 #include "uci/session.hpp"
 #include "uci/tokens.hpp"
@@ -139,12 +145,104 @@ struct TestHash {
   void clear() { std::fill(buckets.begin(), buckets.end(), TtBucket{}); }
 };
 
-// Switches for a search that must equal minimax: TT cutoffs only at their
-// own depth, and no pruning or reductions (they are not exact).
+// Switches for a search that must equal minimax at its nominal depth (the
+// references above): TT cutoffs only at their own depth, and every technique
+// whose decision reads the evaluation's values (against a margin, a bar or an
+// earlier ply's eval) or the search's history (history tables, the TT's
+// contents) to prune, reduce or extend switched off. Such a technique stays
+// exact only while the default network's numbers keep it from firing in
+// these positions, which another network need not do (2026-11-14: the
+// history skip, below; owner, 2026-11-14: every such switch off, and the
+// exact cases also run with a second network, further down). Every switch
+// of SearchSwitches, and why it is off or kept:
+//
+// Off: prunes, reduces or extends on a value or history test.
+//   use_rfp                 RFP: eval - margin x depth >= beta cuts the node.
+//   use_nmp                 the null move: on eval >= beta, a reduced search
+//                           after passing cuts the node.
+//   use_capture_probe       ProbCut: a capture holding beta + margin in a
+//                           shallower search cuts the node (from depth 9).
+//   use_singular_extension  the singular test (the TT entry's score less a
+//                           margin, searched at half depth without the TT
+//                           move) extends the TT move a ply past the nominal
+//                           depth (from depth 6 at ply > 0, so from root
+//                           depth 7: the depth-10 case below).
+//   use_multi_cut           the same test returns its bar as the node's score.
+//   use_negative_extension  the same test searches the TT move a ply
+//                           shallower (off by default; pinned off here).
+//   use_no_move_reduction   IIR: a node without a TT move (what the TT holds)
+//                           is searched a ply shallower (from depth 8).
+//   use_lmr, use_root_lmr   late quiets searched shallower.
+//   use_lmr_check_relief, use_lmr_in_check, use_cut_node_lmr,
+//   use_improving_lmr, use_centred_lmr_history
+//                           LMR's terms (checks, node types, the improving
+//                           flag from earlier plies' evals, the history's
+//                           centred term): inert with LMR off, off too so a
+//                           variant turning LMR on cannot bring them along.
+//   use_lmp, use_improving_lmp
+//                           late move pruning and its eval-trend allowance.
+//   use_futility            futility: eval + margin <= alpha drops quiets.
+//   use_see_prune           main-search SEE pruning (a threshold growing with
+//                           depth, which the references do not apply).
+//   use_history_skip        the history skip: a quiet whose ordering score
+//                           is at or below -700 x depth is dropped (depths
+//                           1-3). Left on, it dropped a refuting king move in
+//                           KRK once a network's evaluations had left that
+//                           move with bad history (2026-11-14: the
+//                           zero-window case below, 443 against 442, with
+//                           bake-off round 3's x_lower smoke net, as
+//                           architecture 10 and as S512+PP alike).
+//   use_skip_check_exempt   the history skip's exemption: inert with it off.
+//   use_quiesce_move_cap    the quiescence search stops after N moves.
+//   use_piece_drift, use_minor_drift, use_major_drift, use_threat_drift
+//                           learned terms added to the stand-pat and the
+//                           pruning eval: not minimax on the raw eval.
+//   use_tt_eval_refine      the pruning eval moved by the TT entry's score:
+//                           read only by the pruning above (all off); off so
+//                           a variant turning one on starts from the raw eval.
+//   use_tables              Syzygy probes: exact, but the references know no
+//                           tables (off whatever another suite has loaded).
+// Kept: nothing a minimax value depends on.
+//   use_tt (tt_exact_depth) a cutoff only on an entry of the node's own depth
+//                           whose bound settles the window: minimax where no
+//                           repetition is in reach (each case checks that).
+//   use_pvs, use_aspiration zero or narrow windows, re-searched on a fail:
+//                           the value is the same (the cases vary both).
+//   use_mate_distance       prunes only what cannot beat the mate bounds.
+//   use_quiesce, use_see_quiesce
+//                           the references' own horizon (captures and queen
+//                           promotions, SEE-losing captures skipped).
+//   use_history, use_history_malus, use_reply_history, use_follow_history,
+//   use_take_history, use_threat_buckets, use_check_order_bonus,
+//   use_pair_sum_update, use_history_ageing, use_linear_bonus
+//                           move ordering and its tables: alpha-beta's value
+//                           does not depend on the order. Kept on, so the
+//                           probes run on real orderings and grown histories.
+//   tt_age_blend, tt_keep_exact, use_tt_keep_deeper
+//                           which entry a full bucket keeps: with exact-depth
+//                           cutoffs every entry kept is a true bound.
+//   use_tt_halfmove_guard   declines some TT cutoffs near the fifty-move
+//                           rule: the node is searched instead.
+//   use_stability_time, use_share_time, use_deep_time_depth, use_time_guards,
+//   use_forced_move_stop, use_pass_best_stop
+//                           timed or stopped searches only; these have a
+//                           depth limit and no stop.
 SearchSwitches exact_switches() {
   SearchSwitches s;
   s.tt_exact_depth = true;
-  s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  s.use_rfp = s.use_nmp = s.use_capture_probe = false;
+  s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = false;
+  s.use_no_move_reduction = false;
+  s.use_lmr = s.use_root_lmr = false;
+  s.use_lmr_check_relief = s.use_lmr_in_check = s.use_cut_node_lmr = false;
+  s.use_improving_lmr = s.use_centred_lmr_history = false;
+  s.use_lmp = s.use_improving_lmp = false;
+  s.use_futility = s.use_see_prune = false;
+  s.use_history_skip = s.use_skip_check_exempt = false;
+  s.use_quiesce_move_cap = false;
+  s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = false;
+  s.use_tt_eval_refine = false;
+  s.use_tables = false;
   return s;
 }
 
@@ -205,8 +303,9 @@ TEST_CASE("search", "the search bench's perft-suite FENs equal the cited suite")
     CHECK_MSG(search_bench_fens()[i] == suite[i].fen, suite[i].name << ": " << search_bench_fens()[i]);
 }
 
-TEST_CASE("search",
-          "root score equals plain minimax: PVS, aspiration, mate distance pruning, TT on and off") {
+namespace {
+
+void check_root_oracle() {
   Fixture fx;
   // With the quiescence search the reference grows fast: depth 3 (2 in debug
   // builds), and depth 1 for the variant without the SEE filter, whose
@@ -240,6 +339,13 @@ TEST_CASE("search",
   CHECK(compared >= 108);
 }
 
+}  // namespace
+
+TEST_CASE("search",
+          "root score equals plain minimax: PVS, aspiration, mate distance pruning, TT on and off") {
+  check_root_oracle();
+}
+
 // Endgames transpose a lot, so the TT really cuts here (counted below).
 // Exactness is claimed only where no repetition is in reach (a path-blind
 // TT may carry a repetition draw across paths: the next test case), and the
@@ -270,10 +376,7 @@ std::vector<DepthCase> repetition_free_cases() {
   return out;
 }
 
-}  // namespace
-
-TEST_CASE("search",
-          "TT cutoffs at exact depth equal plain minimax on small endgames, no repetition in reach") {
+void check_exact_depth_endgames() {
   Fixture fx;
   std::uint64_t first_nodes = 0, again_nodes = 0;
   for (const DepthCase& c : repetition_free_cases()) {
@@ -306,6 +409,13 @@ TEST_CASE("search",
   }
   CHECK_MSG(again_nodes < first_nodes,
             again_nodes << " nodes over the filled TT, " << first_nodes << " before");
+}
+
+}  // namespace
+
+TEST_CASE("search",
+          "TT cutoffs at exact depth equal plain minimax on small endgames, no repetition in reach") {
+  check_exact_depth_endgames();
 }
 
 // The known path-dependent case, tolerated (owner, 2026-10-29): in KRK at
@@ -351,9 +461,10 @@ TEST_CASE("search", "known: with a repetition in reach, TT cutoffs may differ sl
 // a valid bound of the exact value. Betas lie around the exact value and, in
 // the mate positions (test_search.cpp's mates, checked by
 // tools/check_search_positions.py), on the mate scores, where mate distance
-// pruning binds.
-TEST_CASE("search",
-          "zero-window probes agree with a zero-window reference, mate bands included (TT shared)") {
+// pruning binds. With `keep_history` the move-ordering history is not cleared
+// between positions (as in games, and as passes > 1 repeat the whole list),
+// so whatever reads it (the history skip, ordering) sees grown tables.
+void check_zero_window_probes(bool keep_history, int passes) {
   Fixture fx;
   struct Probed {
     std::string_view fen;
@@ -373,42 +484,221 @@ TEST_CASE("search",
                                "6k1/5ppp/8/8/8/8/8/R5K1 b - - 0 1"})
     positions.push_back({fen, 3});
   int probes = 0, mate_band = 0;
-  for (const Probed& p : positions) {
-    Position pos;
-    CHECK(pos.set_fen(p.fen));
-    if (p.small)
-      CHECK_MSG(!repetition_in_tree(pos, p.depth), p.fen << ": a repetition fits in depth " << p.depth);
-    fx.store.clear();
-    fx.searcher->clear_history();
-    fx.searcher->switches = exact_switches();
-    SearchQuota limits;
-    limits.depth = p.depth;
-    const int full = fx.search(pos, limits).score;  // fills the TT with PV and non-PV entries
-    for (int d = 1; d <= p.depth; ++d) {
-      const int value = reference_minimax(pos, d, 0);
-      if (d == p.depth) CHECK_MSG(full == value, p.fen << ": full window " << full << " vs " << value);
-      std::vector<int> betas;
-      for (int offset : {-300, -40, -1, 0, 1, 40, 300}) betas.push_back(value + offset);
-      for (int n = 1; n <= 5; ++n) {
-        betas.push_back(mate_score(n));
-        betas.push_back(mated_score(n));
-        betas.push_back(mated_score(n) + 1);
-      }
-      for (int beta : betas) {
-        beta = std::clamp(beta, -ScoreInfinite + 1, ScoreInfinite);
-        const int s = fx.searcher->probe_zero_window(pos, beta, d, fx.stop);
-        const int ref = reference_alphabeta(pos, d, 0, beta - 1, beta, true);
-        ++probes;
-        mate_band += is_mate_score(beta);
-        CHECK_MSG((s >= beta) == (ref >= beta),
-                  p.fen << " depth " << d << " beta " << beta << ": probe " << s << ", reference " << ref);
-        CHECK_MSG(s >= beta ? value >= s : value <= s,
-                  p.fen << " depth " << d << " beta " << beta << ": fail-soft " << s << ", exact " << value);
+  fx.searcher->clear_history();
+  for (int pass = 0; pass < passes; ++pass)
+    for (const Probed& p : positions) {
+      Position pos;
+      CHECK(pos.set_fen(p.fen));
+      if (p.small)
+        CHECK_MSG(!repetition_in_tree(pos, p.depth), p.fen << ": a repetition fits in depth " << p.depth);
+      fx.store.clear();
+      if (!keep_history) fx.searcher->clear_history();
+      fx.searcher->switches = exact_switches();
+      SearchQuota limits;
+      limits.depth = p.depth;
+      const int full = fx.search(pos, limits).score;  // fills the TT with PV and non-PV entries
+      for (int d = 1; d <= p.depth; ++d) {
+        const int value = reference_minimax(pos, d, 0);
+        if (d == p.depth) CHECK_MSG(full == value, p.fen << ": full window " << full << " vs " << value);
+        std::vector<int> betas;
+        for (int offset : {-300, -40, -1, 0, 1, 40, 300}) betas.push_back(value + offset);
+        for (int n = 1; n <= 5; ++n) {
+          betas.push_back(mate_score(n));
+          betas.push_back(mated_score(n));
+          betas.push_back(mated_score(n) + 1);
+        }
+        for (int beta : betas) {
+          beta = std::clamp(beta, -ScoreInfinite + 1, ScoreInfinite);
+          const int s = fx.searcher->probe_zero_window(pos, beta, d, fx.stop);
+          const int ref = reference_alphabeta(pos, d, 0, beta - 1, beta, true);
+          ++probes;
+          mate_band += is_mate_score(beta);
+          CHECK_MSG((s >= beta) == (ref >= beta),
+                    p.fen << " depth " << d << " beta " << beta << ": probe " << s << ", reference " << ref);
+          CHECK_MSG(s >= beta ? value >= s : value <= s, p.fen << " depth " << d << " beta " << beta
+                                                               << ": fail-soft " << s << ", exact " << value);
+        }
       }
     }
-  }
   CHECK(probes > 0 && mate_band > 0);
 }
+
+TEST_CASE("search",
+          "zero-window probes agree with a zero-window reference, mate bands included (TT shared)") {
+  check_zero_window_probes(false, 1);
+}
+
+// The same with the history kept across positions and passes: exact_switches()
+// must switch off every rule that prunes on the history (the history skip).
+// With it left on, a probe failed high one centipawn above the exact value in
+// KRK (8/8/3k4/8/8/3K4/8/R7 w, depth 2: 443 against 442) once a network's
+// evaluations had left a refuting king move with bad history (bake-off round
+// 3's x_lower smoke net, 2026-11-14, and its weights as S512+PP: this case and
+// the one above fail with either). The default network never reaches such a
+// history in these positions, so with it both pass either way; s512ppr3 does
+// (the second-network case below).
+TEST_CASE("search", "zero-window probes stay exact with the history of earlier searches kept") {
+  check_zero_window_probes(true, 2);
+}
+
+// The locked endgames deeper (owner, 2026-11-14): the cases above stop at
+// root depth 6, where the singular test (SingularMinDepth 6, at ply > 0, so
+// from root depth 7), the no-move reduction (from depth 8) and multi-cut
+// never run, so an exact_switches() that left them on still passed. Here the
+// locked endgames above (no capture on either side, every move of the walled
+// side irreversible) are searched to depth 10 (cheap: few moves), equal to
+// minimax there, and probed on zero windows around the exact value at every
+// depth from 7, over the TT the search filled and over an empty one (no TT
+// move: the no-move reduction's nodes). Each of the singular extension,
+// multi-cut, the no-move reduction and the negative extension, left on alone,
+// fails probes here, with either network of the case below (2026-11-14; e.g.
+// the singular extension in 8/6pp/1p6/kP6/Pp6/1P6/8/3K4 w at depth 9, beta
+// -120: the probe fails high at -48 where the exact value is -121). ProbCut needs a capture,
+// which these positions lack: its switch is off by reasoning only. The
+// locked endgame with White's rook holds a repetition from depth 8
+// (repetition_in_tree) and is left out; the other three are checked for one
+// to depth 10.
+namespace {
+
+void check_deep_locked_endgames() {
+  const int deepest = 10;
+  Fixture fx;
+  // The locked endgames (after the four plain ones) but the last, White's
+  // rook's.
+  const std::vector<DepthCase> all = repetition_free_cases();
+  CHECK(all.size() == 8);
+  int positions = 0, probes = 0;
+  for (std::size_t i = 4; i + 1 < all.size(); ++i) {
+    const DepthCase& c = all[i];
+    Position pos;
+    CHECK(pos.set_fen(c.fen));
+    CHECK_MSG(!repetition_in_tree(pos, deepest), c.fen << ": a repetition fits in depth " << deepest);
+    ++positions;
+    fx.store.clear();
+    fx.searcher->switches = exact_switches();
+    SearchQuota limits;
+    limits.depth = deepest;
+    const int full = fx.search(pos, limits).score;
+    for (int d = 7; d <= deepest; ++d) {
+      const int value = reference_minimax(pos, d, 0);
+      if (d == deepest) CHECK_MSG(full == value, c.fen << ": depth " << d << ": " << full << " vs " << value);
+      for (bool empty_tt : {false, true})
+        for (int offset : {-40, -1, 0, 1, 40}) {
+          const int beta = value + offset;
+          if (empty_tt) fx.store.clear();
+          const int s = fx.searcher->probe_zero_window(pos, beta, d, fx.stop);
+          const int ref = reference_alphabeta(pos, d, 0, beta - 1, beta, true);
+          ++probes;
+          CHECK_MSG((s >= beta) == (ref >= beta), c.fen << " depth " << d << " beta " << beta << " empty TT "
+                                                        << empty_tt << ": probe " << s << ", reference "
+                                                        << ref);
+          CHECK_MSG(s >= beta ? value >= s : value <= s, c.fen << " depth " << d << " beta " << beta
+                                                               << ": fail-soft " << s << ", exact " << value);
+        }
+    }
+  }
+  CHECK_MSG(positions == 3 && probes == 3 * 4 * 10, positions << " positions, " << probes << " probes");
+}
+
+}  // namespace
+
+TEST_CASE("search", "the locked endgames stay exact to depth 10, where the singular test and multi-cut run") {
+  check_deep_locked_endgames();
+}
+
+#if defined(FORK_EVAL_NNUE)
+// The exact cases with a second network (owner, 2026-11-14): a technique
+// left on that reads the evaluation's values or the history they produce can
+// pass with one network and fail with another, so the exact cases (all but
+// the tiny-TT one, whose exact part is the root oracle's on fewer buckets)
+// run again with another committed network of this build's architecture.
+// With an S512+PP build (r8ceplo2's, the default network until r3kr1's
+// promotion on 2026-11-14) that is s512ppr3 (S512+PP, the default network
+// until 2026-11-10: r8btd90 was retrained from it and r8brft1 fine-tuned from
+// r8btd90, docs/nets.md), whose evaluations differ from the embedded
+// network's on most of the cases' positions (checked below). With the history
+// skip left on, s512ppr3 fails the zero-window probes in KRK
+// (8/8/3k4/8/8/3K4/8/R7 w, depth 2: 373 against 372) where the default
+// network then, r8brft1, passes (2026-11-14). With the default build since
+// r3kr1's promotion (H512+PP, architecture 9) it is r8brft1kr4, H512+PP's
+// test net (r8brft1's weights in every king region), the only other committed
+// network of that architecture.
+// A build whose architecture has no other committed network skips the case;
+// the bootstrap evaluation has no network to swap and does not compile it.
+namespace {
+
+// The searcher and static_eval(), which the references call, both read
+// embedded_net(): one NetFile, allocated (not const) on its first use. A
+// NetSwap copies another network's weights into it for its lifetime and the
+// embedded weights back at its end (writing through const_cast is defined:
+// the object itself is not const). Single-threaded cases only. A search reads
+// the weights from its root (FeatureStack::reset) and the TT keeps static
+// evaluations, so each fixture is made, with an empty TT, under the swap.
+class NetSwap {
+ public:
+  explicit NetSwap(const NetFile& other) : saved_(std::make_unique<NetFile>(embedded_net())) {
+    live() = other;
+  }
+  ~NetSwap() { live() = *saved_; }
+  NetSwap(const NetSwap&) = delete;
+  NetSwap& operator=(const NetSwap&) = delete;
+
+ private:
+  static NetFile& live() { return const_cast<NetFile&>(embedded_net()); }
+  std::unique_ptr<NetFile> saved_;
+};
+
+// The first committed network (nets/NAME.fnet, in this order) that this
+// build reads (its architecture) and that is not the embedded one, after
+// skipping `skip` such networks; null if there is none. Architecture 10
+// (S512+PPXL, x_lower) has r8brft1xl, its test net (r8brft1's evaluation, the
+// exposure rows zero); r8ceplo2 (S512+PP) comes after the older S512+PP nets.
+std::unique_ptr<NetFile> second_network(std::string& name, int skip = 0) {
+  for (std::string_view candidate : {"s512ppr3", "r8btd90", "s512ppr2", "s512pp", "r8brft1", "s512r2", "s512",
+                                     "b0r2", "b0r1", "b0", "r8brft1kr4", "r8ceplo2", "r8brft1xl"}) {
+    std::ifstream in(std::string(FORK_SOURCE_DIR) + "/nets/" + std::string(candidate) + ".fnet",
+                     std::ios::binary);
+    if (!in) continue;
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                          std::istreambuf_iterator<char>());
+    auto net = std::make_unique<NetFile>();
+    std::string error;
+    if (!read_net_file(bytes, *net, error) || write_net_file(*net) == write_net_file(embedded_net()))
+      continue;
+    if (skip-- > 0) continue;
+    name = candidate;
+    return net;
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+TEST_CASE("search", "the exact searches stay exact with a second network") {
+  std::string name;
+  const std::unique_ptr<NetFile> net = second_network(name);
+  if (!net) SKIP("no committed network of this build's architecture besides the embedded one");
+  // A different evaluation, checked: the networks disagree on most of the
+  // positions the cases search.
+  std::vector<Position> sample = oracle_positions();
+  for (const DepthCase& c : repetition_free_cases()) {
+    Position pos;
+    CHECK(pos.set_fen(c.fen));
+    sample.push_back(pos);
+  }
+  std::vector<int> embedded;
+  for (const Position& pos : sample) embedded.push_back(static_eval(pos));
+  const NetSwap swap(*net);
+  std::size_t differ = 0;
+  for (std::size_t i = 0; i < sample.size(); ++i) differ += static_eval(sample[i]) != embedded[i];
+  CHECK_MSG(differ * 4 >= sample.size() * 3,
+            name << " evaluates " << differ << " of " << sample.size() << " positions differently");
+  check_root_oracle();
+  check_exact_depth_endgames();
+  check_zero_window_probes(true, 1);
+  check_deep_locked_endgames();
+}
+#endif
 
 // Audit-1 Q-10 (DESIGN.md §5.2's tiny-hash stress test): every search
 // fixture used 16,384 buckets, so the TT's replacement under heavy pressure
@@ -453,9 +743,12 @@ TEST_CASE("search",
 // A guard, so a growing frame is a decision, not an accident. Decisions:
 // 2,688 B with tier 2's singular test and pair history (2026-10-31; the two
 // pair tables share one pointer to stay there), then 2,696 B with the take
-// history's pointer in the move selector (2026-10-31, tier 2 T11).
-static_assert(sizeof(PlyFrame) <= 2696,
-              "PlyFrame grew past 2,696 bytes (DESIGN.md §5.2, review 2 claim (e))");
+// history's pointer in the move selector (2026-10-31, tier 2 T11), then
+// 2,704 B with the threat set the selector keeps for its node (2026-11-10,
+// tier 2 T56's port to phase-4; the counter of filtered quiets narrowed to
+// int16 so the two new flags fit in the existing padding).
+static_assert(sizeof(PlyFrame) <= 2704,
+              "PlyFrame grew past 2,704 bytes (DESIGN.md §5.2, review 2 claim (e))");
 
 // Audit-1 Q-7: the TT's bound checks at their edge (mutant M12: an upper
 // bound cut when s <= beta instead of s <= alpha). An upper bound u, stored
@@ -500,6 +793,11 @@ TEST_CASE("search", "a TT upper bound cuts when it is at or below alpha, never a
 //   move loses).
 TEST_CASE("search", "no null move without pieces: two pawn endings keep their tablebase result") {
   Fixture fx;
+  // The two endings were found with B9's LMP use off (it did not exist yet);
+  // with it on, the first ending's depth-9 search plays g5f4 with the guard
+  // in place (2026-11-13), so the case pins it off: it tests the guard on
+  // the trees it was built for.
+  fx.searcher->switches.use_improving_lmp = false;
   Position pos;
   SearchResult r = fx.search("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1", 9);
   CHECK(pos.set_fen("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1"));
@@ -593,15 +891,19 @@ TEST_CASE("search", "finds mate in 1 and mate in 2, and stops early on go mate")
   // K+R v K, mate in 2 (and not in 1).
   r = fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 4);
   CHECK_EQ(r.score, mate_score(3));
-  // go mate 2 stops once the mate is found (depth 3: the quiescence search
-  // sees that the king has no evasion), well before depth 20.
+  // go mate 2 stops once the mate is found, well before depth 20. Mate in 2
+  // is 3 plies, so the earliest iteration that can prove it is depth 3 (the
+  // quiescence search sees that the king has no evasion); the evaluation's
+  // pruning may need up to two more iterations depending on the net (depth 4
+  // with a label-depth B0 net, 2026-11-12). The property tested is the early
+  // stop, not the iteration count.
   CHECK(pos.set_fen("k7/8/2K5/8/8/8/8/7R w - - 0 1"));
   SearchQuota limits;
   limits.depth = 20;
   limits.mate_moves = 2;
   r = fx.search(pos, limits);
   CHECK_EQ(r.score, mate_score(3));
-  CHECK_EQ(r.depth, 3);
+  CHECK_MSG(r.depth >= 3 && r.depth <= 5, "go mate 2 stopped at depth " << r.depth);
 }
 
 TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
@@ -640,6 +942,189 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
 TEST_CASE("search", "draws: mate on the 100th half-move is found at a quiescence node") {
   Fixture fx;
   CHECK_EQ(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 99 80", 1).score, mate_score(1));
+}
+
+// The TT halfmove guard (use_tt_halfmove_guard; engineering review
+// 2026-11-11 W7, owner 2026-11-16). The TT ignores the halfmove clock. The
+// K+R v K position of the draws case above (mate in 2, none in 1;
+// python-chess, tools/check_search_positions.py; White has no capture or
+// pawn move) probed at clock 0 stores its mate as a lower bound; at clock
+// 99 the same key finds it, though every move there draws. Without the
+// guard the probe cuts on the stale mate; with it the node is searched and
+// fails low with the draw. Then the rule's edges, on entries deposited by
+// hand (777: a non-mate score stored at some lower clock), each searched
+// value checked against reference_minimax or reference_quiesce (no TT, the
+// fifty-move rule applied):
+// - clock + depth 99 cuts, 100 does not (clocks 95 and 96 at depth 4);
+// - at clock 99 bounds on the draw's side still cut (an upper bound of 777
+//   at alpha 777, a lower bound of -777 at beta -777);
+// - a mate on the rule's last ply still cuts (an entry claiming mate in 1
+//   ply at clock 99: 99 + 1 = 100; untrue here, so its return shows the
+//   cut), a mate one ply later does not (mate in 3 plies at clock 98);
+// - quiescence: Black in check at clock 99 after h1h8 (played from the
+//   clock-98 position; its evasions reach clock 100) does not cut on a stale
+//   exact -777; White at clock 99, not in check, still cuts (its quiescence
+//   moves, captures, would reset the clock).
+// Fault-checked (2026-11-16): with fifty_rule_may_change always false, the
+// four guarded checks fail (the stale mate, the clock-96 edge, the mate one
+// ply late, the quiescence check); always true, the five checks that must
+// still cut fail.
+TEST_CASE("search", "the TT halfmove guard: no TT cutoff where the fifty-move rule may change the score") {
+  Fixture fx;
+  const auto at_clock = [](int clock) {
+    Position pos;
+    const std::string fen = "k7/8/2K5/8/8/8/8/7R w - - " + std::to_string(clock) + " 80";
+    CHECK_MSG(pos.set_fen(fen), fen);
+    return pos;
+  };
+  const int depth = 4;
+  Position early = at_clock(0), late = at_clock(99);
+  CHECK(early.key() == late.key());
+  CHECK_EQ(reference_minimax(late, depth, 0), 0);
+  fx.searcher->switches = exact_switches();
+
+  // A stored entry from a real search: the clock-0 probe at the mate's own
+  // bar fails high with the mate and stores it.
+  CHECK_EQ(fx.searcher->probe_zero_window(early, mate_score(3), depth, fx.stop), mate_score(3));
+  TtHit stored{};
+  CHECK(fx.store.table.fetch(early.key(), stored));
+  CHECK_MSG(stored.score == mate_score(3) && stored.depth == depth && stored.bound == TtBound::Lower,
+            "stored " << stored.score << " at depth " << stored.depth);
+  fx.searcher->switches.use_tt_halfmove_guard = false;
+  CHECK_EQ(fx.searcher->probe_zero_window(late, mate_score(3), depth, fx.stop), mate_score(3));
+  fx.searcher->switches.use_tt_halfmove_guard = true;
+  CHECK_EQ(fx.searcher->probe_zero_window(late, mate_score(3), depth, fx.stop), 0);
+
+  // The edges, on deposited entries.
+  const auto probe = [&](Position& pos, int score, TtBound bound, int beta, int search_depth) {
+    fx.store.clear();
+    fx.store.table.deposit(pos.key(), NoMove, score, ScoreNone, search_depth, bound, false);
+    return fx.searcher->probe_zero_window(pos, beta, search_depth, fx.stop);
+  };
+  Position clock95 = at_clock(95), clock96 = at_clock(96), clock98 = at_clock(98);
+  CHECK_EQ(probe(clock95, 777, TtBound::Exact, 1, depth), 777);
+  CHECK_EQ(reference_minimax(clock96, depth, 0), mate_score(3));
+  CHECK_EQ(probe(clock96, 777, TtBound::Exact, 1, depth), mate_score(3));
+  CHECK_EQ(probe(late, 777, TtBound::Upper, 778, depth), 777);
+  CHECK_EQ(probe(late, -777, TtBound::Lower, -777, depth), -777);
+  CHECK_EQ(probe(late, mate_score(1), TtBound::Exact, 1, depth), mate_score(1));
+  CHECK_EQ(reference_minimax(clock98, depth, 0), 0);
+  CHECK_EQ(probe(clock98, mate_score(3), TtBound::Exact, 1, depth), 0);
+  fx.searcher->switches.use_tt_halfmove_guard = false;
+  CHECK_EQ(probe(clock96, 777, TtBound::Exact, 1, depth), 777);
+  CHECK_EQ(probe(clock98, mate_score(3), TtBound::Exact, 1, depth), mate_score(3));
+
+  // Quiescence (a depth-0 probe is a quiescence node).
+  Position checked = clock98;
+  MoveList legal;
+  generate<GenMode::Legal>(checked, legal);
+  const Move rook_check = checked.parse_uci("h1h8");
+  CHECK(legal.contains(rook_check));
+  checked.make(rook_check);
+  CHECK(checked.in_check() && checked.halfmove_clock() == 99);
+  CHECK_EQ(reference_quiesce(checked, 0, -ScoreInfinite, ScoreInfinite, true), 0);
+  CHECK_EQ(probe(checked, -777, TtBound::Exact, -776, 0), -777);
+  fx.searcher->switches.use_tt_halfmove_guard = true;
+  CHECK_EQ(probe(checked, -777, TtBound::Exact, -776, 0), 0);
+  CHECK_EQ(probe(late, 777, TtBound::Exact, 1, 0), 777);
+}
+
+// The fifty-move position set: positions where the unguarded TT cutoff
+// misses an approaching fifty-move draw. Source: Fork's own games only, the
+// STC SPRT tt-halfmove-guard-nonreg (2026-11-16; fastchess PGNs of stages
+// 0 and 1, kept outside the repository), selected by
+// tools/fifty_guard_positions.py (--min-dtz 7, the first candidate of each
+// game): pawnless, at most 5 pieces, a win for one side at clock 0 by the
+// Syzygy 3-4-5 tables (WDL +-2) with |DTZ| >= 7 plies. The DTZ oracle: at
+// clock 100 - 4 = 96 no zeroing move or mate can be forced before the
+// rule, so the position is a fifty-move draw there. The FENs below are the
+// script's output (clock 0, the game's move number), copied by script; the
+// comment names the PGN (stage s, shard), the game and the ply.
+// Each position is searched to depth 4 at clock 0 (a previous search: at
+// clock 0 the guard cannot engage, 0 + 4 < 100), then probed with
+// the same TT at clock 96 (probe_zero_window, a non-PV node, as any node of
+// a game's search) on the draw's bar: beta 1 if the clock-0 score is a win,
+// 0 if a loss. Off, the stale entry cuts with the clock-0 score; on
+// (96 + 4 reaches 100), the node is searched and returns the
+// draw, 0 exactly (a zero-window bound on a true 0). The second oracle,
+// reference_minimax at clock 96 (no TT, the rule applied), is 0 for each.
+// Of the script's 36 candidates, 2 are left out because the depth-4
+// minimax at clock 96 is not 0 (a zeroing line inside the horizon:
+// "8/8/8/4r3/R7/8/3k3K/2q5 b - - 0 75", 37, and
+// "2Q5/8/3K4/6k1/8/8/2R5/7r w - - 0 90", 63); off and on differ on all 34
+// kept (and on 35 of the 36). Built for the narrowed variant (branch
+// tier2/tt-halfmove-guard-high, the recorded fallback) and kept for the
+// always-on guard (owner, 2026-11-16). Fault-checked (2026-11-16): with the
+// guard's predicate always false, every position fails.
+TEST_CASE("search", "the TT halfmove guard: fifty-move draws the unguarded TT cutoff misses") {
+  static constexpr std::string_view fens[] = {
+      "3R4/8/4B1k1/8/8/5K2/8/8 b - - 0 85",    // s0 shard 0-0, game 92, ply 157 (DTZ -12)
+      "2k3r1/7R/4K3/4B3/8/8/8/8 w - - 0 108",  // s0 shard 0-1, game 20, ply 201 (DTZ 11)
+      "8/8/8/8/5k2/8/4K3/6r1 b - - 0 87",      // s0 shard 0-10, game 5, ply 160 (DTZ 19)
+      "8/6k1/2K5/8/1B3N2/8/8/1B6 b - - 0 72",  // s0 shard 0-10, game 67, ply 127 (DTZ -8)
+      "7k/8/7b/8/3r4/5K2/8/8 w - - 0 68",      // s0 shard 0-11, game 42, ply 119 (DTZ -16)
+      "8/8/1Q6/3K1k2/2B5/8/8/8 b - - 0 86",    // s0 shard 0-11, game 74, ply 161 (DTZ -8)
+      "4k3/8/6R1/5K2/8/8/1B1b4/8 w - - 0 66",  // s0 shard 0-13, game 16, ply 115 (DTZ 9)
+      "8/8/8/5k2/3b4/8/1K6/r7 w - - 0 69",     // s0 shard 0-15, game 48, ply 124 (DTZ -14)
+      "7N/8/8/5R2/6K1/4k3/8/8 b - - 0 86",     // s0 shard 0-15, game 64, ply 159 (DTZ -18)
+      "5Q2/8/4k3/7K/8/8/8/8 w - - 0 87",       // s0 shard 0-2, game 10, ply 157 (DTZ 11)
+      "Q7/1KR5/8/1r6/8/4k3/8/8 w - - 0 88",    // s0 shard 0-2, game 21, ply 168 (DTZ 9)
+      "8/8/8/2N2k2/3b4/r7/8/4K3 w - - 0 71",   // s0 shard 0-2, game 67, ply 127 (DTZ -10)
+      "8/8/8/3R4/8/3k2K1/2r5/3q4 b - - 0 67",  // s0 shard 0-3, game 30, ply 118 (DTZ 11)
+      "8/8/R1K2k2/2R5/8/6r1/8/8 w - - 0 67",   // s0 shard 0-3, game 40, ply 118 (DTZ 7)
+      "8/8/4K3/8/8/2b1k3/8/5b2 w - - 0 111",   // s0 shard 0-4, game 30, ply 205 (DTZ -27)
+      "8/8/8/8/8/1b1R4/3K4/4Bk2 b - - 0 133",  // s0 shard 0-5, game 42, ply 249 (DTZ -10)
+      "8/8/8/8/8/1k3r2/3Bb1K1/8 b - - 0 90",   // s0 shard 0-6, game 41, ply 165 (DTZ 21)
+      "K7/4r3/8/8/5Q2/8/5k2/8 b - - 0 74",     // s0 shard 0-6, game 60, ply 133 (DTZ -52)
+      "1K6/2R5/B7/8/8/8/k7/8 b - - 0 83",      // s0 shard 0-8, game 92, ply 155 (DTZ -14)
+      "5K2/8/6Q1/8/k5N1/8/8/8 b - - 0 80",     // s1 shard 1-1, game 11, ply 149 (DTZ -12)
+      "3k4/8/2R5/4N1K1/8/8/8/8 b - - 0 90",    // s1 shard 1-1, game 27, ply 167 (DTZ -8)
+      "Q7/1KN5/8/4k3/8/8/8/8 b - - 0 91",      // s1 shard 1-1, game 46, ply 168 (DTZ -12)
+      "8/8/8/2k4B/5K2/8/2nB4/8 b - - 0 82",    // s1 shard 1-11, game 75, ply 157 (DTZ -100)
+      "1Q1R4/8/8/8/2k5/6K1/8/5r2 b - - 0 79",  // s1 shard 1-11, game 82, ply 141 (DTZ -8)
+      "8/k7/8/1R6/2N5/5n1K/8/8 b - - 0 67",    // s1 shard 1-12, game 85, ply 123 (DTZ -22)
+      "8/8/2K5/8/2kb4/7r/4N3/8 w - - 0 78",    // s1 shard 1-12, game 98, ply 138 (DTZ -16)
+      "5K2/8/8/4n3/8/8/1k6/r7 w - - 0 85",     // s1 shard 1-3, game 100, ply 155 (DTZ -16)
+      "4K3/8/8/5N2/3Q4/8/8/1k6 b - - 0 80",    // s1 shard 1-4, game 82, ply 151 (DTZ -8)
+      "8/8/1k6/8/8/1KN4r/8/6n1 w - - 0 88",    // s1 shard 1-5, game 28, ply 162 (DTZ -30)
+      "8/4k3/2K5/6N1/3B4/8/8/8 b - - 0 103",   // s1 shard 1-5, game 72, ply 190 (DTZ -35)
+      "8/8/3R1B2/5k2/8/6K1/8/8 w - - 0 78",    // s1 shard 1-6, game 3, ply 139 (DTZ 9)
+      "8/8/8/6r1/8/2K3k1/8/8 b - - 0 74",      // s1 shard 1-6, game 6, ply 131 (DTZ 21)
+      "8/8/8/5k2/2K5/8/5r2/6b1 w - - 0 103",   // s1 shard 1-8, game 43, ply 188 (DTZ -14)
+      "4Q3/8/8/8/4K3/2k3r1/8/8 b - - 0 88",    // s1 shard 1-8, game 75, ply 160 (DTZ -40)
+  };
+  const int depth = 4;
+  const int late_clock = 100 - depth;
+  int differ = 0;
+  for (std::string_view source : fens) {
+    Position early, late;
+    CHECK_MSG(early.set_fen(source), source);
+    std::string fen(source);  // the same position at clock 96
+    std::size_t at = 0;
+    for (int field = 0; field < 4; ++field) at = fen.find(' ', at) + 1;
+    fen.replace(at, fen.find(' ', at) - at, std::to_string(late_clock));
+    CHECK_MSG(late.set_fen(fen) && late.halfmove_clock() == late_clock && early.key() == late.key(), fen);
+    CHECK_MSG(reference_minimax(late, depth, 0) == 0, fen);
+    int probed[2] = {};
+    for (int on = 0; on < 2; ++on) {
+      Fixture fx;
+      fx.searcher->switches = exact_switches();
+      fx.searcher->switches.use_tt_halfmove_guard = on == 1;
+      SearchQuota limits;
+      limits.depth = depth;
+      Position root = early;
+      const int early_score = fx.search(root, limits).score;
+      CHECK_MSG(early_score != 0, source);
+      Position probe = late;
+      probed[on] = fx.searcher->probe_zero_window(probe, early_score > 0 ? 1 : 0, depth, fx.stop);
+      // Off: the stale entry's side of the bar (a win fails high, a loss low).
+      if (on == 0) CHECK_MSG(early_score > 0 ? probed[0] >= 1 : probed[0] < 0, source << ": " << probed[0]);
+    }
+    CHECK_MSG(probed[1] == 0, source << ": " << probed[1]);
+    differ += probed[0] != probed[1];
+  }
+  CHECK_EQ(differ, static_cast<int>(std::size(fens)));
+  CHECK_EQ(differ, 34);
 }
 
 TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still returns a legal move") {
@@ -999,30 +1484,37 @@ TEST_CASE("search", "a stop during a root fail high's re-search keeps the previo
     CHECK(pos.set_fen(fen));
     return fx.search(pos, q);
   };
-  int distinct_fail_highs = 0;
-  // The first bench positions are the perft suite (perft position 6 stopped
-  // at 4,991 nodes with g5f6 failed high and c3d5 the previous best).
-  for (std::size_t i = 0; i < search_bench_fens().size() && distinct_fail_highs < 3; ++i) {
-    const std::string_view fen = search_bench_fens()[i];
-    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
-      SearchQuota q;
-      q.nodes = nodes;
-      const SearchResult r = fresh_search(fen, q);
-      const Move pending = fx.searcher->unresolved_fail_high();
-      if (pending.is_none() || r.depth == 0) continue;
-      SearchQuota to_depth;
-      to_depth.depth = r.depth;
-      const Move previous_best = fresh_search(fen, to_depth).best;
-      if (pending == previous_best) continue;
-      ++distinct_fail_highs;
-      Position pos;
-      CHECK(pos.set_fen(fen));
-      CHECK_MSG(r.best != pending, fen << " at " << nodes << " nodes: played the unconfirmed fail high "
-                                       << pos.move_to_uci(pending) << " (previous best "
-                                       << pos.move_to_uci(previous_best) << ")");
+  // Under both stop rules (use_pass_best_stop, bug review 2026-11-11 E1):
+  // the new rule takes a pass's best exact move, never a fail high.
+  for (const bool pass_best : {false, true}) {
+    fx.searcher->switches.use_pass_best_stop = pass_best;
+    int distinct_fail_highs = 0;
+    // The first bench positions are the perft suite (perft position 6 stopped
+    // at 4,991 nodes with g5f6 failed high and c3d5 the previous best).
+    for (std::size_t i = 0; i < search_bench_fens().size() && distinct_fail_highs < 3; ++i) {
+      const std::string_view fen = search_bench_fens()[i];
+      for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
+        SearchQuota q;
+        q.nodes = nodes;
+        const SearchResult r = fresh_search(fen, q);
+        const Move pending = fx.searcher->unresolved_fail_high();
+        if (pending.is_none() || r.depth == 0) continue;
+        SearchQuota to_depth;
+        to_depth.depth = fx.searcher->time_signals().depth;  // the last finished iteration
+        const Move previous_best = fresh_search(fen, to_depth).best;
+        if (pending == previous_best) continue;
+        ++distinct_fail_highs;
+        Position pos;
+        CHECK(pos.set_fen(fen));
+        CHECK_MSG(r.best != pending, fen << " at " << nodes << " nodes: played the unconfirmed fail high "
+                                         << pos.move_to_uci(pending) << " (previous best "
+                                         << pos.move_to_uci(previous_best) << ", pass-best rule " << pass_best
+                                         << ")");
+      }
     }
+    CHECK_MSG(distinct_fail_highs > 0,
+              "no search stopped with a distinct fail high unresolved (pass-best rule " << pass_best << ")");
   }
-  CHECK_MSG(distinct_fail_highs > 0, "no search stopped with a distinct fail high unresolved");
 }
 
 }  // namespace forkeng::test
@@ -1041,10 +1533,13 @@ struct PausingListener final : SearchListener {
 
 // Deliverable 8, variant (c): no iteration starts that would probably not
 // finish before the hard limit (elapsed * 5/3 past it). With soft = hard =
-// 90 ms and a 60 ms pause after depth 3, the rule stops at depth 3
-// (60 * 5/3 > 90); without it, depth 4 from the start position starts, as
+// 900 ms and a 600 ms pause after depth 3, the rule stops at depth 3
+// (600 * 5/3 > 900); without it, depth 4 from the start position starts, as
 // the soft limit is not reached, and finishes long before the hard limit
-// (fault-injected).
+// (fault-injected). Times ten times the first version's 90 / 60 ms, which a
+// gcc-tsan Debug build missed (CI 43780238486, 2026-11-15: depths 1-2 took
+// about 34 ms, so the rule stopped at depth 2): depths 1-2 must now take
+// under 540 ms (900 * 3/5), not 54 ms.
 TEST_CASE("search", "an iteration that would not finish before the hard limit is not started") {
   TestHash store;
   auto searcher = std::make_unique<Searcher>(store.table);
@@ -1053,11 +1548,11 @@ TEST_CASE("search", "an iteration that would not finish before the hard limit is
   CHECK(pos.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
   SearchQuota limits;
   limits.depth = 5;
-  limits.soft_ms = 90;
-  limits.hard_ms = 90;
+  limits.soft_ms = 900;
+  limits.hard_ms = 900;
   PausingListener listener;
   listener.pause_after = 3;
-  listener.pause = std::chrono::milliseconds{60};
+  listener.pause = std::chrono::milliseconds{600};
   const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &listener);
   CHECK_EQ(r.depth, 3);
 }
@@ -1122,15 +1617,113 @@ struct ReportLog final : SearchListener {
 // case above covers the other half of the rule; playing the unfinished
 // iteration's best whatever its score passed every test (mutant M24).
 // Node-limited searches over the bench positions stop at many points; the
-// last finished iteration is the first exact report at the result's depth.
+// last finished iteration is the first exact report at time_signals()'s depth
+// (the result's depth is the unfinished iteration's when it supplies the move).
 // At least one stop must play a new move, or the test proves nothing. That
 // is required of optimized builds only: node-limited searches are the same
 // in every build (bench parity), and the smaller sample debug builds can
 // afford may hold no such stop (none in the first 6 positions after
 // 304081e, RfpMargin 40, so gcc-debug failed in CI).
+// Whether the sample holds such a stop depends on the network, not on the rule
+// (r8crft1 held none in the usual band, r3xl2 none in either band, 2026-11-14):
+// when the embedded network's sample holds none, the same checks run again
+// with each other committed network of the build's architecture in turn
+// (second_network, NetSwap) until one's sample does, and the stop is required
+// there. The rule's checks run on every network sampled. A build with no such
+// network notes it and skips the requirement, as debug builds do.
 TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored above the last iteration") {
-  Fixture fx;
   int switched = 0;
+  const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
+  // The case on the network embedded at the call, with a fresh fixture.
+  const auto run = [&] {
+    Fixture fx;
+    fx.searcher->switches.use_pass_best_stop = false;  // the rule as it was; the next cases cover the switch
+    switched = 0;
+    // One node-limited search per budget in [first, last]; until_switch ends the
+    // sample at the first stop that plays a new move.
+    const auto sample = [&](std::uint64_t first, std::uint64_t last, std::uint64_t step, bool until_switch) {
+      for (std::size_t i = 0; i < positions; ++i) {
+        const std::string_view fen = search_bench_fens()[i];
+        for (std::uint64_t nodes = first; nodes <= last; nodes += step) {
+          fx.store.clear();
+          fx.searcher->clear_history();
+          Position pos;
+          CHECK(pos.set_fen(fen));
+          SearchQuota q;
+          q.nodes = nodes;
+          ReportLog log;
+          const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
+          if (r.depth == 0) continue;
+          const int finished_depth = fx.searcher->time_signals().depth;
+          const auto finished = std::ranges::find_if(log.entries, [&](const ReportLog::Entry& e) {
+            return e.depth == finished_depth && e.bound == 0;
+          });
+          CHECK_MSG(finished != log.entries.end(),
+                    fen << " at " << nodes << " nodes: no report of depth " << finished_depth);
+          if (finished == log.entries.end() || r.best == finished->first) continue;
+          ++switched;
+          CHECK_MSG(r.score > finished->score, fen << " at " << nodes << " nodes: played "
+                                                   << pos.move_to_uci(r.best) << " at " << r.score << " over "
+                                                   << pos.move_to_uci(finished->first) << " at "
+                                                   << finished->score << " (depth " << finished_depth << ")");
+          if (until_switch) return;
+        }
+      }
+    };
+    sample(2000, Optimized ? 30000u : 12000u, 997, false);
+    // Whether 2,000-30,000 nodes holds a stop that plays a new move depends on
+    // the network: retrain 8c's r8crft1 held none (2026-11-14). Optimized builds
+    // then search larger budgets until one does, so the rule is still exercised
+    // (the sample above is unchanged for every net that switches in it).
+    if (Optimized && switched == 0) sample(31000, 200000, 4001, true);
+  };
+  run();
+  bool required = Optimized;
+#if defined(FORK_EVAL_NNUE)
+  if (Optimized && switched == 0) {
+    std::string name;
+    for (int k = 0; switched == 0; ++k) {
+      const std::unique_ptr<NetFile> net = second_network(name, k);
+      if (!net) {
+        if (k == 0) required = false;
+        break;
+      }
+      const NetSwap swap(*net);
+      run();
+      if (switched > 0)
+        NOTE("the embedded network's sample held no stop playing a new move; " << name << "'s did");
+    }
+    if (!required)
+      NOTE(
+          "the embedded network's sample held no stop playing a new move, and no other committed network of "
+          "this architecture exists: the requirement is skipped");
+  }
+#endif
+  if (required)
+    CHECK_MSG(switched > 0, "no stop played a move other than the last finished iteration's");
+  else if (switched == 0 && !Optimized)
+    NOTE("no stop in the debug sample played a new move; optimized builds require one");
+}
+
+// The result describes the move played (fix/partial-iteration-report,
+// 2026-11-10): its depth, score and move are those of the last reported line,
+// which is exact. When an unfinished iteration supplies the move, that line
+// has the unfinished iteration's depth (searcher.cpp, the stop rule), so the
+// result's depth is that iteration's too, one more than the last finished
+// iteration's (time_signals().depth). Before the fix the result kept the
+// finished depth beside the unfinished iteration's score (the web page
+// showed "depth 7" with depth 8's score and line). Node-limited searches over
+// the bench positions; at least one must take its move from an unfinished
+// iteration, or the test proves nothing (optimized builds only, as above).
+TEST_CASE("search", "after a stop, the result's depth, score and move are the last reported line's") {
+  Fixture fx;
+  // Every aspiration fail reported (CI 43780238486, 2026-11-15: in the slow
+  // clang-tsan build a node-limited search passed the 1 s fail-report delay,
+  // reported a fail high at depth 9 naming the move then played from depth 8,
+  // and that bound line stayed the last one), so the case does not depend on
+  // the machine's speed.
+  fx.searcher->fail_report_ms = 0;
+  int from_unfinished = 0;
   const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
   for (std::size_t i = 0; i < positions; ++i) {
     const std::string_view fen = search_bench_fens()[i];
@@ -1143,23 +1736,159 @@ TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored abo
       q.nodes = nodes;
       ReportLog log;
       const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
-      if (r.depth == 0) continue;
-      const auto finished = std::ranges::find_if(
-          log.entries, [&](const ReportLog::Entry& e) { return e.depth == r.depth && e.bound == 0; });
-      CHECK_MSG(finished != log.entries.end(),
-                fen << " at " << nodes << " nodes: no report of depth " << r.depth);
-      if (finished == log.entries.end() || r.best == finished->first) continue;
-      ++switched;
-      CHECK_MSG(r.score > finished->score, fen << " at " << nodes << " nodes: played "
-                                               << pos.move_to_uci(r.best) << " at " << r.score << " over "
-                                               << pos.move_to_uci(finished->first) << " at "
-                                               << finished->score << " (depth " << r.depth << ")");
+      if (r.depth == 0 || log.entries.empty()) continue;
+      const ReportLog::Entry& last = log.entries.back();
+      const int finished = fx.searcher->time_signals().depth;
+      CHECK_MSG(last.bound == 0 && last.depth == r.depth && last.score == r.score && last.first == r.best,
+                fen << " at " << nodes << " nodes: last line depth " << last.depth << " score " << last.score
+                    << " bound " << last.bound << " pv " << pos.move_to_uci(last.first) << ", result depth "
+                    << r.depth << " score " << r.score << " move " << pos.move_to_uci(r.best));
+      CHECK_MSG(r.depth == finished || r.depth == finished + 1,
+                fen << " at " << nodes << " nodes: result depth " << r.depth << ", finished " << finished);
+      if (r.depth == finished + 1) ++from_unfinished;
     }
   }
   if (Optimized)
-    CHECK_MSG(switched > 0, "no stop played a move other than the last finished iteration's");
-  else if (switched == 0)
-    NOTE("no stop in the debug sample played a new move; optimized builds require one");
+    CHECK_MSG(from_unfinished > 0, "no stop took its move from an unfinished iteration");
+  else if (from_unfinished == 0)
+    NOTE("no stop in the debug sample played an unfinished iteration's move; optimized builds require one");
+}
+
+// The pass-best stop rule (use_pass_best_stop; bug review 2026-11-11, E1).
+// A search stopped mid-iteration used to play an unfinished iteration's move
+// only if its exact score beat the last finished iteration's, so when the
+// previous best came back lower at the new depth and another move scored
+// above it in the same pass, the previous best was still played. With the
+// switch on, once the pass has searched the previous best again, the pass's
+// best exact move is played. The switch changes nothing before the stop, so
+// the same node-limited search runs under both rules and the two are
+// compared stop by stop over the bench positions:
+// - both searches are the same tree (same nodes, same last finished depth);
+// - with the switch on, the result is the last reported line, exact, at the
+//   finished depth or one more (as above);
+// - where the rules differ, either the old rule kept the last finished
+//   iteration's move and the new one plays a move reported exact at the
+//   unfinished depth (E1's case), or the old rule took an earlier pass's
+//   move (the new rule keeps each pass's best apart); at least one E1 case
+//   must have a new move at or below the finished score (the case the old
+//   rule threw away), in optimized builds, or the test proves nothing;
+// - the completed search to that depth (fresh tables, so it repeats the
+//   stopped search exactly up to the stop, then finishes the iteration) is
+//   the judge: its best move agrees with the new rule's move more often than
+//   with the old rule's.
+// Whether the sample holds a deciding stop depends on the network (r8clam1
+// none in the usual band; r3xl2 none in either band, 2026-11-14): when the
+// embedded network's sample holds none, the same checks run again with each
+// other committed network of the build's architecture in turn (second_network,
+// NetSwap) until one's sample decides, and the two requirements above are made
+// there. The rule's checks run on every network sampled. A build with no such
+// network notes it and skips the requirements.
+TEST_CASE("search", "the pass-best stop rule plays the pass's better exact move over the previous best") {
+  CHECK(SearchSwitches{}.use_pass_best_stop);  // on since its non-regression SPRT passed
+  int differ = 0, kept_lower = 0, earlier_pass = 0, judge_new = 0, judge_old = 0;
+  const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
+  // A stop decides when the old rule kept the previous best over a lower exact move and the completed
+  // iteration agrees with exactly one of the two rules. until_decided ends the sample at the first stop after
+  // which the sample holds such a stop and the judge counts differ.
+  const auto decided = [&] { return kept_lower > 0 && judge_new != judge_old; };
+  // The case on the network embedded at the call (named `net` in its note), with a fresh fixture.
+  const auto run = [&](const std::string& net) {
+    Fixture fx;
+    auto fresh_search = [&](std::string_view fen, const SearchQuota& q, bool pass_best,
+                            SearchListener* listener) {
+      fx.store.clear();
+      fx.searcher->clear_history();
+      fx.searcher->switches.use_pass_best_stop = pass_best;
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      return fx.searcher->deliberate(pos, q, fx.stop, nullptr, listener);
+    };
+    differ = kept_lower = earlier_pass = judge_new = judge_old = 0;
+    const auto sample = [&](std::uint64_t lo, std::uint64_t hi, std::uint64_t step, bool until_decided) {
+      for (std::size_t i = 0; i < positions; ++i) {
+        const std::string_view fen = search_bench_fens()[i];
+        Position pos;
+        CHECK(pos.set_fen(fen));
+        for (std::uint64_t nodes = lo; nodes <= hi; nodes += step) {
+          SearchQuota q;
+          q.nodes = nodes;
+          ReportLog old_log, new_log;
+          const SearchResult was = fresh_search(fen, q, false, &old_log);
+          const int finished_depth = fx.searcher->time_signals().depth;
+          const SearchResult now = fresh_search(fen, q, true, &new_log);
+          CHECK_EQ(now.nodes, was.nodes);
+          CHECK_EQ(fx.searcher->time_signals().depth, finished_depth);
+          if (now.depth == 0 || new_log.entries.empty()) continue;
+          const ReportLog::Entry& last = new_log.entries.back();
+          CHECK_MSG(
+              last.bound == 0 && last.depth == now.depth && last.score == now.score && last.first == now.best,
+              fen << " at " << nodes << " nodes: last line depth " << last.depth << " score " << last.score
+                  << " bound " << last.bound << ", result depth " << now.depth << " score " << now.score);
+          CHECK(now.depth == finished_depth || now.depth == finished_depth + 1);
+          if (now.best == was.best) continue;
+          ++differ;
+          const auto finished = std::ranges::find_if(old_log.entries, [&](const ReportLog::Entry& e) {
+            return e.depth == finished_depth && e.bound == 0;
+          });
+          CHECK(finished != old_log.entries.end());
+          if (finished == old_log.entries.end()) continue;
+          // E1's case: the old rule kept the last finished iteration's move, the
+          // new one plays an exact move of the unfinished iteration. Otherwise
+          // the old rule took an earlier pass's move, which the new rule no
+          // longer does (counted only).
+          if (was.best == finished->first && was.depth == finished_depth && now.depth == finished_depth + 1) {
+            if (now.score <= finished->score) ++kept_lower;
+          } else {
+            ++earlier_pass;
+          }
+          SearchQuota to_depth;
+          to_depth.depth = finished_depth + 1;
+          const Move judge = fresh_search(fen, to_depth, false, nullptr).best;
+          judge_new += judge == now.best;
+          judge_old += judge == was.best;
+          if (until_decided && decided()) return;
+        }
+      }
+    };
+    sample(2000, Optimized ? 30000u : 12000u, 997, false);
+    // Whether 2,000-30,000 nodes holds a deciding stop depends on the network: retrain 8c's r8clam1 had three
+    // stops where the rules differ, the old rule keeping the previous best each time, but the completed
+    // iteration chose a third move in all three (2026-11-14). Optimized builds then search larger budgets
+    // until a stop decides, as 00b66c5 does for the other stop-rule case (the sample above is unchanged for
+    // every net that decides in it).
+    if (Optimized && !decided()) sample(31000, 200000, 4001, true);
+    record_note(
+        "pass-best stop rule (" + net + "): " + std::to_string(differ) + " stops differ, " +
+        std::to_string(kept_lower) + " with the old rule keeping the previous best over a move at or " +
+        "below the finished score, " + std::to_string(earlier_pass) + " with the old rule taking an " +
+        "earlier pass's move; the completed iteration agrees with the new rule " + std::to_string(judge_new) +
+        " times, the old " + std::to_string(judge_old));
+  };
+  run("the embedded network");
+  bool required = Optimized;
+#if defined(FORK_EVAL_NNUE)
+  if (Optimized && !decided()) {
+    std::string name;
+    for (int k = 0; !decided(); ++k) {
+      const std::unique_ptr<NetFile> net = second_network(name, k);
+      if (!net) {
+        if (k == 0) required = false;
+        break;
+      }
+      const NetSwap swap(*net);
+      run(name);
+    }
+    if (!required)
+      NOTE(
+          "the embedded network's sample held no deciding stop, and no other committed network of this "
+          "architecture exists: the requirements are skipped");
+  }
+#endif
+  if (required) {
+    CHECK_MSG(kept_lower > 0, "no stop where the old rule kept the previous best over a lower exact move");
+    CHECK_MSG(judge_new > judge_old, "the completed iteration agrees with the new rule "
+                                         << judge_new << " times, the old " << judge_old);
+  }
 }
 
 // Audit-1 V-4 (00bed14): no LMR or PVS re-search once the search has
@@ -1234,6 +1963,45 @@ TEST_CASE("search", "the listener: one exact report per finished iteration, plus
 // the search runs to its depth limit, below the soft limit. The limits leave
 // about 7 s for depth 6 because sanitizer builds on a slow runner need it: with
 // 800 ms and a 150 ms pause, gcc-tsan once stopped the start position at depth 5.
+// Lazy SMP's rule that a stopped search stores nothing in the TT (DESIGN.md
+// §5.6 step 17a; owner, 2026-11-15: tested before any SMP SPRT), at one
+// thread, deterministically: a search to depth D finishes iteration D after
+// N nodes; the same search from the same fresh state with a node limit of
+// N + 40 stops early in iteration D + 1, inside its first root move (the
+// best move of iteration D, searched first by move-to-front). The child
+// node of that move is then being searched at depth D. Had the stopped node
+// stored its result on the way out, its entry would carry depth D and a
+// meaningless score; it must still hold iteration D's entry at depth D - 1.
+// Fault-checked: without the move loop's stop check (`if (stopped_) return
+// 0;` after the unmake) this case fails.
+TEST_CASE("search", "a stopped search stores nothing in the TT: the interrupted line keeps its finished entries") {
+  constexpr int Depth = 7;
+  // The start position and two of the bench's positions (search_bench.hpp: the Lichess CC0 database).
+  for (const std::string_view fen : {Position::StartFen, search_bench_fens()[10], search_bench_fens()[30]}) {
+    Position pos;
+    CHECK_MSG(pos.set_fen(fen), fen);
+    SearchQuota to_depth;
+    to_depth.depth = Depth;
+    SearchResult finished;
+    {
+      Fixture fx;
+      finished = fx.search(pos, to_depth);
+    }
+    CHECK_EQ(finished.depth, Depth);
+    Fixture fx;
+    SearchQuota stopped;
+    stopped.nodes = finished.nodes + 40;
+    const SearchResult r = fx.search(pos, stopped);
+    CHECK_MSG(r.depth == Depth && r.best == finished.best, fen << ": stopped at depth " << r.depth);
+    Position child = pos;
+    child.make(finished.best);
+    TtHit hit{};
+    CHECK_MSG(fx.store.table.fetch(child.key(), hit), fen << ": no entry for the best move's child");
+    CHECK_MSG(hit.depth == Depth - 1, fen << ": the interrupted child's entry has depth " << hit.depth << ", not "
+                                          << Depth - 1);
+  }
+}
+
 TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
   TestHash store;
   auto searcher = std::make_unique<Searcher>(store.table);
@@ -1256,4 +2024,456 @@ TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
   CHECK_EQ(depth_reached(forced, false), 6);
   CHECK_EQ(depth_reached("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", true), 6);
 }
+// Time management (DESIGN.md §5.6 step 10, think tank R8): the soft limit's
+// scale. The reference is an independent double-precision version of the
+// formula, written from the fitted coefficients as tm_curve.py prints them
+// (§5.7 on measure/step1), not from the Q16 constants: the change chance for
+// the iteration over the typical one at its depth, times the balance, at
+// least the floor.
+TEST_CASE("time_budget", "the soft limit's scale follows Fork's fit of best-move changes") {
+  const auto reference = [](TimeScaleVariant v, int stability, int depth, int share) {
+    const double s = std::clamp(stability, 1, 72), d = std::min(depth, 19);
+    const auto sigma = [](double z) { return 1 / (1 + std::exp(-z)); };
+    double z1 = 0, balance = 0;
+    if (v == TimeScaleVariant::StabilityOnly) {
+      z1 = 0.534912 - 0.207666 * s - 0.096556 * d;
+      balance = 1.030;
+    } else {
+      const double p = std::clamp(share, 5, 995) / 1000.0;
+      z1 = 0.474586 - 0.177596 * s - 0.185073 * std::log(p / (1 - p)) - 0.103338 * d;
+      balance = 0.996;
+    }
+    return std::max(360.0, 1000 * balance * sigma(z1) / sigma(0.567490 - 0.211730 * d));
+  };
+  int checked = 0, wrong = 0;
+  std::ostringstream first;
+  for (TimeScaleVariant v : {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
+    for (int stability : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 30, 50, 71, 72, 73, 100})
+      for (int depth = 8; depth <= 40; ++depth)
+        for (int share = 1; share <= 1000; share += v == TimeScaleVariant::StabilityOnly ? 333 : 1) {
+          const double want = reference(v, stability, depth, share);
+          const int got = soft_scale_permille(v, {depth, stability, share, 0});
+          ++checked;
+          if (std::abs(got - want) > std::max(2.0, want * 0.002) && wrong++ == 0)
+            first << "variant " << static_cast<int>(v) << " s " << stability << " d " << depth << " share "
+                  << share << ": " << got << " vs " << want;
+        }
+  CHECK_MSG(wrong == 0, wrong << " of " << checked << " off the fit; first: " << first.str());
+  // Anchors (DESIGN.md §5.6 step 10's table): a changed best move extends,
+  // a long-stable one shortens, a dominant every-pass share shortens more.
+  const auto near = [](int got, int want) { return std::abs(got - want) <= 2; };
+  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityOnly, {10, 1, 0, 0}), 2033));
+  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityOnly, {12, 10, 0, 0}), 531));
+  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityAndShare, {12, 1, 995, 0}), 1041));
+  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityAndShare, {12, 10, 900, 0}), 407));
+  CHECK_EQ(soft_scale_permille(TimeScaleVariant::StabilityOnly, {12, 20, 0, 0}), 360);  // the floor
+}
+
+TEST_CASE("time_budget", "the soft limit's scale: its shape, its neutral cases and its floor") {
+  using enum TimeScaleVariant;
+  int broken = 0;
+  for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare})
+    for (int depth = 8; depth <= 30; ++depth)
+      for (int share = 5; share <= 995; share += 10) {
+        for (int stability = 1; stability < 80; ++stability)  // more stability, no more time
+          broken += soft_scale_permille(v, {depth, stability + 1, share, 0}) >
+                    soft_scale_permille(v, {depth, stability, share, 0});
+        if (v == StabilityAndShare && share + 10 <= 995)  // a larger share, no more time
+          broken += soft_scale_permille(v, {depth, 3, share + 10, 0}) >
+                    soft_scale_permille(v, {depth, 3, share, 0});
+        for (int stability = 1; stability <= 80; ++stability)
+          broken += soft_scale_permille(v, {depth, stability, share, 0}) < 360;
+      }
+  CHECK_EQ(broken, 0);
+  // Stability-only ignores the share; the caps hold stability at 72 and depth at 19.
+  CHECK_EQ(soft_scale_permille(StabilityOnly, {12, 4, 5, 0}),
+           soft_scale_permille(StabilityOnly, {12, 4, 995, 0}));
+  for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare}) {
+    CHECK_EQ(soft_scale_permille(v, {8, 72, 5, 0}),
+             soft_scale_permille(v, {8, 100000, 5, 0}));  // no overflow past the cap
+    CHECK_EQ(soft_scale_permille(v, {19, 3, 500, 0}), soft_scale_permille(v, {60, 3, 500, 0}));
+    // Neutral: below depth 8 (no fit there), at mate and tablebase scores.
+    for (int depth = 1; depth < 8; ++depth) CHECK_EQ(soft_scale_permille(v, {depth, 1, 500, 0}), 1000);
+    CHECK(soft_scale_permille(v, {8, 1, 500, 0}) != 1000);
+    for (int score : {TbWinScore - MaxPly, -(TbWinScore - MaxPly), mate_score(5), -mate_score(5)})
+      CHECK_EQ(soft_scale_permille(v, {12, 1, 500, score}), 1000);
+    CHECK(soft_scale_permille(v, {12, 1, 500, TbWinScore - MaxPly - 1}) != 1000);
+  }
+  CHECK_EQ(soft_scale_permille(Off, {12, 1, 500, 0}), 1000);
+  CHECK_EQ(soft_scale_permille(StabilityAndShare, {12, 1, 0, 0}), 1000);  // no share counted
+}
+
+TEST_CASE("time_budget", "deep_depth: the depth clamp at 60, the same scale up to 19, its shape to MaxPly") {
+  using enum TimeScaleVariant;
+  // The same independent double-precision formula as the fit test above, with the depth clamped at 60.
+  const auto reference = [](TimeScaleVariant v, int stability, int depth, int share) {
+    const double s = std::clamp(stability, 1, 72), d = std::min(depth, 60);
+    const auto sigma = [](double z) { return 1 / (1 + std::exp(-z)); };
+    double z1 = 0, balance = 0;
+    if (v == StabilityOnly) {
+      z1 = 0.534912 - 0.207666 * s - 0.096556 * d;
+      balance = 1.030;
+    } else {
+      const double p = std::clamp(share, 5, 995) / 1000.0;
+      z1 = 0.474586 - 0.177596 * s - 0.185073 * std::log(p / (1 - p)) - 0.103338 * d;
+      balance = 0.996;
+    }
+    return std::max(360.0, 1000 * balance * sigma(z1) / sigma(0.567490 - 0.211730 * d));
+  };
+  int broken = 0, wrong = 0;
+  for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare})
+    for (int depth = 1; depth <= MaxPly; ++depth)
+      for (int share = 5; share <= 995; share += 30) {
+        for (int stability = 1; stability <= 80; ++stability) {
+          const int got = soft_scale_permille(v, {depth, stability, share, 0}, true);
+          if (depth <= 19) broken += got != soft_scale_permille(v, {depth, stability, share, 0});
+          if (depth >= 60) broken += got != soft_scale_permille(v, {60, stability, share, 0}, true);
+          if (depth >= 8) {
+            const double want = reference(v, stability, depth, share);
+            wrong += std::abs(got - want) > std::max(2.0, want * 0.003);  // the fixed point, also at 60
+            broken += got < 360;
+            broken += soft_scale_permille(v, {depth, stability + 1, share, 0}, true) > got;
+          }
+        }
+      }
+  CHECK_EQ(broken, 0);
+  CHECK_EQ(wrong, 0);
+  // E2's case: a best move stable for 20 iterations at depth 30 is no longer held at the floor.
+  CHECK_EQ(soft_scale_permille(StabilityAndShare, {30, 20, 500, 0}), 360);
+  CHECK(soft_scale_permille(StabilityAndShare, {30, 20, 500, 0}, true) > 600);
+  // The switch is on by default (adopted 2026-11-14).
+  CHECK(SearchSwitches{}.use_deep_time_depth);
+}
+
+// L1 of the time-management audit of 2026-11-16 (switch use_time_guards):
+// the scale's depth clamped at 27, the deepest depth E2's long-search check
+// validated (bug-review-followup-2026-11-11.md, E2): the same scale as the
+// clamp at 60 at every depth up to 27, over every stability and share X6's
+// fit uses (stability 1-72 and past its cap, share 5-995 and outside it),
+// and beyond 27 the scale at 27. Without deep_depth the clamp stays at 19.
+TEST_CASE("time_budget",
+          "validated_depth: the depth clamp at 27, the same scale as at 60 up to 27, constant beyond") {
+  using enum TimeScaleVariant;
+  int differs = 0, moves = 0, checked = 0;
+  for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare})
+    for (int depth = 1; depth <= MaxPly; ++depth)
+      for (int share = 0; share <= 1000; share += share < 10 || share >= 990 ? 1 : 15)
+        for (int stability = 1; stability <= 80; ++stability) {
+          const IterationSignals at{depth, stability, share, 0};
+          const int got = soft_scale_permille(v, at, true, true);
+          ++checked;
+          if (depth <= 27)
+            differs += got != soft_scale_permille(v, at, true);
+          else
+            differs += got != soft_scale_permille(v, {27, stability, share, 0}, true, true);
+          differs += soft_scale_permille(v, at, false, true) != soft_scale_permille(v, at);
+          if (depth >= 27 && depth < 60)
+            moves += soft_scale_permille(v, at, true) !=
+                     soft_scale_permille(v, {depth + 1, stability, share, 0}, true);
+        }
+  CHECK_MSG(differs == 0, differs << " of " << checked << " off the rule");
+  CHECK(moves > 0);  // the clamp at 60 does follow depth in this range: the comparison can fail
+  // The two depths the order named: 40 and 60 give the scale at 27; at 60 the clamp at 60 does not.
+  for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare})
+    for (int stability : {1, 3, 8, 20})
+      for (int share : {50, 500, 950}) {
+        const int at27 = soft_scale_permille(v, {27, stability, share, 0}, true, true);
+        CHECK_EQ(soft_scale_permille(v, {40, stability, share, 0}, true, true), at27);
+        CHECK_EQ(soft_scale_permille(v, {60, stability, share, 0}, true, true), at27);
+        CHECK_EQ(soft_scale_permille(v, {27, stability, share, 0}, true), at27);
+      }
+  // The hazard: with the clamp at 60, a best move stable for 9 iterations at depth 40 still scales past
+  // the hard limit (four budgets; it takes 17 there, 9 at depth 27); with the clamp at 27 it does not.
+  CHECK(soft_scale_permille(StabilityAndShare, {40, 9, 500, 0}, true) > 4000);
+  CHECK(soft_scale_permille(StabilityAndShare, {40, 9, 500, 0}, true, true) < 4000);
+  CHECK(soft_scale_permille(StabilityAndShare, {27, 8, 500, 0}, true, true) > 4000);
+  CHECK(SearchSwitches{}.use_time_guards);  // on: the test side of its SPRT
+}
+
+// L1's second guard (plan_time's move_guard): one move takes at most its
+// increment plus half of the rest of the clock after the Move Overhead, or an
+// even share of that clock over movestogo if larger; elsewhere the plan is the
+// unguarded one. The bound is restated here from that rule, over a grid of
+// clocks, increments, movestogo and overheads; the literal TCEC cases (1800+3,
+// Move Overhead 100) are worked by hand from plan_time's rule (the danger-zone
+// case's comment above) and the guard's:
+// - 1,800,000 ms: available 1,799,900, share 59,996 + 2,250 = 62,246, cap
+//   1,619,910, hard 4 x 62,246 = 248,984; guard 3,000 + 898,450: unchanged;
+// - 22,600 ms (available 22,500, 7.5 increments: the soft limit equals the
+//   increment): share 750 + 2,250 = 3,000, hard 12,000; guard 3,000 + 9,750 =
+//   12,750: unchanged;
+// - 10,100 ms: available 10,000, share 333 + 2,250 = 2,583, cap 9,000, hard
+//   min(2,583, 2,250) x 4 = 9,000; guard 3,000 + 3,500 = 6,500: hard 6,500;
+// - 10,100 ms, no increment, movestogo 1: share 10,000, hard 9,000 (the cap);
+//   guard max(5,000, 10,000): unchanged, soft 9,000; movestogo 3: share
+//   3,333, hard 9,000; guard max(5,000, 3,333) = 5,000: hard 5,000.
+TEST_CASE("time_budget",
+          "move_guard: a move never takes more than its increment and half of the rest of the clock") {
+  const std::int64_t Huge = std::numeric_limits<std::int64_t>::max();
+  int broken = 0, bound = 0, checked = 0;
+  for (std::int64_t remaining :
+       {std::int64_t{-5}, std::int64_t{0}, std::int64_t{1}, std::int64_t{50}, std::int64_t{150},
+        std::int64_t{250}, std::int64_t{380}, std::int64_t{1000}, std::int64_t{2000}, std::int64_t{5000},
+        std::int64_t{10100}, std::int64_t{22600}, std::int64_t{60000}, std::int64_t{600000},
+        std::int64_t{1800000}, std::int64_t{7200000}, Huge})
+    for (std::int64_t inc :
+         {std::int64_t{-10}, std::int64_t{0}, std::int64_t{10}, std::int64_t{80}, std::int64_t{400},
+          std::int64_t{3000}, std::int64_t{12000}, std::int64_t{60000}, Huge})
+      for (std::int64_t mtg : {std::int64_t{0}, std::int64_t{1}, std::int64_t{2}, std::int64_t{3},
+                               std::int64_t{10}, std::int64_t{40}, std::int64_t{1000}})
+        for (std::int64_t overhead : {std::int64_t{0}, std::int64_t{100}, std::int64_t{1000}}) {
+          ClockInput c;
+          c.remaining_ms = remaining;
+          c.increment_ms = inc;
+          if (mtg) c.movestogo = mtg;
+          c.overhead_ms = overhead;
+          const TimeBudget plain = plan_time(c);
+          c.move_guard = true;
+          const TimeBudget t = plan_time(c);
+          const std::int64_t available =
+              std::max<std::int64_t>(1, std::min(remaining, std::int64_t{1} << 40) - overhead);
+          const std::int64_t own =
+              std::min(std::clamp<std::int64_t>(inc, 0, std::int64_t{1} << 40), available);
+          std::int64_t limit = own + (available - own) / 2;
+          if (mtg) limit = std::max(limit, available / std::clamp<std::int64_t>(mtg, 1, MaxMovesToGo));
+          limit = std::max<std::int64_t>(limit, 1);
+          ++checked;
+          broken += !(t.soft_ms >= 1 && t.soft_ms <= t.hard_ms && t.hard_ms <= limit);
+          broken += t.hard_ms != std::min(plain.hard_ms, limit);  // only the guard changes
+          broken += t.soft_ms != std::min(plain.soft_ms, t.hard_ms);
+          bound += plain.hard_ms > limit;
+        }
+  CHECK_MSG(broken == 0, broken << " broken over " << checked << " clocks");
+  CHECK(bound > 0);  // the unguarded plan does go past the bound in this grid: the check can fail
+  struct Literal {
+    std::int64_t remaining, inc, mtg, soft, hard;
+  };
+  for (const Literal& l : {Literal{1800000, 3000, 0, 62246, 248984}, Literal{22600, 3000, 0, 3000, 12000},
+                           Literal{10100, 3000, 0, 2583, 6500}, Literal{10100, 0, 1, 9000, 9000},
+                           Literal{10100, 0, 3, 3333, 5000}}) {
+    ClockInput c;
+    c.remaining_ms = l.remaining;
+    c.increment_ms = l.inc;
+    if (l.mtg) c.movestogo = l.mtg;
+    c.overhead_ms = 100;
+    c.move_guard = true;
+    const TimeBudget t = plan_time(c);
+    CHECK_MSG(t.soft_ms == l.soft && t.hard_ms == l.hard, l.remaining << " + " << l.inc << " mtg " << l.mtg
+                                                                      << ": soft " << t.soft_ms << " hard "
+                                                                      << t.hard_ms);
+  }
+  // go movetime and no clock: the guard has nothing to guard.
+  ClockInput c;
+  c.movetime = 1000;
+  c.overhead_ms = 100;
+  c.move_guard = true;
+  CHECK_EQ(plan_time(c).hard_ms, 900);
+  c = ClockInput{};
+  c.move_guard = true;
+  CHECK_EQ(plan_time(c).hard_ms, -1);
+  // quota_for_go passes the switch through.
+  GoLimits go;
+  go.remaining_ms[White] = 10100;
+  go.increment_ms[White] = 3000;
+  CHECK_EQ(quota_for_go(go, White, 100).hard_ms, 9000);
+  CHECK_EQ(quota_for_go(go, White, 100, true).hard_ms, 6500);
+}
+
+TEST_CASE("time_budget", "a scaled soft limit stays within [1, hard] and leaves movetime alone") {
+  CHECK_EQ(scaled_soft_ms(1000, 4000, 531), 531);
+  CHECK_EQ(scaled_soft_ms(1000, 4000, 2033), 2033);
+  CHECK_EQ(scaled_soft_ms(1000, 4000, 5384), 4000);  // never past the hard limit
+  CHECK_EQ(scaled_soft_ms(1001, 4000, 999), 999);    // 1001 * 999 / 1000, rounded down
+  CHECK_EQ(scaled_soft_ms(1, 4000, 360), 1);         // never below 1
+  CHECK_EQ(scaled_soft_ms(1000, 4000, 0), 1);
+  for (int permille : {360, 1000, 5384}) {
+    CHECK_EQ(scaled_soft_ms(200, 200, permille), 200);  // go movetime: soft == hard
+    CHECK_EQ(scaled_soft_ms(-1, 4000, permille), -1);   // no limit stays none
+    CHECK_EQ(scaled_soft_ms(1000, -1, permille), 1000);
+  }
+  constexpr std::int64_t Big = std::numeric_limits<std::int64_t>::max();
+  CHECK_EQ(scaled_soft_ms(Big - 1, Big, 1'000'000), Big);  // no overflow
+  constexpr std::int64_t Clock = std::int64_t{1} << 40;    // plan_time's largest clock
+  CHECK_EQ(scaled_soft_ms(Clock, Big, 5384), Clock / 1000 * 5384 + Clock % 1000 * 5384 / 1000);
+}
+
+namespace {
+// Records the time-management scale of every finished iteration at depth 8
+// or more (the variant's function on the searcher's own signals), and once,
+// after the iteration at jump_depth, moves the search's clock to jump_to_ms.
+struct ClockJumpListener final : SearchListener {
+  Searcher* searcher = nullptr;
+  TimeScaleVariant variant = TimeScaleVariant::StabilityOnly;
+  int jump_depth = 0;
+  std::int64_t jump_to_ms = 0;
+  bool jumped = false;
+  std::vector<std::pair<int, int>> scales;  // depth, per mille
+  void on_iteration(const Position&, const IterationReport& r) override {
+    const IterationSignals& signals = searcher->time_signals();
+    if (r.bound != 0 || signals.depth != r.depth || jumped) return;
+    if (r.depth >= 8) scales.push_back({r.depth, soft_scale_permille(variant, signals)});
+    if (r.depth == jump_depth) {
+      searcher->advance_clock(std::chrono::milliseconds{jump_to_ms - r.elapsed_ms});
+      jumped = true;
+    }
+  }
+};
+}  // namespace
+
+// Time management in the search (§5.6 step 10), each variant: a soft limit
+// of 100 s (hard 400 s) and a clock moved forward after a chosen iteration D,
+// so no test waits. Extend: at the first D (depth >= 8) whose scale is at
+// least 1100, the clock moves to 105 s: the plain soft limit stops there,
+// the scaled one (at least 110 s) searches on to the depth limit D + 1.
+// Shorten: at the first D whose scale is at most 900, the clock moves to
+// 95 s: the plain limit searches on, the scaled one (at most 90 s) stops.
+// The soft check follows the jump at once, so the margins need no slack.
+// D is found in the bench positions by a search without limits first (the
+// first position that has one); the searches are the same up
+// to D (fresh TT and history, and time only stops a search), which the test
+// checks. With the switches off, and with use_share_time alone, the soft
+// check compares against the planned 100 s exactly.
+TEST_CASE("search", "time management: a changed best move searches longer, a stable one stops sooner") {
+  const std::atomic<bool> stop{false};
+  struct Outcome {
+    int depth;
+    std::int64_t soft;
+    std::vector<std::pair<int, int>> scales;
+  };
+  const auto run = [&](std::string_view fen, TimeScaleVariant v, bool stability_on, bool share_on, int depth,
+                       int jump_depth, std::int64_t jump_to_ms) {
+    TestHash store;
+    auto searcher = std::make_unique<Searcher>(store.table);
+    searcher->switches.use_stability_time = stability_on;
+    searcher->switches.use_share_time = share_on;
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    SearchQuota limits;
+    limits.depth = depth;
+    if (jump_depth) {
+      limits.soft_ms = 100'000;
+      limits.hard_ms = 400'000;
+    }
+    ClockJumpListener listener;
+    listener.searcher = searcher.get();
+    listener.variant = v;
+    listener.jump_depth = jump_depth;
+    listener.jump_to_ms = jump_to_ms;
+    const int reached = searcher->deliberate(pos, limits, stop, nullptr, &listener).depth;
+    return Outcome{reached, searcher->last_soft_ms(), listener.scales};
+  };
+  const std::span<const std::string_view> fens = search_bench_fens();
+  const int probe_depth = 11;  // every build: the search is the same on all of them (bench parity)
+  using enum TimeScaleVariant;
+  for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare}) {
+    const bool share_on = v == StabilityAndShare;
+    for (const bool extend : {true, false}) {
+      bool found = false;
+      for (std::string_view fen : fens) {
+        const Outcome probe = run(fen, v, false, false, probe_depth, 0, 0);
+        int d = 0, scale = 0;
+        for (const auto& [depth, permille] : probe.scales)
+          if (depth < probe_depth && (extend ? permille >= 1100 : permille <= 900)) {
+            d = depth;
+            scale = permille;
+            break;
+          }
+        if (!d) continue;
+        found = true;
+        const std::int64_t jump_to = extend ? 105'000 : 95'000;
+        const Outcome off = run(fen, v, false, false, d + 1, d, jump_to);
+        const Outcome on = run(fen, v, true, share_on, d + 1, d, jump_to);
+        const Outcome share_alone = run(fen, v, false, true, d + 1, d, jump_to);
+        const std::string where = std::string(fen) + ", depth " + std::to_string(d);
+        // The switched-on search is the same search up to d.
+        CHECK_MSG(!on.scales.empty() && on.scales.back() == std::make_pair(d, scale), where);
+        CHECK_MSG(off.depth == (extend ? d : d + 1), where << ": off reached " << off.depth);
+        CHECK_MSG(on.depth == (extend ? d + 1 : d),
+                  where << ": on reached " << on.depth << ", scale " << scale);
+        CHECK_MSG(share_alone.depth == off.depth, where);
+        CHECK_EQ(off.soft, 100'000);
+        CHECK_EQ(share_alone.soft, 100'000);
+        CHECK_MSG(on.soft != 100'000, where);
+        break;
+      }
+      CHECK_MSG(found, "variant " << static_cast<int>(v)
+                                  << (extend ? ": no iteration to extend" : ": none to shorten"));
+    }
+  }
+}
+
+#ifdef FORK_TUNE
+// Tuning builds: the eleven ranges widened for the final retune (owner,
+// 2026-11-09; final-retune.md), and the four set on 2026-11-12
+// (AspirationHalfWidth's highest 40, FollowWeight's 16, MinorDriftShare's
+// lowest 16, SingularMarginPerPly's highest 16, and DirectCheckBonus's
+// 2500-10000, narrowed from 0-20000 to the ranges rule), searched at their
+// new bounds, each alone and all at once:
+// every search completes with a legal move and a score inside the score
+// bounds. LmrMinMove 1 is the same search as 2 (same nodes, move
+// and score): the first move searched never takes the LMR path, so the
+// bound adds a value SPSA cannot tell from 2.
+TEST_CASE("search", "tuning build: the widened ranges search at their bounds") {
+  struct Bound {
+    const char* name;
+    int value;
+  };
+  const Bound bounds[] = {{"RfpMargin", 30},
+                          {"LmpQuietAllowance", 3},
+                          {"FutilityOffset", 30},
+                          {"FutilityGrowth", 25},
+                          {"SingularMarginPerPly", 2},
+                          {"SingularMinDepth", 3},
+                          {"NoMoveReduceMinDepth", 16},
+                          {"ReplyWeight", 12},
+                          {"NullSurplusPliesMax", 6},
+                          {"LmrMinMove", 1},
+                          {"LmpMaxDepth", 1},
+                          {"AspirationHalfWidth", 40},
+                          {"FollowWeight", 16},
+                          {"MinorDriftShare", 16},
+                          {"SingularMarginPerPly", 16},
+                          {"DirectCheckBonus", 2500},
+                          {"DirectCheckBonus", 10000}};
+  const std::string_view fens[] = {"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+                                   "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"};
+  const auto reset = [] {
+    for (const TuneParam& p : param_table()) CHECK(set_param(p.name, p.default_value));
+  };
+  const auto check_searches = [&](const std::string& what) {
+    for (std::string_view fen : fens) {
+      Fixture fx;
+      const SearchResult r = fx.search(fen, 7);
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      CHECK_MSG(legal.contains(r.best), what << ": " << fen);
+      CHECK_MSG(std::abs(r.score) <= MateScore && (is_tb_or_mate(r.score) || std::abs(r.score) <= EvalLimit),
+                what << ": " << fen << " score " << r.score);
+    }
+  };
+  for (const Bound& b : bounds) {
+    const TuneParam* p = find_param(b.name);
+    CHECK_MSG(p && (p->lowest == b.value || p->highest == b.value), b.name);
+    CHECK(set_param(b.name, b.value));
+    check_searches(b.name);
+    reset();
+  }
+  for (const Bound& b : bounds) CHECK(set_param(b.name, b.value));
+  check_searches("all at once");
+  reset();
+  // LmrMinMove 1 against 2.
+  SearchResult at[2];
+  for (int i = 0; i < 2; ++i) {
+    CHECK(set_param("LmrMinMove", i + 1));
+    Fixture fx;
+    at[i] = fx.search(fens[0], 8);
+  }
+  reset();
+  CHECK_EQ(at[0].nodes, at[1].nodes);
+  CHECK(at[0].best == at[1].best);
+  CHECK_EQ(at[0].score, at[1].score);
+}
+#endif
 }  // namespace forkeng::test

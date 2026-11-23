@@ -8,7 +8,11 @@ report of each entry). Its figures are rounded to two decimals.
 
     python3 -m unittest discover -s tools/cloud -p 'test_*.py'
 """
+import contextlib
+import io
+import json
 import math
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -199,6 +203,51 @@ class MergeTests(unittest.TestCase):
         self.assertIn('  stage 0 shard 0 (github): failed, pairs 2 of 50 planned, fastchess exit 139\n'
                       '  stage 0 shard 1 (github): done, pairs 9 of 50 planned\n', text)
 
+    # Bug review 2026-11-11, T3 (owner, the same day): only shards that are "done" with their planned pairs.
+    def test_incomplete_shards_are_named(self):
+        done = self.shard([1, 2, 3, 2, 2], stage='1', shard='3', rounds='10')
+        self.assertIsNone(sm.incomplete(done))
+        for status in ('running', 'short', 'failed', 'interrupted'):
+            self.assertIn(f"stage 1 shard 3 has status '{status}'", sm.incomplete(dict(done, status=status)))
+        self.assertIn('9 pairs of 10 planned', sm.incomplete(dict(done, ptnml=[1, 2, 3, 2, 1])))
+        self.assertIn('no planned rounds', sm.incomplete(self.shard([1, 2, 3, 2, 2])))
+
+    def test_merge_with_require_complete_refuses_a_partial_shard(self):
+        a = self.shard([1, 2, 3, 2, 2], stage='0', shard='0', rounds='10', opening_start='1')
+        b = self.shard([1, 2, 3, 2, 2], stage='0', shard='1', rounds='10', opening_start='11')
+        self.assertEqual(sm.merge([a, b], require_complete=True)['pairs'], 20)
+        running = dict(b, status='running')  # a final snapshot that was never written
+        with self.assertRaisesRegex(ValueError, "1 of 2 shards incomplete: stage 0 shard 1 has status 'running'"):
+            sm.merge([a, running], require_complete=True)
+        self.assertEqual(sm.merge([a, running])['pairs'], 20)  # the library default (h2h_pick, report) as before
+
+    def test_the_cli_refuses_partial_shards_unless_allowed(self):
+        import json
+        import os
+        import tempfile
+        from contextlib import redirect_stderr, redirect_stdout
+        from io import StringIO
+        a = self.shard([1, 2, 3, 2, 2], stage='0', shard='0', rounds='10', opening_start='1')
+        b = self.shard([1, 2, 3, 2, 1], stage='0', shard='1', rounds='10', opening_start='11')  # 9 of 10
+        with tempfile.TemporaryDirectory() as d:
+            paths = []
+            for i, s in enumerate((a, b)):
+                paths.append(os.path.join(d, f'{i}.json'))
+                with open(paths[-1], 'w', encoding='utf-8') as f:
+                    json.dump(s, f)
+            out, err = StringIO(), StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                rc = sm.main(['merge', *paths, '--elo0', '0', '--elo1', '5', '--played', '1', '--cap', '2'])
+            self.assertEqual(rc, 1)
+            self.assertIn('merge refused: 1 of 2 shards incomplete: stage 0 shard 1 has 9 pairs of 10 planned',
+                          err.getvalue())
+            self.assertNotIn('Verdict', out.getvalue())
+            out = StringIO()
+            with redirect_stdout(out), redirect_stderr(StringIO()):
+                rc = sm.main(['merge', *paths, '--elo0', '0', '--elo1', '5', '--allow-partial'])
+            self.assertEqual(rc, 0)
+            self.assertIn('pairs 19, games 38', out.getvalue())
+
     def test_pairs_count_only_when_both_games_are_done(self):
         # Concurrency finishes games out of order; game 6 is still running.
         log = '\n'.join([
@@ -210,6 +259,182 @@ class MergeTests(unittest.TestCase):
         ])
         # (1, 2): 0 + 1/2 (bin 1); (3, 4): 1/2 + 1 (bin 3); (5, 6) unfinished.
         self.assertEqual(sm.pairs_from_games(log), [0, 1, 0, 1, 0])
+
+
+class TestStageDecision(unittest.TestCase):
+    """Design R (owner, DESIGN.md §6 2026-11-07 decision 2): [0, 6] nElo, alpha 0.05, beta 0.20, a cap
+    of 8 stages and one futility look after 2 stages (stop if the cumulative nElo estimate is below 0)."""
+    # Two stages of two shards of [6, 11, 20, 9, 4]: nElo -27.08, LLR on [0, 6] -0.60 (inside both bounds).
+    FUTILE = [24, 44, 80, 36, 16]
+    EVEN = [40, 80, 160, 80, 40]  # mean exactly 1/2: nElo 0
+    STRONG = [0, 0, 10, 40, 50]
+
+    def decide(self, ptnml, played, cap=8, futility_after=2, fixed=False):
+        return sm.stage_decision(ptnml, 0, 6, 0.05, 0.20, played, cap, futility_after, fixed)[0]
+
+    def test_design_r_bounds(self):
+        lower, upper = sm.bounds(0.05, 0.20)
+        self.assertAlmostEqual(lower, math.log(0.20 / 0.95), places=12)
+        self.assertAlmostEqual(upper, math.log(0.80 / 0.05), places=12)
+
+    def test_futility_at_two_stages(self):
+        lower, upper = sm.bounds(0.05, 0.20)
+        self.assertTrue(lower < sm.llr(self.FUTILE, 0, 6) < upper)  # the stop is futility's, not an H0
+        self.assertLess(sm.nelo(self.FUTILE), 0)
+        self.assertEqual(self.decide(self.FUTILE, 2), 'futility stop')
+        self.assertEqual(self.decide(self.FUTILE, 1), 'continue')  # one look only, at 2 stages
+        self.assertEqual(self.decide(self.FUTILE, 3), 'continue')
+        self.assertEqual(self.decide(self.FUTILE, 2, futility_after=0), 'continue')  # off
+        detail = sm.stage_decision(self.FUTILE, 0, 6, 0.05, 0.20, 2, 8, 2)[1]
+        self.assertEqual(detail, 'futility stop (nElo -27.08 < 0 after 2 stages)')
+
+    def test_futility_needs_negative(self):
+        self.assertEqual(sm.nelo(self.EVEN), 0.0)
+        self.assertEqual(self.decide(self.EVEN, 2), 'continue')
+
+    def test_llr_before_futility(self):
+        weak = [x * 8 for x in self.FUTILE]  # nElo still -27.08, LLR -4.8: below the lower bound
+        self.assertLess(sm.llr(weak, 0, 6), sm.bounds(0.05, 0.20)[0])
+        self.assertEqual(self.decide(weak, 2), 'H0 accepted')
+        self.assertEqual(self.decide(self.STRONG, 2), 'H1 accepted')
+
+    def test_capped(self):
+        self.assertEqual(self.decide(self.EVEN, 8), 'capped')
+        self.assertEqual(self.decide(self.EVEN, 7), 'continue')
+        detail = sm.stage_decision(self.EVEN, 0, 6, 0.05, 0.20, 8, 8, 2)[1]
+        self.assertEqual(detail, 'capped (8 of 8 stages, undecided)')
+
+    def test_fixed_ignores_llr(self):
+        self.assertEqual(self.decide(self.STRONG, 1, cap=2, futility_after=0, fixed=True), 'continue')
+        self.assertEqual(self.decide(self.STRONG, 2, cap=2, futility_after=0, fixed=True), 'complete')
+
+    def test_cli_verdict_line(self):
+        import contextlib
+        import io
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / 'result.json'
+            f.write_text(json.dumps({'ptnml': self.FUTILE, 'status': 'done', 'meta': {'rounds': '200'}}),
+                         encoding='utf-8')
+            args = ['merge', str(f), '--elo0', '0', '--elo1', '6', '--alpha', '0.05', '--beta', '0.2']
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                sm.main(args + ['--played', '2', '--cap', '8', '--futility-after', '2'])
+            lines = out.getvalue().splitlines()
+            self.assertEqual(lines[-1], 'Verdict: futility stop (nElo -27.08 < 0 after 2 stages)')
+            self.assertIn('LLR: -0.60 (-1.56, 2.77) [0.00, 6.00] nElo: continue', lines[-2])
+            plain = io.StringIO()
+            with contextlib.redirect_stdout(plain):
+                sm.main(args)
+            self.assertNotIn('Verdict:', plain.getvalue())  # the format without --played is unchanged
+            self.assertEqual(plain.getvalue().splitlines(), lines[:-1])
+
+
+class RowsTests(unittest.TestCase):
+    """The factorial round's per-shard rows (design-mode exemption of the same-options check; design
+    docs/research/phase4-designs/factorial-removal-round.md §3.1, §3.3): each shard's row, options and design
+    digest are checked against the recomputed permutation (--design/--name) or a stage's table (--stage-rows)."""
+
+    def setUp(self):
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'github'))
+        import factorial_fit
+        self.ff = factorial_fit
+        self.tmp = tempfile.TemporaryDirectory()
+        self.design = {'format': factorial_fit.FORMAT, 'factors': ['UseLmp', 'UseAspiration', 'UseMateDistance'],
+                       'm': 1, 'rows': [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]]}
+        self.design_path = os.path.join(self.tmp.name, 'design.json')
+        with open(self.design_path, 'w', encoding='utf-8') as f:
+            json.dump(self.design, f)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def shards(self, name, stages, mutate=None):
+        out = []
+        for stage in stages:
+            for s, entry in enumerate(self.ff.stage_rows(self.design, name, stage)['shard_rows']):
+                start = 1 + (stage * 4 + s) * 10
+                meta = {'base': 'aaa', 'test': 'aaa', 'tc': '8+0.08', 'hash': '16', 'base_opts': '',
+                        'test_opts': entry['opts'], 'tables': '3-4-5', 'book_sha': 'x', 'stage': str(stage),
+                        'shard': str(s), 'rounds': '10', 'opening_start': str(start), 'opening_end': str(start + 9),
+                        'row': str(entry['row']), 'design': self.ff.design_digest(self.design)}
+                out.append({'ptnml': [1, 2, 4, 2, 1], 'finished_games': 20, 'time_losses': 0, 'abnormal': 0,
+                            'status': 'done', 'meta': meta})
+        if mutate:
+            mutate(out)
+        return out
+
+    def cli(self, shards, *extra):
+        paths = []
+        for i, s in enumerate(shards):
+            paths.append(os.path.join(self.tmp.name, f'r{i}.json'))
+            with open(paths[-1], 'w', encoding='utf-8') as f:
+                json.dump(s, f)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = sm.main(['merge', *paths, '--elo0', '0', '--elo1', '6', *extra])
+        return rc, out.getvalue(), err.getvalue()
+
+    def test_without_rows_differing_options_are_refused_as_before(self):
+        rc, out, err = self.cli(self.shards('n', [0]))
+        self.assertEqual(rc, 1)
+        self.assertIn('shards differ in test_opts', err)
+        self.assertNotIn('Rows:', out)
+
+    def test_the_recomputed_permutation(self):
+        rc, out, err = self.cli(self.shards('n', [0, 1, 2]), '--design', self.design_path, '--name', 'n')
+        self.assertEqual(rc, 0, err)
+        lines = out.splitlines()
+        self.assertTrue(lines[-1].startswith('Rows: every shard played its permuted row (design '), lines[-1])
+        self.assertTrue(lines[-2].startswith('LLR: '), lines[-2])  # after the report, so a driver's tail keeps it
+        self.assertIn('pairs 120, games 240', out)
+        rc, _, err = self.cli(self.shards('n', [0, 1]), '--design', self.design_path, '--name', 'other')
+        self.assertEqual(rc, 1)
+        self.assertIn("not the permutation's row", err)
+
+    def test_a_shard_off_its_row_is_refused(self):
+        def swap(shards):  # stage 1's shards 0 and 1 swap rows (options and row together)
+            a, b = shards[4]['meta'], shards[5]['meta']
+            a['row'], b['row'], a['test_opts'], b['test_opts'] = b['row'], a['row'], b['test_opts'], a['test_opts']
+        rc, _, err = self.cli(self.shards('n', [0, 1], swap), '--design', self.design_path, '--name', 'n')
+        self.assertEqual(rc, 1)
+        self.assertIn('merge refused: stage 1 shard 0 played row', err)
+
+        def digest(shards):
+            for s in shards:
+                s['meta']['design'] = '0' * 64
+        rc, _, err = self.cli(self.shards('n', [0], digest), '--design', self.design_path, '--name', 'n')
+        self.assertEqual(rc, 1)
+        self.assertIn("not the permutation's row", err)
+
+    def test_one_stage_table(self):
+        table = os.path.join(self.tmp.name, 'rows.json')
+        with open(table, 'w', encoding='utf-8') as f:
+            json.dump(self.ff.stage_rows(self.design, 'n', 3), f)
+        rc, out, err = self.cli(self.shards('n', [3]), '--stage-rows', table)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("Rows: every shard played its row of the stage's table", out)
+        rc, _, err = self.cli(self.shards('n', [2]), '--stage-rows', table)  # stage 2's shards, stage 3's table
+        self.assertEqual(rc, 1)
+        rc, _, err = self.cli(self.shards('n', [2, 3]), '--stage-rows', table)
+        self.assertEqual(rc, 1)
+        self.assertIn("checks one stage's shards", err)
+
+    def test_options_that_go_together(self):
+        rc, _, err = self.cli(self.shards('n', [0]), '--design', self.design_path)
+        self.assertEqual(rc, 1)
+        self.assertIn('--design and --name go together', err)
+        rc, _, err = self.cli(self.shards('n', [0]), '--design', os.path.join(self.tmp.name, 'missing.json'),
+                              '--name', 'n')
+        self.assertEqual(rc, 1)
+        self.assertIn('merge refused: --design', err)
+
+    def test_the_merged_meta_names_the_design(self):
+        merged = sm.merge(self.shards('n', [0]), rows=self.ff.expected_rows(self.design, 'n', [0]))
+        self.assertEqual(merged['meta']['design'], self.ff.design_digest(self.design))
+        self.assertNotIn('test_opts', merged['meta'])
 
 
 if __name__ == '__main__':

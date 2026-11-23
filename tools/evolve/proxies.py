@@ -93,6 +93,7 @@ class Engine:
                                   encoding='utf-8', bufsize=1)
         self.send('uci')
         self.until('uciok')
+        self.send('setoption name CalibratedScore value false')  # raw scores (the display calibration off)
         self.send(f'setoption name Hash value {hash_mb}')
 
     def send(self, line):

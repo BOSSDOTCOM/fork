@@ -1,0 +1,138 @@
+{
+ "run": "g4e",
+ "generator": {
+  "tool": "fork_datagen (complete games of generation 4's run g4e, labelled by Fork 0.3.0-dev+275b8e3 (r3kr1), on 10 threads, finished at its target; sealed by the Control Center)",
+  "version": "0.3.0-dev+275b8e3 (WSL clang PGO, clang 21.1.8)",
+  "evaluator": "nnue (r3kr1)",
+  "arch": "x86-64-v3"
+ },
+ "settings": {
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "check_nodes": 2000,
+  "hash_mb": 1,
+  "nodes": 20000,
+  "openings": "lichess-2026-09.epd",
+  "positions_target": 424000000,
+  "save_percent": 50,
+  "seed": 20261120,
+  "shard_mb": 1024,
+  "threads": 10,
+  "unsaved_nodes": 4000,
+  "tables": "syzygy 5-piece",
+  "openings_count": 13943421
+ },
+ "openings": {
+  "file": "lichess-2026-09.epd",
+  "sha256": "dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef",
+  "positions": 13943421,
+  "source": "lichess_db_standard_rated_2026-09.pgn.zst",
+  "source_sha256": "1de8eb64fed443f4be310c779e8d60a13bcfc6e3b104bcb39a018eb056edec89"
+ },
+ "games": 4191030,
+ "positions": 424000695,
+ "seconds": 208918,
+ "results": {
+  "white": 1640459,
+  "draw": 999542,
+  "black": 1551029
+ },
+ "ends": {
+  "checkmate": 848,
+  "stalemate": 3654,
+  "repetition": 586808,
+  "fifty_moves": 36760,
+  "insufficient_material": 0,
+  "table_result": 759322,
+  "mate_found": 816497,
+  "decided_opening": 942703,
+  "too_long": 669,
+  "score_adjudicated": 1987989
+ },
+ "part_end": "target reached: 424,000,695 positions of the 424,000,000 target (finished 2026-11-19 9:37 PM EST); sealed on the owner's approval of 2026-11-22 (C: 23.08 GB free before the seal, 20 GB reserve); generation 4's part g4e, started 2026-11-17 03:10:13 PM EST, finished at its target, on 10 threads (Control Center); every game verified (tools/datagen/verify_games.py with its manifest)",
+ "batches": [
+  [
+   {
+    "file": "g4e-w00.vf",
+    "worker": 0,
+    "games": 419381,
+    "positions": 42400196,
+    "bytes": 184698500,
+    "sha256": "8d31a4e507a6275b50ec642c1eca47321b60093f314acb1a51485c1336e27eda"
+   },
+   {
+    "file": "g4e-w01.vf",
+    "worker": 1,
+    "games": 419090,
+    "positions": 42400001,
+    "bytes": 184687244,
+    "sha256": "990351cccc978abe682039d86b76d5f3ec02ad594c0d2595f2e7a647033f85fb"
+   },
+   {
+    "file": "g4e-w02.vf",
+    "worker": 2,
+    "games": 419330,
+    "positions": 42400087,
+    "bytes": 184696228,
+    "sha256": "0aacd5b0dcda32874c795b9f34deeef7e90d1f3f755682bc1bbca3d8d5c07353"
+   },
+   {
+    "file": "g4e-w03.vf",
+    "worker": 3,
+    "games": 419704,
+    "positions": 42400023,
+    "bytes": 184709436,
+    "sha256": "54684060fd5fd76aeb4712953deab553e75de17f9130a67f04e74b7a246e20ce"
+   },
+   {
+    "file": "g4e-w04.vf",
+    "worker": 4,
+    "games": 419254,
+    "positions": 42400054,
+    "bytes": 184693360,
+    "sha256": "6fd8ce758ef0095b6c409ab6803c43d647ca45e1906f01cbbdfecf6829fb8882"
+   },
+   {
+    "file": "g4e-w05.vf",
+    "worker": 5,
+    "games": 419195,
+    "positions": 42400119,
+    "bytes": 184691496,
+    "sha256": "c6c305bf9e88bde8bd1cc20009dd52008f8fc56c85168e2482cff20663723616"
+   },
+   {
+    "file": "g4e-w06.vf",
+    "worker": 6,
+    "games": 419242,
+    "positions": 42400070,
+    "bytes": 184692992,
+    "sha256": "534c6ca7b0ee0c72abd62dd3f85a10e3e592e25017c34738128725ea69daee1c"
+   },
+   {
+    "file": "g4e-w07.vf",
+    "worker": 7,
+    "games": 418716,
+    "positions": 42400085,
+    "bytes": 184674116,
+    "sha256": "672faa58f87dc9032b904140b33d542bf939017dd74f19e0aa42569c56c249a3"
+   },
+   {
+    "file": "g4e-w08.vf",
+    "worker": 8,
+    "games": 418427,
+    "positions": 42400057,
+    "bytes": 184663600,
+    "sha256": "95153aa2f652da209b43b850e3a4060e7641ca22cc5fd8940b62cd0f1379ed67"
+   },
+   {
+    "file": "g4e-w09-val.vf",
+    "worker": 9,
+    "games": 418691,
+    "positions": 42400003,
+    "bytes": 184672888,
+    "sha256": "960ae54644efdf63b9b8284c5973f475e6cb07cf9ac41b838a418d11be1b715e"
+   }
+  ]
+ ],
+ "positions_unsaved": 193465868
+}

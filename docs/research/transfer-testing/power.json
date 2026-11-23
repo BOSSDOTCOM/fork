@@ -1,0 +1,138 @@
+{
+ "per_anchor": {
+  "Clover 6.1": {
+   "score": 0.265,
+   "rho_used": 0.15,
+   "se_elo_100_openings": 21.0,
+   "info_per_game_rel": null
+  },
+  "Altair 7.0.0": {
+   "score": 0.393,
+   "rho_used": 0.181,
+   "se_elo_100_openings": 16.6,
+   "info_per_game_rel": null
+  },
+  "Marvin 6.3.0": {
+   "score": 0.57,
+   "rho_used": 0.034,
+   "se_elo_100_openings": 19.8,
+   "info_per_game_rel": null
+  },
+  "Laser 1.7": {
+   "score": 0.755,
+   "rho_used": 0.494,
+   "se_elo_100_openings": 21.0,
+   "info_per_game_rel": null
+  },
+  "Winter 0.9": {
+   "score": 0.85,
+   "rho_used": 0.415,
+   "se_elo_100_openings": 29.6,
+   "info_per_game_rel": null
+  },
+  "Monolith 2.01": {
+   "score": 0.905,
+   "rho_used": 0.489,
+   "se_elo_100_openings": 37.6,
+   "info_per_game_rel": null
+  },
+  "Weiss 1.0": {
+   "score": 0.92,
+   "rho_used": 0.641,
+   "se_elo_100_openings": 35.4,
+   "info_per_game_rel": null
+  }
+ },
+ "designs": [
+  {
+   "anchors": "Clover + Altair",
+   "openings": 100,
+   "games": 800,
+   "se_elo": 13.05,
+   "power_gt0_at_10": 0.19,
+   "P_est_ge_half_at_10": 0.649,
+   "power_gt0_at_15": 0.31,
+   "P_est_ge_half_at_15": 0.717,
+   "power_gt0_at_20": 0.455,
+   "P_est_ge_half_at_20": 0.778,
+   "power_gt0_at_30": 0.744,
+   "P_est_ge_half_at_30": 0.875
+  },
+  {
+   "anchors": "Clover + Altair",
+   "openings": 200,
+   "games": 1600,
+   "se_elo": 9.22,
+   "power_gt0_at_10": 0.287,
+   "P_est_ge_half_at_10": 0.706,
+   "power_gt0_at_15": 0.492,
+   "P_est_ge_half_at_15": 0.792,
+   "power_gt0_at_20": 0.7,
+   "P_est_ge_half_at_20": 0.861,
+   "power_gt0_at_30": 0.946,
+   "P_est_ge_half_at_30": 0.948
+  },
+  {
+   "anchors": "Clover + Altair + Marvin",
+   "openings": 100,
+   "games": 1200,
+   "se_elo": 10.9,
+   "power_gt0_at_10": 0.233,
+   "P_est_ge_half_at_10": 0.677,
+   "power_gt0_at_15": 0.394,
+   "P_est_ge_half_at_15": 0.754,
+   "power_gt0_at_20": 0.575,
+   "P_est_ge_half_at_20": 0.821,
+   "power_gt0_at_30": 0.866,
+   "P_est_ge_half_at_30": 0.916
+  },
+  {
+   "anchors": "Clover + Altair + Marvin",
+   "openings": 200,
+   "games": 2400,
+   "se_elo": 7.71,
+   "power_gt0_at_10": 0.364,
+   "P_est_ge_half_at_10": 0.742,
+   "power_gt0_at_15": 0.619,
+   "P_est_ge_half_at_15": 0.835,
+   "power_gt0_at_20": 0.829,
+   "P_est_ge_half_at_20": 0.903,
+   "power_gt0_at_30": 0.988,
+   "P_est_ge_half_at_30": 0.974
+  },
+  {
+   "anchors": "all seven",
+   "openings": 100,
+   "games": 2800,
+   "se_elo": 8.66,
+   "power_gt0_at_10": 0.312,
+   "P_est_ge_half_at_10": 0.718,
+   "power_gt0_at_15": 0.535,
+   "P_est_ge_half_at_15": 0.807,
+   "power_gt0_at_20": 0.747,
+   "P_est_ge_half_at_20": 0.876,
+   "power_gt0_at_30": 0.966,
+   "P_est_ge_half_at_30": 0.958
+  },
+  {
+   "anchors": "all seven",
+   "openings": 200,
+   "games": 5600,
+   "se_elo": 6.12,
+   "power_gt0_at_10": 0.495,
+   "P_est_ge_half_at_10": 0.793,
+   "power_gt0_at_15": 0.79,
+   "P_est_ge_half_at_15": 0.89,
+   "power_gt0_at_20": 0.948,
+   "P_est_ge_half_at_20": 0.949,
+   "power_gt0_at_30": 0.999,
+   "P_est_ge_half_at_30": 0.993
+  }
+ ],
+ "observed_run_to_run_sd_six_anchors": {
+  "A: r2->ppr2": 10.49,
+  "B: ppr2->ppr3tm": 10.95,
+  "A+B: r2->ppr3tm": 12.2
+ },
+ "note": "Clover's rho is not measured (one run); 0.15 assumed (Altair's measured values: 0.05-0.30)"
+}

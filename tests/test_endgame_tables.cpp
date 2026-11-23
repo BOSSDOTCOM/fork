@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "core/movegen.hpp"
@@ -27,6 +28,7 @@
 #include "search/endgame_tables.hpp"
 #include "search/score_bounds.hpp"
 #include "search/searcher.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng::test {
 
@@ -219,12 +221,13 @@ std::string joined(const std::vector<std::string>& moves) {
   return s;
 }
 
-// A fresh search with the tables loaded and default switches.
-SearchResult search_tables(Position& pos, int depth) {
+// A fresh search with the tables loaded, with default switches unless given.
+SearchResult search_tables(Position& pos, int depth, const SearchSwitches& switches = {}) {
   std::vector<TtBucket> buckets(16384);
   TransTable tt;
   tt.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
   auto searcher = std::make_unique<Searcher>(tt);
+  searcher->switches = switches;
   const std::atomic<bool> stop{false};
   SearchQuota q;
   q.depth = depth;
@@ -337,6 +340,89 @@ TEST_CASE("tables", "3-4-5 root ranking: after a repetition only the fastest win
   CHECK_EQ(pos.repetition_count(), 2);
   CHECK_EQ(joined(kept_moves(pos, true)), std::string("g1c5"));
   CHECK_EQ(pos.move_to_uci(search_tables(pos, 1).best), std::string("g1c5"));
+  load_endgame_tables("");
+}
+
+// use_fastest_table_win (owner, 2026-11-15): the ranking after a repetition,
+// for every won root. Without a repetition the same position keeps its 22
+// winning moves with fastest off and only g1c5 with it on, and the search
+// with the switch on plays g1c5 at every depth tried.
+TEST_CASE("tables", "3-4-5 search: use_fastest_table_win searches only the fastest win") {
+  if (!small_present()) return;
+  load_endgame_tables(small_dir());
+  CHECK(SearchSwitches{}.use_fastest_table_win);  // on in the SPRT's test commit
+  Position pos = at(KqkFastest);
+  CHECK_EQ(kept_moves(pos, false).size(), std::size_t{22});
+  CHECK_EQ(joined(kept_moves(pos, true)), std::string("g1c5"));
+  SearchSwitches fastest;
+  fastest.use_fastest_table_win = true;
+  for (int depth = 1; depth <= 4; ++depth)
+    CHECK_MSG(pos.move_to_uci(search_tables(pos, depth, fastest).best) == "g1c5", "depth " << depth);
+  load_endgame_tables("");
+}
+
+// SyzygyProbeLimit (owner, 2026-11-16): a piece limit below a position's
+// count turns its probes off, the root ranking's included, and the default
+// probes every loaded table. BlessedLossFen has five pieces, KqkpMated four.
+TEST_CASE("tables", "3-4-5: the piece limit bounds the probes and the root ranking") {
+  if (!small_present()) return;
+  load_endgame_tables(small_dir());
+  CHECK_EQ(SearchSwitches{}.table_probe_pieces, LargestTablePieces);
+  CHECK(probe_table_wdl(at(BlessedLossFen), 5).has_value());
+  CHECK(!probe_table_wdl(at(BlessedLossFen), 4).has_value());
+  CHECK(probe_table_wdl(at(KqkpMated), 4).has_value());
+  CHECK(!probe_table_wdl(at(KqkpMated), 3).has_value());
+  MoveList kept;
+  CHECK(rank_root_by_tables(at(KpkDraw), false, kept, 3));
+  CHECK(!rank_root_by_tables(at(KpkDraw), false, kept, 2) && kept.size() == 0);
+  // The search: with five pieces allowed it finds the blessed loss (as in the
+  // test above); with four, neither the root nor a5a4's child is probed, and
+  // the score is the evaluation's, not the near-draw score.
+  SearchSwitches limited;
+  limited.table_probe_pieces = 5;
+  Position pos = at(BlessedLossFen);
+  CHECK_EQ(search_tables(pos, 3, limited).score, -1);
+  limited.table_probe_pieces = 4;
+  const int unprobed = search_tables(pos, 3, limited).score;
+  CHECK_MSG(unprobed != -1 && !is_tb_or_mate(unprobed), "score " << unprobed);
+  load_endgame_tables("");
+}
+
+// SyzygyProbeDepth (owner, 2026-11-16): the search probes only at a remaining
+// depth of at least table_probe_depth; the root ranking (one counted probe)
+// does not depend on it. A depth-3 search reaches no node below the root at
+// depth 3 or more (an extension never makes a child deeper than its parent).
+TEST_CASE("tables", "3-4-5: the probe depth bounds the search's probes, not the root ranking") {
+  if (!small_present()) return;
+  load_endgame_tables(small_dir());
+  CHECK_EQ(SearchSwitches{}.table_probe_depth, TableProbeMinDepth);
+  const auto hits_at = [](std::string_view fen, int search_depth, int probe_depth) {
+    std::vector<TtBucket> buckets(16384);
+    TransTable tt;
+    tt.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+    auto searcher = std::make_unique<Searcher>(tt);
+    searcher->switches.table_probe_depth = probe_depth;
+    const std::atomic<bool> stop{false};
+    SearchQuota q;
+    q.depth = search_depth;
+    Position pos = at(fen);
+    TableHitCounter counter;
+    const int score = searcher->deliberate(pos, q, stop, nullptr, &counter).score;
+    return std::pair<std::uint64_t, int>{counter.hits, score};
+  };
+  std::uint64_t previous = hits_at(KqkpMated, 3, 1).first;
+  CHECK_MSG(previous > 1, "tbhits " << previous);
+  for (int probe_depth = 2; probe_depth <= 4; ++probe_depth) {
+    const std::uint64_t hits = hits_at(KqkpMated, 3, probe_depth).first;
+    CHECK_MSG(hits <= previous, "probe depth " << probe_depth << ": tbhits " << hits << " > " << previous);
+    previous = hits;
+  }
+  CHECK_EQ(previous, std::uint64_t{1});  // probe depth 4: the root ranking alone
+  // Behaviour, not only counts: at probe depth 3 no child of the blessed
+  // loss is probed in a depth-3 search, so the near-draw score is not found.
+  CHECK_EQ(hits_at(BlessedLossFen, 3, 2).second, -1);
+  const int unprobed = hits_at(BlessedLossFen, 3, 3).second;
+  CHECK_MSG(unprobed != -1 && !is_tb_or_mate(unprobed), "score " << unprobed);
   load_endgame_tables("");
 }
 

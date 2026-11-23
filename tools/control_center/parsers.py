@@ -123,6 +123,13 @@ def datagen_args(argv):
     return out, paths
 
 
+def tables_label(path):
+    """The manifests' name for a Syzygy folder named by its piece counts: '~/fork-tools/syzygy/3-4-5' gives
+    'syzygy 5-piece' (verify_games.py reads the count back); None for a folder without counts."""
+    counts = [int(x) for x in re.findall(r'\d+', str(path).rstrip('/').rsplit('/', 1)[-1])]
+    return f'syzygy {max(counts)}-piece' if counts else None
+
+
 def fork_version(text):
     """`fork version`: {'version': '0.3.0-dev+684bac6', 'commit': '684bac6', 'compiler': 'clang 21.1.8',
     'arch': 'native', 'net': 's512r2', 'evaluator': 'nnue'}."""
@@ -282,6 +289,8 @@ def merged_block(lines):
         if m:
             out.update(llr=num(m[1]), llr_lo=num(m[2]), llr_hi=num(m[3]), elo0=num(m[4]), elo1=num(m[5]),
                        verdict=m[6].strip())
+        if line.startswith('Verdict: '):  # sprt_run.sh's kinds (design R): the staged decision
+            out['decision'] = line[len('Verdict: '):].strip()
     return out
 
 
@@ -315,6 +324,8 @@ def driver_log(text):
         if h:
             s.update(base=h[1], test=h[2], elo0=num(h[3]), elo1=num(h[4]), first_stage=int(h[5]),
                      last_stage=int(h[6]), finished=None)
+            k = re.search(r', kind (\w+), .*?, cap (\d+),', msg)  # the kinds since 2026-11-07 (design R)
+            s.update(kind=k[1] if k else None, cap=int(k[2]) if k else None)
             continue
         st = re.match(r'stage (\d+): (?:run (\d+) (dispatched|merged)|waiting for run (\d+))', msg)
         if st:
@@ -325,7 +336,7 @@ def driver_log(text):
             if st[3] == 'merged':
                 block = (n, [])
             continue
-        if msg.startswith('decided after stage') or msg.startswith('undecided after stage'):
+        if msg.startswith(('decided after stage', 'undecided after stage', 'complete after stage')):
             s['finished'] = msg
         elif msg.endswith('stopping'):
             s['finished'] = msg
@@ -340,7 +351,8 @@ def sprt_state(s):
     current = max(s['stages'].values(), key=lambda x: x['stage']) if s['stages'] else {}
     return {'name': s['name'], 'stage': current.get('stage'), 'stage_state': current.get('state'),
             'run': current.get('run'), 'merged_stage': latest.get('stage'), **{k: latest.get(k) for k in (
-                'games', 'elo', 'elo_err', 'nelo', 'nelo_err', 'llr', 'llr_lo', 'llr_hi', 'verdict')},
+                'games', 'elo', 'elo_err', 'nelo', 'nelo_err', 'llr', 'llr_lo', 'llr_hi', 'verdict', 'decision')},
+            'kind': s.get('kind'), 'cap': s.get('cap'),
             'elo0': s.get('elo0'), 'elo1': s.get('elo1'), 'finished': s.get('finished'),
             'first_stage': s.get('first_stage'), 'last_stage': s.get('last_stage'), 'base': s.get('base'),
             'test': s.get('test'), 'last_at': s.get('last_at')}

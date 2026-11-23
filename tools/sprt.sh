@@ -24,7 +24,13 @@
 # opening order's seed; default: the run's UTC stamp as a number),
 # TABLES (default 1: both engines get the Syzygy 3-4-5 tables; 0: neither
 # does, and BASE_OPTS / TEST_OPTS may then give them to one side),
-# SYZYGY_PATH (default: config/local-test.json's syzygy.path).
+# SYZYGY_PATH (default: config/local-test.json's syzygy.path), PYTHON (for
+# the CalibratedScore guard below; default python3, else python).
+#
+# CalibratedScore (owner, 2026-11-13): both engines get
+# option.CalibratedScore=false; before any build, if BASE or TEST has the
+# option, this checkout must pass tools/check_score_display_off.py
+# (tools/jobs/score_display_guard.py), or the run stops with exit 1.
 #
 # Tables (DESIGN.md §5.2; owner, audit-1 Phase C): both engines get
 # option.SyzygyPath, the 3-4-5 set (145 .rtbw + 145 .rtbz, checked here);
@@ -152,6 +158,19 @@ identity() {  # commit, engine -> "Fork <version>, <compiler>, bench <nodes> <si
   echo "$version, $compiler, bench $bench${ref:+ (= bench.ref)}"
 }
 
+# CalibratedScore (owner, 2026-11-13): this checkout is the harness. If BASE or TEST has the option (default on),
+# the checkout must force it off (tools/jobs/score_display_guard.py runs its tools/check_score_display_off.py), or
+# nothing is built or played. PYTHON: default the first working python3 or python.
+py=${PYTHON:-}
+if [ -z "$py" ]; then
+  for c in python3 python; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c pass >/dev/null 2>&1; then py=$c; break; fi
+  done
+fi
+[ -n "$py" ] || { echo "sprt.sh: no Python for tools/jobs/score_display_guard.py (set PYTHON)" >&2; exit 1; }
+guard=$(cd "$repo" && "$py" -I -B tools/jobs/score_display_guard.py --repo . --tree . "$base" "$test" 2>&1) ||
+  { echo "sprt.sh: $guard" >&2; exit 1; }
+
 base_exe=$(build "$base")
 test_exe=$(build "$test")
 base_id=$(identity "$base" "$base_exe")
@@ -189,7 +208,7 @@ fc_status=0
 "$fastchess" \
   -engine cmd="$test_exe" name=test ${TEST_OPTS:-} \
   -engine cmd="$base_exe" name=base ${BASE_OPTS:-} \
-  -each tc="$tc" option.Hash="$hash" option.Threads=1 "${each_tb[@]}" \
+  -each tc="$tc" option.Hash="$hash" option.Threads=1 option.CalibratedScore=false "${each_tb[@]}" \
   -openings file="$book" format=epd order=random -srand "$seed" \
   -repeat -rounds $((MAX_GAMES / 2)) -concurrency "${CONCURRENCY:-10}" \
   -sprt elo0="$elo0" elo1="$elo1" alpha=0.05 beta=0.05 model=normalized \

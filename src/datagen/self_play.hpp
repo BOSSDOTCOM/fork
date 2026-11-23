@@ -111,6 +111,8 @@ class SelfPlayGame {
   // depth-1 fallbacks included).
   int unsaved_positions() const { return unsaved_; }
   std::uint64_t nodes_spent() const { return nodes_spent_; }
+  // The table's search age: one step per search (tests).
+  int table_age() const { return table_.age(); }
 
  private:
   explicit SelfPlayGame(const SelfPlayConfig& config) : config_(config), searcher_(table_) {}

@@ -28,6 +28,7 @@ option(FORK_BUILD_TESTS "Build the test executable and CTest tests" ON)
 option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
 option(FORK_SEARCH_STATS "Debug counters in the search, printed by fork bench (never released)" OFF)
 option(FORK_TUNE "Tuning build: every search switch is a UCI option (SPRT and SPSA only, never released)" OFF)
+option(FORK_NODE_CLOCK "Test-only build: the search clock is its node count, so timed searches are deterministic (never released)" OFF)
 set(FORK_PGO "OFF" CACHE STRING "Profile-guided optimization stage: OFF, GEN, USE")
 set(FORK_PGO_DATA "" CACHE PATH "Profile directory (GEN) or merged profile file / directory (USE)")
 
@@ -152,7 +153,8 @@ add_library(forkcore STATIC
   src/core/position.cpp
   src/core/movegen.cpp
   src/core/perft.cpp
-  src/core/bench.cpp)
+  src/core/bench.cpp
+  src/core/cpu_features.cpp)
 target_include_directories(forkcore PUBLIC src)
 target_link_libraries(forkcore PUBLIC fork_flags PRIVATE fork_pgo)
 
@@ -175,18 +177,30 @@ target_compile_options(fathom PRIVATE -w)
 # no runtime interface and no indirect call in the search.
 # nnue is the default since B0 passed its SPRT against the bootstrap
 # evaluation (+486.85 +/- 32.07 Elo; DESIGN.md §5.3, deliverable 7; owner,
-# 2026-10-29). The network is nets/s512ppr3.fnet, S512+PP (S-512 plus pawn
-# links of rank limit 1, architecture 8) retrained warm from S512ppr2 on
-# g3s3 (item 8a), since it passed its STC SPRT against S512ppr2 (+7.12 Elo,
-# 2026-11-07; docs/nets.md; owner: promoted). nets/s512ppr2.fnet,
-# nets/s512pp.fnet, nets/s512r2.fnet, nets/s512.fnet, nets/b0r2.fnet,
-# nets/b0r1.fnet and nets/b0.fnet stay buildable with FORK_NET
-# (tests/bench-s512ppr2.ref, tests/bench-s512pp.ref, tests/bench-s512r2.ref,
+# 2026-10-29). The network is nets/r3kr1.fnet, H512+PP (architecture 9,
+# bake-off round 3's option a: S512+PP's inputs per own-king region, four
+# regions (M4), with a factoriser and a refresh cache), trained warm from
+# r8ceplo2, since it passed its STC SPRT against r8ceplo2 (+8.04 Elo,
+# 2026-11-14; docs/nets.md; owner's order). The inference is compiled for
+# the embedded net's architecture (below), so this build is architecture 9's.
+# nets/r8ceplo2.fnet, nets/r8brft1.fnet, nets/r8btd90.fnet,
+# nets/s512ppr3.fnet, nets/s512ppr2.fnet, nets/s512pp.fnet,
+# nets/s512r2.fnet, nets/s512.fnet, nets/b0r2.fnet, nets/b0r1.fnet and
+# nets/b0.fnet stay buildable with FORK_NET (tests/bench-r8ceplo2.ref,
+# tests/bench-r8brft1.ref, tests/bench-r8btd90.ref, tests/bench-s512ppr3.ref,
+# tests/bench-s512ppr2.ref, tests/bench-s512pp.ref, tests/bench-s512r2.ref,
 # tests/bench-s512.ref, tests/bench-b0r2.ref, tests/bench-b0r1.ref,
 # tests/bench-b0.ref), and so does bootstrap (tests/bench.ref).
+# nets/r8brft1kr4.fnet is H512+PP's test net (architecture 9, bake-off round
+# 3's option a): r8brft1 with its piece rows copied into each of the four
+# king regions (tools/nnue/extend_weights.py --arch h512pp), so its bench,
+# tests/bench-r8brft1kr4.ref, is r8brft1's. nets/r8brft1xl.fnet is
+# S512+PPXL's (architecture 10, the x_lower arm): r8brft1 with 640 zero
+# exposure rows between its piece rows and its links (extend_weights.py --arch
+# s512ppxl), so its bench, tests/bench-r8brft1xl.ref, is r8brft1's too.
 set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
-set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512ppr3.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/r3kr1.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
 if(FORK_EVALUATOR STREQUAL "nnue")
   if(NOT EXISTS ${FORK_NET})
     message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")
@@ -213,9 +227,11 @@ add_library(forksearch STATIC
   src/search/search_bench.cpp
   src/search/endgame_tables.cpp
   src/search/hash_memory.cpp
+  src/search/helper_pool.cpp
   src/search/move_selector.cpp
   src/search/searcher.cpp
   src/search/see.cpp
+  src/search/stats_report.cpp
   src/search/time_budget.cpp
   src/search/trans_table.cpp
   src/tune/params.cpp)
@@ -238,6 +254,13 @@ target_link_libraries(forksearch PUBLIC forkcore fathom ${fork_threads} PRIVATE 
 if(FORK_SEARCH_STATS)
   target_compile_definitions(forksearch PUBLIC FORK_SEARCH_STATS)
 endif()
+# The node clock (DESIGN.md §5.6 step 10): elapsed time is nodes / 1000 ms,
+# so two builds can be compared on timed searches byte for byte (the time
+# management switches' identity check). Never released; its tests are not
+# run (the wall-clock cases assume a real clock).
+if(FORK_NODE_CLOCK)
+  target_compile_definitions(forksearch PUBLIC FORK_NODE_CLOCK)
+endif()
 
 # The UCI front end (src/uci/): protocol loop, options, info output.
 add_library(forkuci STATIC
@@ -255,6 +278,11 @@ add_library(forknnue STATIC
   src/eval/nnue/contacts.cpp
   src/eval/nnue/net_file.cpp)
 target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH})
+# Stats builds count the feature stack's work too (DESIGN.md §5.7, X1); public,
+# so every user of accumulator.hpp sees the same FeatureStack layout.
+if(FORK_SEARCH_STATS)
+  target_compile_definitions(forknnue PUBLIC FORK_SEARCH_STATS)
+endif()
 target_link_libraries(forknnue PUBLIC forkcore PRIVATE fork_pgo)
 
 # Self-play training data (src/datagen/; DESIGN.md §5.3, deliverable 2): the
@@ -294,6 +322,18 @@ set_source_files_properties(src/uci/version.cpp PROPERTIES COMPILE_DEFINITIONS "
 
 add_executable(fork src/main.cpp)
 target_link_libraries(fork PRIVATE forkuci forknnue fork_pgo)
+# The startup CPU check (src/core/cpu_gate.cpp): compiled for baseline x86-64
+# without AVX and without LTO (the options below come after fork_flags', so
+# they win), so it runs on any x86-64 CPU and refuses, with a message, one
+# that lacks what the rest was compiled for. That list comes from the
+# compiler's own macros in src/core/cpu_features.cpp (forkcore, the build's
+# flags), so it follows FORK_ARCH, FORK_VNNI and native builds. Linked into
+# fork and fork_tests (whose cpu_gate suite tests its decision); WebAssembly
+# has none.
+if(NOT EMSCRIPTEN)
+  target_sources(fork PRIVATE src/core/cpu_gate.cpp)
+  set_source_files_properties(src/core/cpu_gate.cpp PROPERTIES COMPILE_OPTIONS "-march=x86-64;-mno-avx;-fno-lto")
+endif()
 # `fork version` names the evaluator and, for nnue, the network (its file's
 # stem): the SPRT tools use it for the game gate (tools/cloud/build_pair.sh).
 get_filename_component(fork_net_stem_for_version ${FORK_NET} NAME_WE)
@@ -409,9 +449,12 @@ if(FORK_BUILD_TESTS)
     tests/test_search.cpp
     tests/test_see.cpp
     tests/test_tt.cpp
+    tests/test_smp.cpp
     tests/test_ordering.cpp
+    tests/test_eval_drift.cpp
     tests/test_pruning.cpp
     tests/test_endgame_tables.cpp
+    tests/test_elementary_mates.cpp
     tests/test_pruning_review.cpp
     tests/test_ordering_review.cpp
     tests/engine_process.cpp
@@ -420,7 +463,9 @@ if(FORK_BUILD_TESTS)
     tests/test_params.cpp
     tests/test_datagen.cpp
     tests/test_nnue.cpp
-    tests/test_web.cpp)
+    tests/test_web.cpp
+    tests/test_cpu_gate.cpp
+    src/core/cpu_gate.cpp)
   target_link_libraries(fork_tests PRIVATE forkuci forkdatagen forknnue forkweb)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
@@ -521,7 +566,25 @@ if(FORK_BUILD_TESTS)
       "KQvK.rtbz|3-4-5-dtz|71ea9444fa5bd42897d781a0c356975ea6f23e0f65a4254e470897031c161c8c"
       "KRvK.rtbz|3-4-5-dtz|cab59f42e75c2a25da3939231850a79fa838593fff5c28d7772da92062ed965a"
       "KBvK.rtbz|3-4-5-dtz|6246c8a5c643eec9d4758d55ed843e31cc28a9b82a6f630c1c950d8b7755975b"
-      "KNvK.rtbz|3-4-5-dtz|0e49a0f2810a131c32fc14872e83044aa9810ce2c86df071851512077291fc25")
+      "KNvK.rtbz|3-4-5-dtz|0e49a0f2810a131c32fc14872e83044aa9810ce2c86df071851512077291fc25"
+      # The elementary-mate suite's endings (tests/test_elementary_mates.cpp), from the same list,
+      # downloaded and checked 2026-11-15: 1,199,024 bytes in all.
+      "KBNvK.rtbw|3-4-5-wdl|76958da65bc243f2f0a16ceb83f1c00cbc4fb6d6e2f43d052c2f9d65bf16fee8"
+      "KBNvK.rtbz|3-4-5-dtz|cad874516a2327e63754b3faababc7dece1b949305f2944b2b5a3b137f92ecd3"
+      "KBBvK.rtbw|3-4-5-wdl|3afa74fcfd6100df851c3b18ca255acd9d68c31c7c74cb02b2d5236ffd610ed6"
+      "KBBvK.rtbz|3-4-5-dtz|d3786ba13d73b1ed61b8be4fd301ceed56b9af5e7c4fbf4a252ef77d2ea3d3db"
+      "KQvKP.rtbz|3-4-5-dtz|faedb2db23be6619a57cd21c1291582bba9ddae30c5a394f5d4a7ab834a3940f"
+      "KQvKR.rtbw|3-4-5-wdl|8cdbe3c8e098037875de5854c656f8afeadb8327c85b5b7b1cac81719afd3e2c"
+      "KQvKR.rtbz|3-4-5-dtz|0c15a2aaa3bdef39da4c26932006b5d38b55b8e3ad13e8a44815d63f84738618"
+      # The endings the suite's KQvKP starts reach by the defender's other promotions (the
+      # suite's reachability case), from the same list (as copied into
+      # tools/cloud/syzygy-345.sha256), downloaded and checked 2026-11-17: 397,856 bytes in all.
+      "KQvKN.rtbw|3-4-5-wdl|ba07bd47c6eaa20904b595f43e171c6fc70fcc056cb33696fe12ed254c546100"
+      "KQvKN.rtbz|3-4-5-dtz|0e99385bbd903975f8511751379079aa3b6663dd093f43b9ac951a97bd938371"
+      "KQvKB.rtbw|3-4-5-wdl|0c18bbcaec0e7c161d56392ff57a39258dd93acd0321e3bbb32f7c05636abeac"
+      "KQvKB.rtbz|3-4-5-dtz|a63befd64dbd1aab4e8b290da558fa1ccae21d7aebad81966a7cdd6ac8432554"
+      "KQvKQ.rtbw|3-4-5-wdl|571a85d86e635e48567997ea648fd1e90dde39c9b413b2fe968f5e7faeacfbb0"
+      "KQvKQ.rtbz|3-4-5-dtz|98327247ba50c403199faec4df4a5f21e333c5c51b6ea2649ef9fd71264f8344")
     string(REPLACE "|" ";" parts "${spec}")
     list(GET parts 0 tb_name)
     list(GET parts 1 tb_dir)
@@ -549,11 +612,24 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue
-                web)
+                search see ordering eval_drift pruning tables time_budget tt smp params uci_protocol uci_options uci_timing datagen nnue
+                web elementary_mates cpu_gate)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
+  # The search suites the pre-commit check runs too (owner, 2026-11-12; scripts/check.sh quick, ctest -L
+  # quick-search): whole suites, about 1.5 min together in clang-release. A label only: CI's -LE slow runs
+  # them as before, once each. elementary_mates joined it (owner, 2026-11-15: "add the 13 s mate suite to the
+  # pre-commit quick checks"): about 13 s in clang-release.
+  set_tests_properties(search pruning ordering see params tt time_budget draws elementary_mates
+                       PROPERTIES LABELS quick-search)
+  # The stats build's measurement counters (DESIGN.md §5.7): their own suite,
+  # compiled only with FORK_SEARCH_STATS (the clang-stats preset).
+  if(FORK_SEARCH_STATS)
+    target_sources(fork_tests PRIVATE tests/test_search_stats.cpp)
+    add_test(NAME search_stats COMMAND fork_tests search_stats)
+    set_tests_properties(search_stats PROPERTIES LABELS stats SKIP_RETURN_CODE 77)
+  endif()
   # Timing tests run alone, never beside another test (owner, 2026-10-26).
   set_tests_properties(uci_timing PROPERTIES RUN_SERIAL TRUE)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -578,6 +654,11 @@ if(FORK_BUILD_TESTS)
     add_executable(fork_uci_hash_oom_test tests/uci_hash_oom_test.cpp)
     target_link_libraries(fork_uci_hash_oom_test PRIVATE forkuci)
     add_test(NAME uci_hash_oom COMMAND fork_uci_hash_oom_test)
+    # The correctness audit of 2026-11-16 (area 1, L1): a Threads resize that
+    # runs out of memory must not terminate the engine.
+    add_executable(fork_uci_threads_oom_test tests/uci_threads_oom_test.cpp)
+    target_link_libraries(fork_uci_threads_oom_test PRIVATE forkuci)
+    add_test(NAME uci_threads_oom COMMAND fork_uci_threads_oom_test)
   endif()
 
   # A short differential run against python-chess (tools/difftest; audit-1
@@ -671,6 +752,14 @@ if(FORK_BUILD_TESTS)
   endif()
 
   # `fork version` says whether this build has LTO (audit-1, P-6).
+  # The startup CPU check's refusal path, forced: it must print its message
+  # and stop before `version` prints anything.
+  if(NOT EMSCRIPTEN)
+    add_test(NAME cpu_gate_refusal COMMAND fork version)
+    set_tests_properties(cpu_gate_refusal PROPERTIES ENVIRONMENT FORK_CPU_GATE_TEST=fail
+      PASS_REGULAR_EXPRESSION "needs CPU features this machine lacks.*forced by FORK_CPU_GATE_TEST"
+      FAIL_REGULAR_EXPRESSION "variant")
+  endif()
   add_test(NAME version_lto COMMAND fork version)
   if(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
     set_tests_properties(version_lto PROPERTIES PASS_REGULAR_EXPRESSION "\nlto on[\r\n]")

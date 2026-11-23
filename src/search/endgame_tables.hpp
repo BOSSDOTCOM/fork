@@ -13,6 +13,9 @@
 // - endgame_table_pieces() is the largest piece count among the tables found
 //   (0: none), never a hard-coded limit; positions with more pieces are never
 //   probed. A missing table or a failed probe is "no answer", never an error.
+// - A caller may lower that bound further with a piece limit (the UCI option
+//   SyzygyProbeLimit, DESIGN.md §5.1); the default, LargestTablePieces, is
+//   never below endgame_table_pieces(), so it changes nothing.
 // - probe_table_wdl answers only with no castling rights and a zero halfmove
 //   clock: the win/draw/loss tables do not account for a running fifty-move
 //   count (Fathom refuses those probes too).
@@ -32,6 +35,11 @@ namespace forkeng {
 // and losses that the fifty-move rule turns into draws.
 enum class TableWdl : int { Loss = -2, BlessedLoss = -1, Draw = 0, CursedWin = 1, Win = 2 };
 
+// The most pieces (kings included) any table Fathom loads can have: its
+// TB_PIECES (third_party/fathom/src/tbprobe.c, line 42). A piece limit of
+// this value probes every loaded table.
+inline constexpr int LargestTablePieces = 7;
+
 // Loads the tables in `path` (directories separated by ':' on Linux and ';'
 // on Windows); an empty path unloads them. Returns a one-line report.
 std::string load_endgame_tables(const std::string& path);
@@ -39,15 +47,22 @@ std::string load_endgame_tables(const std::string& path);
 // The largest number of pieces (kings included) the loaded tables cover.
 int endgame_table_pieces();
 
-// The win/draw/loss result of `pos`, or nothing if the tables cannot answer.
-std::optional<TableWdl> probe_table_wdl(const Position& pos);
+// The win/draw/loss result of `pos`, or nothing if the tables cannot answer
+// or `pos` has more than `piece_limit` pieces.
+std::optional<TableWdl> probe_table_wdl(const Position& pos, int piece_limit = LargestTablePieces);
 
 // At the root: the legal moves that keep the best result reachable under the
 // fifty-move rule, in the tables' order of preference, into `keep`. Uses the
 // distance-to-zero tables, or the win/draw/loss tables if those are missing.
-// Returns false (and leaves `keep` empty) if the root is not in the tables or
-// a probe failed. `repeated`: the position has occurred before since the last
-// capture or pawn move (the ranking then avoids walking into a repetition).
-bool rank_root_by_tables(const Position& pos, bool repeated, MoveList& keep);
+// Returns false (and leaves `keep` empty) if the root is not in the tables,
+// has more than `piece_limit` pieces, or a probe failed. `fastest`: of the
+// winning moves, keep only those with the smallest distance to zero (counted
+// with the fifty-move clock), not every move that still wins under the rule
+// (Fathom ranks those equally); the search sets it after a repetition since
+// the last capture or pawn move, so the ranking avoids walking into another,
+// and always with use_fastest_table_win. Draws and losses are ranked the same
+// either way.
+bool rank_root_by_tables(const Position& pos, bool fastest, MoveList& keep,
+                         int piece_limit = LargestTablePieces);
 
 }  // namespace forkeng

@@ -11,7 +11,9 @@
 //   captures and queen promotions by most valuable victim and least valuable
 //   attacker, a capture that loses material by SEE being deferred when it
 //   comes up (SEE is computed only for the captures reached), then quiet
-//   moves by butterfly history (generation order without a history), then
+//   moves by butterfly history (its threat bucket when threat-aware;
+//   generation order without a history; plus the direct-check bonus when
+//   one is given, D13), then
 //   the deferred bad captures and under-promotions, in the order deferred.
 // - In check (main search and quiescence): the TT move, then every evasion,
 //   captures first (by victim and attacker), then quiets by history.
@@ -24,6 +26,8 @@
 // - No allocation; the selector lives in the search stack (PlyFrame).
 #pragma once
 
+#include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 
@@ -31,6 +35,71 @@
 #include "search/quiet_history.hpp"
 
 namespace forkeng {
+
+// The squares from which a piece of `type` belonging to the side to move
+// would attack the enemy king, on the board as it stands (the engine
+// survey's D13). A quiet move other than castling lands on one of them
+// exactly when it gives direct check: if its origin were the only piece
+// between its destination and the king, the piece would already be giving
+// check from there (Position::gives_check's argument).
+inline Bitboard direct_check_targets(const Position& pos, PieceType type) {
+  const Color them = ~pos.side_to_move();
+  const Square king = pos.king_square(them);
+  switch (type) {
+    case Pawn:
+      return pawn_attacks(them, king);
+    case Knight:
+      return knight_attacks(king);
+    case Bishop:
+      return bishop_attacks(king, pos.pieces());
+    case Rook:
+      return rook_attacks(king, pos.pieces());
+    case Queen:
+      return bishop_attacks(king, pos.pieces()) | rook_attacks(king, pos.pieces());
+    default:
+      return 0;
+  }
+}
+
+// Whether quiet move `m` (not castling) gives direct check in `pos`, the
+// board before the move: D13's test, read move by move (the selector reads
+// direct_check_targets once per piece type per node instead), also used by
+// the history skip's exemption for checking quiets (use_skip_check_exempt).
+inline bool gives_direct_check(const Position& pos, Move m) {
+  return !m.is_castle() && (direct_check_targets(pos, kind_of(pos.piece_at(m.from()))) & bb(m.to())) != 0;
+}
+
+// A quiet move's ordering score in `pos`: its butterfly history (0 without
+// one), plus with `pairs` its reply entry after `arrival` times ReplyWeight
+// / 4 and its follow entry after `follow_arrival` times FollowWeight / 4
+// (NoArrival leaves a table out), within int16: the formula of
+// MoveSelector::score_quiets, as a function (the definition of the branch
+// sprt/lmr-history, 7d94d93). Normal builds do not call it; stats builds
+// read the score the selector uses at each LMR site (DESIGN.md §5.7, X2),
+// and tests/test_ordering.cpp checks it orders quiets as the selector does.
+// `bucket` is the move's threat bucket (tier 2, T56; 0 when not threat-aware).
+// A non-zero `check_bonus` (D13) is added when the move gives direct check
+// (not castling), and the sum is clamped to int16 again.
+inline int quiet_order_score(const Position& pos, Move m, const QuietHistory* history,
+                             const PairHistory* pairs, int arrival, int follow_arrival, int bucket = 0,
+                             int check_bonus = 0) {
+  // Without pair tables the arrivals are ignored, as MoveSelector::start_main
+  // drops them (a stats build with UseHistory off and the reply or follow
+  // history on passes arrivals with no tables).
+  if (!pairs) arrival = follow_arrival = NoArrival;
+  int score = history ? history->value(pos.side_to_move(), m, bucket) : 0;
+  if (arrival != NoArrival || follow_arrival != NoArrival) {
+    const int slot = pair_slot(pos.piece_at(m.from()), m.to());
+    if (arrival != NoArrival) score += pairs[ReplyTable].value(arrival, slot) * ReplyWeight / 4;
+    if (follow_arrival != NoArrival)
+      score += pairs[FollowTable].value(follow_arrival, slot) * FollowWeight / 4;
+    // Weights above one can take the sum past int16 at the extremes.
+    score = std::clamp(score, -INT16_MAX, INT16_MAX);
+  }
+  if (check_bonus != 0 && gives_direct_check(pos, m))
+    score = std::clamp(score + check_bonus, -INT16_MAX, INT16_MAX);
+  return score;
+}
 
 enum class SelectorStage : std::uint8_t {
   TtMove,
@@ -58,12 +127,19 @@ class MoveSelector {
   // With `take_history` (tier 2, T11) a capture's score is its victim's
   // value (with any promotion's gain) times 8 plus its take history entry
   // times TakeWeight / 32, instead of MVV-LVA; evasions keep MVV-LVA.
+  // With `threat_aware` (tier 2, T56) quiets and quiet evasions read the
+  // butterfly history's threat bucket (quiet_history.hpp) for the opponent's
+  // attacks in this position; without it, bucket 0.
+  // With `check_bonus` (the engine survey's D13) DirectCheckBonus is added
+  // to the score of each quiet that gives direct check (quiet_order_score's
+  // rule); quiet evasions are unchanged.
   void start_main(const Position& pos, Move tt_move, const QuietHistory* history,
                   const PairHistory* pairs = nullptr, int arrival = NoArrival, int follow_arrival = NoArrival,
-                  const TakeHistory* take_history = nullptr);
+                  const TakeHistory* take_history = nullptr, bool threat_aware = false,
+                  bool check_bonus = false);
   // Quiescence search (all evasions when in check).
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
-                     const TakeHistory* take_history = nullptr);
+                     const TakeHistory* take_history = nullptr, bool threat_aware = false);
 
   // The next move, or NoMove when there are no more.
   Move take_next();
@@ -83,6 +159,19 @@ class MoveSelector {
   SelectorStage yielding_stage() const { return stage_; }
   bool quiets_stopped() const { return quiets_stopped_; }
 
+  // The squares the opponent attacks at this node, built at the first call
+  // (the quiet or evasion stage, or the search's history update), so a node
+  // cut before its quiets never pays for it; 0 unless threat-aware. The
+  // position must still be this node's (no move made).
+  Bitboard attacked_by_opponent() {
+    if (!threat_aware_) return 0;
+    if (!attacked_known_) {
+      attacked_ = pos_->attacked_squares(~pos_->side_to_move());
+      attacked_known_ = true;
+    }
+    return attacked_;
+  }
+
  private:
   void score_captures();
   void score_quiets();
@@ -101,7 +190,11 @@ class MoveSelector {
   bool see_filter_ = false;
   bool quiets_stopped_ = false;
   bool quiet_checks_only_ = false;
-  int quiets_filtered_ = 0;
+  bool threat_aware_ = false;
+  bool attacked_known_ = false;
+  bool check_bonus_ = false;          // D13: direct-checking quiets add DirectCheckBonus
+  std::int16_t quiets_filtered_ = 0;  // at most MaxMoves; int16 keeps the flags above within the padding
+  Bitboard attacked_ = 0;
 
   MoveList list_;                  // the stage's moves
   std::int16_t scores_[MaxMoves];  // every score fits (move_selector.cpp)

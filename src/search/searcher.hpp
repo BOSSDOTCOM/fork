@@ -32,10 +32,15 @@
 #include <optional>
 
 #include "core/position.hpp"
+#include "search/endgame_tables.hpp"
+#include "search/eval_drift.hpp"
+#include "search/lmr_table.hpp"
 #include "search/move_selector.hpp"
 #include "search/quiet_history.hpp"
 #include "search/score_bounds.hpp"
+#include "search/time_budget.hpp"
 #include "search/trans_table.hpp"
+#include "tune/params.hpp"
 
 #if defined(FORK_EVAL_NNUE)
 #include "eval/nnue/accumulator.hpp"
@@ -85,6 +90,13 @@ struct SearchQuota {
 //   is retested with Phase 6's TT tests under large Hash and many threads.
 // - use_tables: Syzygy endgame tables, when loaded (deliverable 7):
 //   win/draw/loss probes in the search and the ranking of root moves.
+// - use_fastest_table_win: with use_tables, a root the tables rank as won
+//   keeps only the winning moves with the smallest distance to zero (the
+//   ranking used after a repetition), not every move that still wins under
+//   the fifty-move rule (owner, 2026-11-15: the elementary-mate suite found
+//   KBNvK and KBBvK mated on the rule's last move). Draws and losses are
+//   ranked as before. On in sprt/tb-root-dtz, the test side of its
+//   non-regression STC SPRT [-3, 0]; adopted only on a pass (owner).
 // - use_lmr_check_relief: a late quiet move that gives check is reduced
 //   LmrCheckRelief plies less (tier 2 step 0, KB T16's check term; its STC
 //   SPRT passed, +11.26 +/- 5.54 Elo; owner, 2026-10-29).
@@ -119,11 +131,184 @@ struct SearchQuota {
 //   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
 //   internal iterative reduction). On since its STC SPRT passed (+21.45
 //   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
+// - use_stability_time, use_share_time: a timed search's soft limit is
+//   scaled after each finished iteration by soft_scale_permille
+//   (time_budget.hpp; §5.6 step 10, think tank R8): use_stability_time alone
+//   by best-move stability (variant a), both by stability and the best
+//   move's every-pass node share (variant b); use_share_time alone does
+//   nothing. (b) won the head-to-head against (a) and is on (both
+//   switches) since its SPRTs against off passed: STC +18.69 +/- 7.18 Elo
+//   after 3,200 games, LTC +10.23 +/- 5.14 Elo after 4,992 games, design R
+//   [0, 6]; 2026-11-08.
+// - use_deep_time_depth: with use_stability_time, the scale's depth is
+//   clamped at 60, not 19 (time_budget.hpp; E2 of the bug review of
+//   2026-11-11: past depth 19 a stable best move got the 0.36 floor at any
+//   share, so deep searches spent less than their soft limit). On since
+//   2026-11-14 under the non-regression standard: its design R LTC SPRT
+//   (40+0.4, [0, 6]) was capped undecided at +2.16 +/- 3.47 Elo after 9,984
+//   games, a 95% lower bound (-1.31) above -3 (owner's decision).
+// - use_cut_node_lmr: node types (tier 2, T17): each node gets an expected
+//   type from its parent (PlyFrame::expected_cut: a PV node's later children
+//   and an all node's children are expected cut nodes, a cut node's are
+//   expected all nodes), and at an expected cut node late quiet moves are
+//   reduced CutNodeLmrSixtyFourths 64ths of a ply more (1 ply, 64, by
+//   default; whole plies until 2026-11-15). On since its SPRTs against off passed
+//   (CutNodeLmrPlies 1, the head-to-head's pick over 2): STC +6.02 +/- 3.67
+//   Elo after 11,200 games, LTC +9.75 +/- 5.14 Elo after 4,992 games, design
+//   R [0, 6]; 2026-11-11.
+// - use_threat_buckets: the butterfly history is read and updated in one of
+//   four buckets by whether the opponent attacks the quiet move's from- and
+//   to-square before the move (tier 2, T56's threat-indexed history, "any
+//   enemy attack"; quiet_history.hpp). Off: every move uses bucket 0, the
+//   table as before. On since its SPRTs against off passed: STC +7.49 +/-
+//   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
+//   design R [0, 6]; 2026-11-11.
+// - use_capture_probe: ProbCut (tier 2, T31): at a non-PV node at least
+//   CaptureProbeMinDepth deep, a capture that holds CaptureProbeMargin above
+//   beta in a quiescence search and then in a search CaptureProbeReduction
+//   plies shallower than a normal child makes the node fail high. Its STC
+//   SPRT on S512r2 ended H0 (-5.29 +/- 3.58 Elo after 12,800 games,
+//   2026-11-06); on since its one LTC-only design R test on the tuned search
+//   (owner, 2026-11-11) passed: +9.40 +/- 5.03 Elo after 4,992 games, design
+//   R [0, 6]; 2026-11-11.
+// - use_pass_best_stop: the stop rule for a search stopped mid-iteration
+//   (bug review 2026-11-11, E1; searcher.cpp, the stop rule). Off: a move
+//   from the unfinished iteration is played only if its exact score beats
+//   the last finished iteration's. On: also once the last finished
+//   iteration's best move has been searched again in the unfinished pass,
+//   whatever the score, since the pass's best exact move is then that move
+//   or one that scored above it at the new depth; the iteration's best is
+//   kept per aspiration pass, so an earlier pass cannot supply it. An
+//   unresolved root fail high is never played either way. Its STC design R
+//   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
+//   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
+//   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
+// - use_history_skip: quiet history pruning (tier 2, T24; the engine
+//   survey's B13): at a non-PV node out of check, at most
+//   HistorySkipMaxDepth deep, once a move has been searched, a quiet move
+//   whose ordering score (quiet_order_score, as the selector orders quiets)
+//   is at or below -HistorySkipPerPly x depth is skipped unsearched. On since
+//   its STC SPRT against off passed: +6.04 +/- 4.37 Elo after 8,000 games,
+//   design R [0, 6]; 2026-11-12.
+// - use_piece_drift, use_minor_drift, use_major_drift, use_threat_drift: the
+//   eval the search estimates with (pruning, the quiescence stand-pat) is
+//   the raw eval plus each switched-on drift table's term (eval_drift.hpp;
+//   tier 2, think tank R34 and engine survey E4): the mean of the two
+//   colours' piece tables, the minor table, the major table, the threat
+//   table, each times its share (PieceDriftShare, ... / DriftShareUnit).
+//   The tables learn at the nodes whose result shows the estimate erred
+//   (negamax's end), only while switched on. The minor table is on, at
+//   MinorDriftShare 32/64, since its STC SPRT against off passed: +5.57 +/-
+//   4.01 Elo after 9,600 games, design R [0, 6]; 2026-11-12. The piece,
+//   major and threat tables stay off until their SPRTs.
+// - use_pair_sum_update: the engine survey's D8: a cutoff's bonus and
+//   maluses move each pair table's entry (reply and follow) with the
+//   self-limiting term read from the move's entries in both tables summed
+//   (PairHistory::apply_from_sum), instead of from the entry alone, so the
+//   two tables approach the limit together. A table the node does not read
+//   (no arrival, or its switch off) is neither summed nor updated, so with
+//   one table the update is the usual one. No constant. On since its STC
+//   SPRT against off passed: +4.29 +/- 3.46 Elo after 12,800 games, design
+//   R [0, 6]; 2026-11-12.
+// - use_check_order_bonus: the engine survey's D13: in the main search out
+//   of check, a quiet move (not castling) that gives direct check adds
+//   DirectCheckBonus to its ordering score (MoveSelector::start_main,
+//   direct_check_targets). On since its STC SPRT against off passed: +5.50
+//   +/- 3.93 Elo after 9,600 games, design R [0, 6]; 2026-11-12.
+// - use_skip_check_exempt: the history skip (use_history_skip) never skips
+//   a quiet move that gives direct check (gives_direct_check, D13's test);
+//   the skip's score has no D13 bonus, so without the exemption a check the
+//   selector put early can be skipped on bad history. On since its
+//   non-regression SPRT [-3, 0] against off passed: +2.86 +/- 2.77 Elo
+//   after 19,200 games (its design R [0, 6] STC capped undecided at +2.80
+//   +/- 3.43); 2026-11-12.
+// - use_history_ageing: history ageing between searches (the engine
+//   survey's D17, think tank R16): at the start of each search (each `go`)
+//   every history entry (butterfly, reply, follow, take) keeps
+//   HistoryKeepQuarters / 4 of its value, so what earlier moves' searches
+//   learned fades instead of persisting unchanged. On since its STC SPRT
+//   against off passed: +5.71 +/- 3.77 Elo after 11,200 games, design R
+//   [0, 6]; 2026-11-12.
+// - use_improving_lmp, use_improving_lmr: the improving flag (the engine
+//   survey's B9, think tank R17): a node is improving when its pruning eval
+//   (prune_eval, the TT-refined static eval RFP uses) is above the same
+//   side's two plies up (four plies up when that node was in check; not
+//   improving when neither is known). use_improving_lmp scales late move
+//   pruning's quiet allowance by (8 + LmpImprovingEighths) / 8 at an
+//   improving node and (8 - LmpImprovingEighths) / 8 at one that is not;
+//   use_improving_lmr reduces late quiets LmrNotImprovingSixtyFourths 64ths
+//   of a ply (64, one ply, by default) more at a node
+//   that is not improving. use_improving_lmp is on since its STC SPRT
+//   against off passed: +6.82 +/- 4.37 Elo after 8,000 games, design R
+//   [0, 6]; 2026-11-13. use_improving_lmr is on since its own STC SPRT
+//   against off (the LMP use off on both sides) passed: +12.71 +/- 7.00 Elo
+//   after 3,200 games, design R [0, 6]; 2026-11-13.
+// - use_centred_lmr_history: round-once LMR with a centred history term
+//   (think tank R20, the engine survey's C10 in its centred form): the
+//   reduction is summed in 64ths of a ply (lmr_table.hpp, LmrSixtyFourths)
+//   and rounded once, and a late quiet is reduced less (more) by its
+//   butterfly, reply and follow entries above (below) their running centres
+//   at LMR sites (HistoryCentre), weighted as the move ordering weights them,
+//   one ply per LmrHistoryPerPly. With no history term the reduction is the
+//   whole-ply one exactly; the whole-ply terms (B9's not-improving plies
+//   among them) enter the sum as whole multiples of 64, so each moves the
+//   rounded reduction by exactly its own plies. On since its SPRTs against
+//   off (LmrHistoryPerPly 10,000) passed: STC +8.04 +/- 4.04 Elo after
+//   9,600 games, LTC +6.21 +/- 4.35 Elo after 6,656 games, design R [0, 6];
+//   2026-11-13.
+// - use_linear_bonus: the linear history bonus (think tank R15, the engine
+//   survey's D11): a cutoff's history bonus and maluses are LinearBonusPerPly
+//   per ply of depth instead of HistoryBonusFactor / 2 per ply squared, with
+//   the same cap (linear_bonus_for_depth, Searcher::cutoff_bonus). The amount
+//   feeds every table record_cutoff updates (take, butterfly, and the pair
+//   tables through use_pair_sum_update's summed update); R20's centres read
+//   the tables it fills. On since its STC SPRT against off passed: +8.98 +/-
+//   5.70 Elo after 4,800 games, design R [0, 6]; 2026-11-13.
+// - use_quiesce_move_cap: a quiescence node out of check searches at most
+//   QuiesceMoveCap moves (the selector's order) and prunes the rest; in check
+//   every evasion is searched (the engine survey's B16, move-count pruning in
+//   the quiescence search). On since its STC SPRT against off passed at the
+//   retry value QuiesceMoveCap 2 (3 had stopped for futility): +8.90 +/- 5.56
+//   Elo after 4,800 games, design R [0, 6]; 2026-11-13.
+// - use_root_lmr: late quiet root moves are reduced by the LMR table (less
+//   the check relief), then searched again at full depth if they beat alpha
+//   (bug review 2026-11-11 §3: root moves were never reduced). Needs use_lmr
+//   and use_pvs. The whole-ply table entry only, as tested: no context
+//   correction, cut-node or not-improving plies, and no R20 history term.
+//   On since its SPRTs against off passed: STC +17.71 +/- 6.74 Elo after
+//   3,200 games, LTC +14.94 +/- 6.24 Elo after 3,328 games, design R
+//   [0, 6]; 2026-11-13.
+// - use_helper_skip: Lazy SMP v2's depth staggering (DESIGN.md §5.6 step
+//   17a; owner, 2026-11-15): before each iteration a helper thread skips
+//   every depth that at least half of the go's threads are already
+//   searching (helper_next_depth), so the free-running helpers spread over
+//   depths instead of repeating the main thread's; the main thread never
+//   skips. Off until its tests; no effect with one thread.
+// - use_tt_halfmove_guard: the TT ignores the halfmove clock, so a score
+//   stored at a low clock can settle a later visit where the fifty-move
+//   rule falls inside the search it stands for (engineering review
+//   2026-11-11, W7; owner, 2026-11-16: a TCEC hazard). With the switch on,
+//   a TT score does not settle a node (main search or quiescence) when the
+//   node's clock plus the plies the cutoff stands in for (the node's depth;
+//   in quiescence 1 in check, else 0) reaches the rule's 100 plies, unless
+//   the rule cannot have made it wrong: the rule only pulls a result toward
+//   the draw, so a lower bound at or below 0, an upper bound at or above 0,
+//   an exact 0, and a mate (or mated) score whose mate falls on or before
+//   the rule's last ply stay true. The TT move still orders the moves. On
+//   in sprt/tt-halfmove-guard, the test side of its non-regression STC SPRT
+//   [-3, 0]; adopted (on) 2026-11-16 by the owner (capped at Elo -0.33 +/- 2.44).
+// - use_time_guards: two guards on time management (L1 of the audit of
+//   2026-11-16; time_budget.hpp): with use_stability_time and
+//   use_deep_time_depth, the scale's depth is clamped at 27, the deepest
+//   depth E2's long-search check validated, not 60; and with a clock, one
+//   move takes at most its increment plus half of the rest of the clock
+//   after the Move Overhead (plan_time's move_guard, passed by the UCI
+//   session's quota_for_go). Adopted (on) 2026-11-16 by the owner.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
   X(use_aspiration, UseAspiration, true)                 \
-  X(use_mate_distance, UseMateDistance, true)            \
+  X(use_mate_distance, UseMateDistance, false)           \
   X(use_quiesce, UseQuiesce, true)                       \
   X(use_see_quiesce, UseSeeQuiesce, true)                \
   X(use_history, UseHistory, true)                       \
@@ -148,7 +333,33 @@ struct SearchQuota {
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
-  X(use_no_move_reduction, UseNoMoveReduction, true)
+  X(use_no_move_reduction, UseNoMoveReduction, true)     \
+  X(use_stability_time, UseStabilityTime, true)          \
+  X(use_share_time, UseShareTime, true)                  \
+  X(use_cut_node_lmr, UseCutNodeLmr, true)               \
+  X(use_threat_buckets, UseThreatBuckets, true)          \
+  X(use_capture_probe, UseCaptureProbe, true)            \
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_history_skip, UseHistorySkip, true)              \
+  X(use_piece_drift, UsePieceDrift, false)               \
+  X(use_minor_drift, UseMinorDrift, true)                \
+  X(use_major_drift, UseMajorDrift, false)               \
+  X(use_threat_drift, UseThreatDrift, false)             \
+  X(use_pair_sum_update, UsePairSumUpdate, true)         \
+  X(use_check_order_bonus, UseCheckOrderBonus, true)     \
+  X(use_skip_check_exempt, UseSkipCheckExempt, true)     \
+  X(use_history_ageing, UseHistoryAgeing, true)          \
+  X(use_improving_lmp, UseImprovingLmp, true)            \
+  X(use_improving_lmr, UseImprovingLmr, true)            \
+  X(use_centred_lmr_history, UseCentredLmrHistory, true) \
+  X(use_linear_bonus, UseLinearBonus, true)              \
+  X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
+  X(use_root_lmr, UseRootLmr, true)                      \
+  X(use_deep_time_depth, UseDeepTimeDepth, true)         \
+  X(use_fastest_table_win, UseFastestTableWin, true)     \
+  X(use_helper_skip, UseHelperSkip, false)               \
+  X(use_tt_halfmove_guard, UseTtHalfmoveGuard, true)     \
+  X(use_time_guards, UseTimeGuards, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -157,12 +368,64 @@ struct SearchSwitches {
   // Tests only (no option): a TT entry cuts only at exactly the depth it was
   // searched to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
+  // The UCI options SyzygyProbeDepth and SyzygyProbeLimit (DESIGN.md §5.1),
+  // which the session sets between searches. With use_tables, the search
+  // probes a node only at a remaining depth of at least table_probe_depth
+  // (and TableProbeMinDepth, which equals its default in released builds),
+  // and every probe, the root ranking's included, only with at most
+  // table_probe_pieces pieces. The defaults are the behaviour before the
+  // options existed: depth TableProbeMinDepth, every loaded table.
+  int table_probe_depth = TableProbeMinDepth;
+  int table_probe_pieces = LargestTablePieces;
 };
+
+// The move played with the score and depth of the search behind it: those of
+// the last reported line. That is the last finished iteration, or the
+// unfinished one when a stop takes its move (searcher.cpp, the stop rule;
+// then one more than time_signals().depth). depth is 0 only if no iteration
+// finished.
+class Searcher;
+
+// What the coordinator of a multi-threaded search (HelperPool, Lazy SMP,
+// DESIGN.md §5.6 step 17a) prepares once per go, before any thread
+// searches: prepare_start advances the TT's age and sets its policy (once,
+// not once per thread), and ranks the root by the endgame tables (Fathom's
+// root probe is not thread-safe; every thread then searches the same kept
+// moves). The main thread's copy also names the helpers, whose node and
+// table-hit counts its reports add to its own; a helper's copy names none.
+struct SearchStart {
+  bool table_ranked = false;  // rank_root_by_tables kept moves
+  MoveList table_kept;        // those moves, in the tables' order
+  Searcher* const* helpers = nullptr;
+  std::size_t helper_count = 0;
+  // A helper's copy only: this thread is a helper, and the go's whole team
+  // (the main thread first), whose published iteration depths its skip rule
+  // reads (use_helper_skip).
+  bool helper = false;
+  const Searcher* const* team = nullptr;
+  std::size_t team_size = 0;
+};
+
+// Lazy SMP v2's skip rule (use_helper_skip): the depth a helper searches
+// next, from `depth` up to `limit`: the first depth that fewer than half of
+// the team's `team_size` threads (`depth_of(i)`: thread i's current
+// iteration depth) are already searching at or beyond. Half: the smallest
+// share that always leaves a depth with fewer threads on it than not
+// (DESIGN.md §5.2, "Search constants").
+template <class DepthOf>
+int helper_next_depth(int depth, int limit, std::size_t team_size, DepthOf&& depth_of) {
+  for (; depth < limit; ++depth) {
+    std::size_t at_or_beyond = 0;
+    for (std::size_t i = 0; i < team_size; ++i) at_or_beyond += depth_of(i) >= depth;
+    if (2 * at_or_beyond < team_size) break;
+  }
+  return depth;
+}
 
 struct SearchResult {
   Move best = NoMove;
   int score = 0;
-  int depth = 0;  // last finished iteration (0 if none finished)
+  int depth = 0;
   std::uint64_t nodes = 0;
 };
 
@@ -201,6 +464,12 @@ struct PlyFrame {
   bool after_null = false;      // this node was reached by a null move (no second one in a row)
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
+  bool expected_cut = false;    // expected to fail high (a cut node), from the parent (T17)
+  // The improving flag (B9): this node's pruning eval (ScoreNone in check,
+  // and in the quiescence search, which never sets it). 16 bits, in the
+  // padding after expected_cut, so the frame keeps its 2,704-byte guard
+  // (every score and ScoreNone fit).
+  std::int16_t pruning_eval = ScoreNone;
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -208,8 +477,9 @@ struct PlyFrame {
 // the others keep their order (Fork's rule; the PV move is searched first).
 struct RootEntry {
   Move move;
-  std::uint64_t nodes = 0;  // nodes under this move in the current iteration's last pass
-  int share = 0;            // its per mille of the last finished iteration's nodes
+  std::uint64_t nodes = 0;             // nodes under this move in the current iteration's last pass
+  int share = 0;                       // its per mille of the last finished iteration's nodes
+  std::uint64_t nodes_all_passes = 0;  // nodes under it in every aspiration pass of the current iteration
 };
 
 // The moved piece's facts for the LMR context, from the position after a
@@ -247,9 +517,10 @@ struct LmrMoveFacts {
 
 // The LMR context's history: the mover's entry for the move, read from the
 // position after the move, where the mover is the side not to move (b89185f:
-// it read the opponent's table; tests/test_pruning.cpp).
-inline int mover_history(const QuietHistory& history, const Position& after, Move m) {
-  return history.value(~after.side_to_move(), m);
+// it read the opponent's table; tests/test_pruning.cpp). `bucket` is the
+// move's threat bucket, taken before the move was made (T56; 0 when off).
+inline int mover_history(const QuietHistory& history, const Position& after, Move m, int bucket = 0) {
+  return history.value(~after.side_to_move(), m, bucket);
 }
 
 // Debug counters (DESIGN.md §5.2), compiled in only with the CMake option
@@ -261,63 +532,253 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
 #else
 #define FORK_STAT(...) static_cast<void>(0)
 #endif
+// FORK_STAT_GATE(tokens): tokens that stats builds add to a search
+// condition (the decision ledger's force, X10); nothing in normal builds,
+// so their conditions are exactly as written without it.
+#ifdef FORK_SEARCH_STATS
+#define FORK_STAT_GATE(...) __VA_ARGS__
+#else
+#define FORK_STAT_GATE(...)
+#endif
+
+#ifdef FORK_SEARCH_STATS
+// The decision ledger (DESIGN.md §5.7, X10): one technique switched at one
+// node of a side search: RFP off, futility off, or futility on (dropping
+// the non-checking quiets after the first move, its bound capped at alpha
+// so the arm claims a fail low, as the rule always does).
+enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
+#endif
+// The scalar counters, one list (as the switches above), so the per-search
+// dump (stats_report.hpp) cannot miss one: X(member).
+// - beta_cutoffs: main-search nodes that failed high; first_move_cutoffs:
+//   ... on the first move searched; cutoff_index_sum: the cutoff move's index
+//   summed (0 = first); makes: moves made in the main and quiescence searches.
+// - Deliverable 6: nodes cut by RFP and the null move; moves pruned by LMP,
+//   futility and SEE; LMR's reduced searches, their full-depth re-searches,
+//   and the plies the reductions took off (the loop's mean-reduction
+//   descriptor).
+// - The heuristic-discovery rule (lmr_correction, idea 23): the LMR sites it
+//   ran at, those where it returned non-zero, and those where that changed
+//   the reduction after scaling and clamping (the loop's trigger rate).
+// - External review (2026-10-26). (c) SEE tests by the main-search SEE
+//   pruning, by where the move came from: good captures (SEE >= 0 already
+//   shown by the selector: skipped since claim (c)), bad captures (SEE < 0
+//   shown by the selector), quiets, other (TT moves and in-check evasions);
+//   bad captures reached after late move pruning stopped the quiets, and how
+//   many SEE pruning then drops. (d) Futile nodes: quiet moves taken from
+//   the selector there, and those searched (the checking ones and the first
+//   move). (f) Quiescence nodes at PV and non-PV nodes.
+// - Tier 2: nodes where a singular test could run (the measurement's
+//   sampling); singular tests run (their searches); those that found the TT
+//   move singular; those where another move also beat beta, so the node
+//   failed high (multi-cut); those where the TT move was searched one ply
+//   shallower; nodes without a TT move searched one ply shallower (T26);
+//   captures the capture probe searched and the nodes it made fail high
+//   (T31); quiet moves the history skip dropped (T24).
+// - Phase 4 step 1, X1 (DESIGN.md §5.7): nodes at the root and in the main
+//   search (with the quiescence nodes above they sum to the node count);
+//   static evaluations computed, taken from the TT entry instead, or not
+//   needed (in check), in the main and the quiescence search, and at the ply
+//   limit (evals_horizon); moves made that move a pawn, all and in the
+//   quiescence search alone.
+// - X10: candidates of RFP and futility (every condition but the margin),
+//   the ledger rows printed, and the nodes its side searches took (kept
+//   apart: a side search restores every other counter).
+// - Idea 59 step 1: evaluation sites whose window has no finite bound (both
+//   in the mate or tablebase band), main and quiescence, computed and
+//   reused from the TT; computed ones with exactly one finite bound.
+// - The drift tables' passive measurement (FORK_DRIFT_REPORT in stats
+//   builds; R34's ranking, tools/measure/drift_rank.py): at every node where
+//   the tables learn, the samples, the summed error of the raw eval against
+//   the result (for a bound only the part the bound proves) and of the raw
+//   eval plus each table's term at its full and at half its share; the same
+//   (but the half share) over the tail samples, those whose raw error is
+//   over DriftTailError cp.
+// - X2: LMR sites whose node has no reply or no follow arrival (a null move
+//   or the root above), so those tables have no entry; late captures (every
+//   LMR gate passed but "quiet": R18's sites); and at LMR sites, where the
+//   LMR history term of sprt/lmr-history would reduce less (its shift > 0),
+//   more (< 0), and where it would change the reduction.
+#define FORK_SEARCH_COUNTERS(X)      \
+  X(beta_cutoffs)                    \
+  X(first_move_cutoffs)              \
+  X(cutoff_index_sum)                \
+  X(makes)                           \
+  X(rfp_cuts)                        \
+  X(null_cuts)                       \
+  X(lmp_prunes)                      \
+  X(futility_prunes)                 \
+  X(see_prunes)                      \
+  X(lmr_searches)                    \
+  X(lmr_researches)                  \
+  X(lmr_plies_sum)                   \
+  X(lmr_rule_sites)                  \
+  X(lmr_rule_fires)                  \
+  X(lmr_rule_changes)                \
+  X(see_tests_good_captures)         \
+  X(see_tests_bad_captures)          \
+  X(see_tests_quiets)                \
+  X(see_tests_other)                 \
+  X(bad_captures_after_stop)         \
+  X(bad_captures_after_stop_pruned)  \
+  X(futile_nodes)                    \
+  X(futile_quiets_taken)             \
+  X(futile_quiets_searched)          \
+  X(quiesce_nodes_pv)                \
+  X(quiesce_nodes_non_pv)            \
+  X(singular_candidates)             \
+  X(singular_tests)                  \
+  X(singular_extended)               \
+  X(multi_cut_cuts)                  \
+  X(negative_extensions)             \
+  X(no_move_reductions)              \
+  X(capture_probes)                  \
+  X(capture_probe_cuts)              \
+  X(history_skips)                   \
+  X(root_nodes)                      \
+  X(main_nodes)                      \
+  X(evals_main)                      \
+  X(tt_eval_hits_main)               \
+  X(check_nodes_main)                \
+  X(evals_quiesce)                   \
+  X(tt_eval_hits_quiesce)            \
+  X(check_nodes_quiesce)             \
+  X(evals_horizon)                   \
+  X(pawn_makes)                      \
+  X(pawn_makes_quiesce)              \
+  X(lmr_reply_absent)                \
+  X(lmr_follow_absent)               \
+  X(late_capture_sites)              \
+  X(lmr_history_fire_less)           \
+  X(lmr_history_fire_more)           \
+  X(lmr_history_changes)             \
+  X(ledger_rfp_candidates)           \
+  X(ledger_futility_candidates)      \
+  X(ledger_rows)                     \
+  X(ledger_side_nodes)               \
+  X(eval_gap_main_infinite)          \
+  X(eval_gap_quiesce_infinite)       \
+  X(eval_gap_main_reuse_infinite)    \
+  X(eval_gap_quiesce_reuse_infinite) \
+  X(eval_gap_main_one_sided)         \
+  X(eval_gap_quiesce_one_sided)      \
+  X(drift_samples)                   \
+  X(drift_error_raw)                 \
+  X(drift_tail_samples)              \
+  X(drift_tail_raw)                  \
+  X(drift_error_pieces)              \
+  X(drift_tail_pieces)               \
+  X(drift_half_pieces)               \
+  X(drift_error_minor)               \
+  X(drift_tail_minor)                \
+  X(drift_half_minor)                \
+  X(drift_error_major)               \
+  X(drift_tail_major)                \
+  X(drift_half_major)                \
+  X(drift_error_threat)              \
+  X(drift_tail_threat)               \
+  X(drift_half_threat)
+
+// X2's histogram bins (DESIGN.md §5.7; measurement settings, no search
+// effect). Sign-magnitude bins: the value 0 and the positive values fill the
+// upper half from its first bin, the negative ones the lower half from its
+// last, so every bin edge sits at a multiple of the width in |v| and the
+// share at or beyond any multiple (24,000: the LMR history term's divisor)
+// is exact. Table values, within [-HistoryMax, HistoryMax], in bins of 250
+// (a fortieth of the range per side: fine enough for the quantiles; 82
+// bins); ordering scores, within int16, in bins of 500 (24,000 is the 48th
+// edge; 132 bins).
+constexpr int TableBinWidth = 250;
+constexpr int TableBins = 2 * (HistoryMax / TableBinWidth + 1);
+constexpr int OrderBinWidth = 500;
+constexpr int OrderBins = 2 * (INT16_MAX / OrderBinWidth + 1);
+constexpr int table_value_bin(int v) {
+  const int b = v >= 0 ? TableBins / 2 + v / TableBinWidth : TableBins / 2 - 1 - (-v) / TableBinWidth;
+  return b < 0 ? 0 : b >= TableBins ? TableBins - 1 : b;
+}
+constexpr int order_score_bin(int s) {
+  const int b = s >= 0 ? OrderBins / 2 + s / OrderBinWidth : OrderBins / 2 - 1 - (-s) / OrderBinWidth;
+  return b < 0 ? 0 : b >= OrderBins ? OrderBins - 1 : b;
+}
+// The LMR history term being measured (branch sprt/lmr-history, 7d94d93:
+// the base reduction less the ordering score / 24,000, integer division, so
+// it acts only at |score| >= 24,000). A measurement setting: the stats build
+// counts where the term would act, and the search never reads it.
+constexpr int LmrHistoryProbeDivisor = 24000;
+constexpr int lmr_history_probe_shift(int order_score) { return order_score / LmrHistoryProbeDivisor; }
+// The history skip's measurement (T24, 2026-11-11; a measurement setting,
+// no search effect): ordering scores in the same sign-magnitude layout in
+// finer bins of 100, so a threshold of any multiple of 100 is counted
+// exactly (the bench's site scores lie mostly within +/-500); 656 bins.
+constexpr int SkipBinWidth = 100;
+constexpr int SkipBins = 2 * (INT16_MAX / SkipBinWidth + 1);
+constexpr int skip_score_bin(int s) {
+  const int b = s >= 0 ? SkipBins / 2 + s / SkipBinWidth : SkipBins / 2 - 1 - (-s) / SkipBinWidth;
+  return b < 0 ? 0 : b >= SkipBins ? SkipBins - 1 : b;
+}
+
+// Idea 59 step 1 (DESIGN.md §5.7; measurement settings, no search effect):
+// the gap between a static evaluation and the nearest finite bound of the
+// node's window, in bins of 1 cp up to 255 (so a margin of any whole number
+// of cp up to 255 is counted exactly), 64 cp up to 4,095 (the tail's shape),
+// and one overflow bin. A bound in the mate or tablebase band counts as
+// infinite: no gate could be set against it. Main-search sites are also
+// split by remaining depth: 1, 2, 3-4, 5-7, 8 and more.
+constexpr int GapBinsFine = 256;
+constexpr int GapBins = GapBinsFine + (4096 - GapBinsFine) / 64 + 1;
+constexpr int GapBands = 5;
+// The gap, or -1 when neither bound is finite.
+constexpr int window_gap(int eval, int alpha, int beta) {
+  const bool low = !is_tb_or_mate(alpha), high = !is_tb_or_mate(beta);
+  if (!low && !high) return -1;
+  const int to_alpha = eval > alpha ? eval - alpha : alpha - eval;
+  const int to_beta = eval > beta ? eval - beta : beta - eval;
+  return !low ? to_beta : !high ? to_alpha : to_alpha < to_beta ? to_alpha : to_beta;
+}
+constexpr int window_gap_bin(int gap) {
+  return gap < GapBinsFine ? gap : gap < 4096 ? GapBinsFine + (gap - GapBinsFine) / 64 : GapBins - 1;
+}
+constexpr int gap_depth_band(int depth) {
+  return depth <= 1 ? 0 : depth == 2 ? 1 : depth <= 4 ? 2 : depth <= 7 ? 3 : 4;
+}
+
 struct SearchCounters {
-  std::uint64_t beta_cutoffs = 0;        // main-search nodes that failed high
-  std::uint64_t first_move_cutoffs = 0;  // ... on the first move searched
-  std::uint64_t cutoff_index_sum = 0;    // sum of the cutoff move's index (0 = first)
-  std::uint64_t makes = 0;               // moves made in the main and quiescence searches
-  // Deliverable 6: nodes cut by RFP and the null move; moves pruned by LMP,
-  // futility and SEE; LMR's reduced searches and their full-depth re-searches.
-  std::uint64_t rfp_cuts = 0;
-  std::uint64_t null_cuts = 0;
-  std::uint64_t lmp_prunes = 0;
-  std::uint64_t futility_prunes = 0;
-  std::uint64_t see_prunes = 0;
-  std::uint64_t lmr_searches = 0;
-  std::uint64_t lmr_researches = 0;
-  std::uint64_t lmr_plies_sum = 0;  // plies taken off by reductions (the loop's mean-reduction descriptor)
-  // The heuristic-discovery rule (lmr_correction, idea 23): the LMR sites it
-  // ran at, those where it returned non-zero, and those where that changed
-  // the reduction after scaling and clamping (the loop's trigger rate).
-  std::uint64_t lmr_rule_sites = 0;
-  std::uint64_t lmr_rule_fires = 0;
-  std::uint64_t lmr_rule_changes = 0;
+#define FORK_COUNTER_MEMBER(member) std::uint64_t member = 0;
+  FORK_SEARCH_COUNTERS(FORK_COUNTER_MEMBER)
+#undef FORK_COUNTER_MEMBER
   // Quiet cutoffs at non-PV nodes out of check, by remaining depth (1-6) and
   // the cutting move's index among the quiets searched there (the late move
   // pruning measurement, DESIGN.md §5.2 deliverable 6).
   static constexpr int CutoffDepths = 7;
   static constexpr int CutoffIndices = 48;
   std::uint64_t quiet_cutoff_index[CutoffDepths][CutoffIndices] = {};
-  // External review (2026-10-26). (c) SEE tests by the main-search SEE
-  // pruning, by where the move came from; bad captures reached after late
-  // move pruning stopped the quiets, and how many SEE pruning then drops.
-  std::uint64_t see_tests_good_captures =
-      0;  // SEE >= 0 already shown by the selector: skipped since claim (c)
-  std::uint64_t see_tests_bad_captures = 0;  // SEE < 0 already shown by the selector
-  std::uint64_t see_tests_quiets = 0;
-  std::uint64_t see_tests_other = 0;  // TT moves and in-check evasions
-  std::uint64_t bad_captures_after_stop = 0;
-  std::uint64_t bad_captures_after_stop_pruned = 0;
-  // (d) Futile nodes: quiet moves taken from the selector there, and those
-  // searched (the checking ones and the first move).
-  std::uint64_t futile_nodes = 0;
-  std::uint64_t futile_quiets_taken = 0;
-  std::uint64_t futile_quiets_searched = 0;
-  // (f) Quiescence nodes at PV and non-PV nodes.
-  std::uint64_t quiesce_nodes_pv = 0;
-  std::uint64_t quiesce_nodes_non_pv = 0;
-  // Tier 2: nodes where a singular test could run (the measurement's sampling).
-  std::uint64_t singular_candidates = 0;
-  std::uint64_t singular_tests = 0;       // singular tests run (their searches)
-  std::uint64_t singular_extended = 0;    // ... that found the TT move singular
-  std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
-  std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
-  std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
-  // The SPSA calibration's firing counts (tools/github/spsa_calibrate.py; DESIGN.md §5.2): one per margin
-  // whose own decisions no counter above isolates.
-  std::uint64_t aspiration_researches = 0;  // root searches repeated after an aspiration fail
-  std::uint64_t null_surplus_plies = 0;     // null-move reduction plies added for the eval surplus, summed
-  std::uint64_t quiet_see_prunes = 0;       // the quiet moves among see_prunes
+  // X2 (DESIGN.md §5.7): at LMR sites, the ordering score (quiet_order_score)
+  // and the raw entries of the mover's butterfly history and of the reply
+  // and follow tables (when the node has those arrivals); at late captures,
+  // the take history's entry.
+  std::uint64_t lmr_order_bins[OrderBins] = {};
+  std::uint64_t lmr_quiet_bins[TableBins] = {};
+  std::uint64_t lmr_reply_bins[TableBins] = {};
+  std::uint64_t lmr_follow_bins[TableBins] = {};
+  std::uint64_t late_take_bins[TableBins] = {};
+  // Idea 59 step 1 (DESIGN.md §5.7): window gaps at evaluation sites with a
+  // finite bound: computed in the main search and in quiescence, reused
+  // from the TT entry (main, quiescence), and the computed main-search ones
+  // by depth band (with each band's infinite-window count).
+  std::uint64_t eval_gap_main_bins[GapBins] = {};
+  std::uint64_t eval_gap_quiesce_bins[GapBins] = {};
+  std::uint64_t eval_gap_main_reuse_bins[GapBins] = {};
+  std::uint64_t eval_gap_quiesce_reuse_bins[GapBins] = {};
+  std::uint64_t eval_gap_band_bins[GapBands][GapBins] = {};
+  std::uint64_t eval_gap_band_infinite[GapBands] = {};
+  // The history skip's measurement (T24, 2026-11-11): at every site where
+  // it could act under any depth limit up to HistorySkipSiteDepths - 1 (a
+  // non-PV node out of check, a quiet move after the first move searched,
+  // past late move pruning), the move's ordering score by remaining depth
+  // (index 0 unused) in skip_score_bin's bins, with the switch on or off;
+  // the skip's own count is history_skips.
+  static constexpr int HistorySkipSiteDepths = 7;
+  std::uint64_t history_skip_site_bins[HistorySkipSiteDepths][SkipBins] = {};
 };
 
 class Searcher {
@@ -326,8 +787,29 @@ class Searcher {
 
   // Searches `pos` (restored on return) until a limit is reached or `stop`
   // becomes true. While `pondering` is true, time limits do not apply.
+  // Without `start` the search prepares the TT and ranks the root itself
+  // (one thread: the path every single-threaded search, bench and data
+  // generation take). With it, prepare_start has done both for every thread
+  // of a multi-threaded search; it must outlive the call.
   SearchResult deliberate(Position& pos, const SearchQuota& limits, const std::atomic<bool>& stop,
-                          const std::atomic<bool>* pondering, SearchListener* listener);
+                          const std::atomic<bool>* pondering, SearchListener* listener,
+                          const SearchStart* start = nullptr);
+
+  // The node and table-hit counts the running or last search has published:
+  // stored every StopCheckInterval nodes and at the search's end, readable
+  // from another thread. clear_published zeroes them (a coordinator, before
+  // the search starts, so a report never reads the last search's counts).
+  std::uint64_t published_nodes() const { return published_nodes_.load(std::memory_order_relaxed); }
+  std::uint64_t published_hits() const { return published_hits_.load(std::memory_order_relaxed); }
+  void clear_published() {
+    published_nodes_.store(0, std::memory_order_relaxed);
+    published_hits_.store(0, std::memory_order_relaxed);
+    searching_depth_.store(0, std::memory_order_relaxed);
+  }
+  // The depth of the iteration this searcher is running (0 before its
+  // first), for helpers' skip rule (use_helper_skip); written by its own
+  // thread at each iteration's start.
+  int searching_depth() const { return searching_depth_.load(std::memory_order_relaxed); }
 
   SearchSwitches switches;
   // Aspiration fails are reported (as upperbound or lowerbound lines) only
@@ -335,6 +817,10 @@ class Searcher {
   std::int64_t fail_report_ms = 1000;
 #ifdef FORK_SEARCH_STATS
   SearchCounters counters;
+#if defined(FORK_EVAL_NNUE)
+  // The network's update counts (X1), kept by the feature stack.
+  const FeatureStackTally& feature_tally() const { return features_.tally(); }
+#endif
 #endif
 
   // Forgets the move-ordering history (ucinewgame, and each bench position).
@@ -342,7 +828,26 @@ class Searcher {
     history_.clear();
     for (PairHistory& table : pair_history_) table.clear();
     take_history_.clear();
+    for (EvalDrift& table : piece_drift_) table.clear();
+    minor_drift_.clear();
+    major_drift_.clear();
+    threat_drift_.clear();
+    for (HistoryCentre& c : lmr_centres_) c = HistoryCentre{};
   }
+  // History ageing (D17): every history entry keeps HistoryKeepQuarters / 4
+  // of its value; deliberate() calls it at each search's start with
+  // use_history_ageing.
+  void age_histories() {
+    history_.age(HistoryKeepQuarters);
+    for (PairHistory& table : pair_history_) table.age(HistoryKeepQuarters);
+    take_history_.age(HistoryKeepQuarters);
+  }
+  // Tests only: the butterfly history (the threat buckets' read and update
+  // checks, tier 2 T56).
+  const QuietHistory& butterfly_view() const { return history_; }
+  // Tests only: the butterfly history, to set entries (the history skip's
+  // exemption for checking quiets).
+  QuietHistory& butterfly_edit() { return history_; }
 
   // Tests only: the root move that failed high in the iteration the last
   // deliberate() stopped in and was not yet re-searched to an exact score
@@ -352,6 +857,14 @@ class Searcher {
   // Tests only: one zero-window search of `pos` as a non-PV node (window
   // [beta - 1, beta]), with no time limit; returns its fail-soft score.
   int probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop);
+
+  // Tests only: moves the search's clock forward (called from a listener, on
+  // the search thread, between iterations); the last finished iteration's
+  // time-management signals (set before its report); and the soft limit the
+  // last soft check compared against.
+  void advance_clock(std::chrono::milliseconds by) { start_ -= by; }
+  const IterationSignals& time_signals() const { return time_signals_; }
+  std::int64_t last_soft_ms() const { return last_soft_ms_; }
 
  private:
   template <bool OnPv>
@@ -369,19 +882,84 @@ class Searcher {
   void play_null(int ply);
   int eval_at(int ply);
 
+  // The drift tables (eval_drift.hpp): each table's term at the node at
+  // `ply` (out of check), at its full share, in cp; the static estimate from
+  // the raw eval plus the switched-on terms, kept out of the tablebase and
+  // mate range; and the learning from a node's result.
+  struct DriftTerms {
+    int pieces = 0, minor = 0, major = 0, threat = 0;
+  };
+  DriftTerms drift_terms(int ply);  // also sets threat_keys_[ply] when that table is read
+  int drift_estimate(int raw, const DriftTerms& terms) const;
+  void learn_drift(int ply, int error, int depth);
+  // A drift table is switched on (or, in stats builds, measured): play()
+  // keeps the material keys, and the search computes the terms.
+  bool drift_in_use() const {
+    return switches.use_piece_drift || switches.use_minor_drift || switches.use_major_drift ||
+           switches.use_threat_drift FORK_STAT_GATE(|| drift_report_);
+  }
+
   bool poll_limits();  // true once the search must stop
+  void publish_counts() {
+    published_nodes_.store(nodes_, std::memory_order_relaxed);
+    published_hits_.store(table_hits_, std::memory_order_relaxed);
+  }
+  // This search's counts plus the helpers' published ones (the main thread
+  // of a multi-threaded search; its own alone otherwise). A node limit
+  // counts pool_nodes with helpers (poll_limits).
+  std::uint64_t pool_nodes() const;
+  std::uint64_t pool_hits() const;
+  // The soft limit for this iteration's soft check: the planned one, or with
+  // use_stability_time scaled by the last finished iteration's signals.
+  std::int64_t soft_limit_now(const SearchQuota& limits) const;
   std::int64_t elapsed_ms() const;
-  void record_cutoff(const PlyFrame& f, Move m, int depth);
+  void record_cutoff(PlyFrame& f, Move m, int depth);
+  // The cutoff bonus for `depth`, quadratic or with use_linear_bonus linear.
+  int cutoff_bonus(int depth) const {
+    return switches.use_linear_bonus ? linear_bonus_for_depth(depth) : bonus_for_depth(depth);
+  }
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
+#ifdef FORK_SEARCH_STATS
+  // X6 (DESIGN.md §5.7): one `iteration_trace` line for a finished iteration.
+  void trace_iteration(int depth, int score, int passes, std::uint64_t iteration_nodes) const;
+  // X10: the node at `ply` searched again with `force` applied there only,
+  // invisible to the real search (nodes, limits, TT writes, histories,
+  // counters and the tally restored); `side_nodes` gets the nodes it took.
+  int ledger_side_search(int alpha, int beta, int depth, int ply, LedgerForce force,
+                         std::uint64_t& side_nodes);
+  // Crucial-point ground truth (DESIGN.md §5.7): one `eval_site` line for a
+  // sampled evaluation site (kind 0 main search, 1 quiescence).
+  void print_eval_site(int kind, bool reused, int alpha, int beta, int eval, int prune_eval, int depth,
+                       int ply, bool tt_hit, const TtHit& hit, bool on_pv) const;
+  // X10: a decision at a position with this key is sampled (1 in ledger_every_).
+  bool ledger_sampled(Key key) const { return key % ledger_every_ == 0; }
+  // The drift measurement (FORK_DRIFT_REPORT): one learning node's errors,
+  // raw and with each table's term (the drift counters); and the pruning
+  // eval negamax derives from a static estimate with the TT entry.
+  void count_drift(int best, int raw, const DriftTerms& terms, TtBound bound);
+  int refined_eval(int estimate, bool tt_hit, const TtHit& hit, int ply) const;
+#endif
 
   TransTable& tt_;
   QuietHistory history_;
   PairHistory pair_history_[2];  // tier 2, T10: the reply and follow tables (ReplyTable, FollowTable)
   TakeHistory take_history_;     // tier 2, T11
+  // The drift tables (R34, E4): the piece tables per colour, then the minor,
+  // major and threat tables.
+  EvalDrift piece_drift_[2];
+  EvalDrift minor_drift_;
+  EvalDrift major_drift_;
+  EvalDrift threat_drift_;
+  bool drift_keys_live_ = false;  // play() keeps drift_keys_ (drift_in_use at the search's start)
+  // R20: the running centres of the butterfly, reply and follow entries at
+  // LMR sites (use_centred_lmr_history), cleared with the histories. D17's
+  // ageing leaves them as they are: they follow the aged tables within a
+  // few thousand LMR sites (HistoryCentre::Shift).
+  HistoryCentre lmr_centres_[3];
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;
@@ -392,8 +970,21 @@ class Searcher {
   std::uint64_t table_hits_ = 0;
   int max_ply_reached_ = 0;
   bool stopped_ = false;
+  const SearchStart* start_plan_ = nullptr;  // deliberate's `start` (null: one thread)
+  // Written only by this searcher's thread, read by others; on its own cache
+  // line, so the owner's stores never contend with another thread's writes.
+  alignas(64) std::atomic<std::uint64_t> published_nodes_{0};
+  std::atomic<std::uint64_t> published_hits_{0};
+  std::atomic<int> searching_depth_{0};
 
   PlyFrame frames_[MaxPly + 1];
+  // The drift tables' keys of each ply's position (eval_drift.hpp), beside
+  // the frames rather than in them (PlyFrame's size guard, tests/test_search.cpp):
+  // the material keys, kept by play() from the root's only while a table is
+  // in use, and the threat key, set where its term is read (drift_terms)
+  // and read where it learns, at the same node.
+  DriftKeys drift_keys_[MaxPly + 1];
+  Key threat_keys_[MaxPly + 1] = {};
   PrincipalLine pv_[MaxPly + 1];
   RootEntry root_moves_[MaxMoves];
   // The iteration's root move that failed high and is not yet resolved by a
@@ -408,22 +999,63 @@ class Searcher {
   Move iteration_best_ = NoMove;
   int iteration_best_score_ = -ScoreInfinite;
   PrincipalLine iteration_pv_;
+  // The last finished iteration's best move, and whether the running
+  // aspiration pass has searched it to a score (use_pass_best_stop).
+  Move prior_best_ = NoMove;
+  bool prior_best_searched_ = false;
   // LMR context inputs kept by the search (lmr_table.hpp): the root score's
   // last change between iterations, and the share of the current root move.
   int score_trend_ = 0;
   int branch_share_ = 0;
   // The last finished iteration's PV, and the first move of the last line
-  // reported: a stop after a reported fail repeats the finished iteration,
-  // so the last line before bestmove names the move played.
+  // reported if it was exact (NoMove after a fail line): a stop after a
+  // reported fail repeats the finished iteration, so the last line before
+  // bestmove is exact and names the move played.
   PrincipalLine finished_pv_;
   Move last_reported_ = NoMove;
+  // Time management (§5.6 step 10): finished iterations in a row with the
+  // same best move, that move, the last finished iteration's signals, and
+  // the soft limit last compared against.
+  int stable_iterations_ = 0;
+  Move stable_move_ = NoMove;
+  IterationSignals time_signals_;
+  std::int64_t last_soft_ms_ = -1;
 #ifdef FORK_SEARCH_STATS
   std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
+  bool report_counters_ = false;      // FORK_STATS_REPORT: dump the counters after each search
+  bool trace_iterations_ = false;     // FORK_ITERATION_TRACE: one line per finished iteration
+  // X10: FORK_PRUNE_LEDGER's sampling rate (0: no ledger), whether a side
+  // search is running, the force for the node it re-enters, and what it
+  // restores afterwards.
+  std::uint64_t ledger_every_ = 0;
+  bool ledger_active_ = false;
+  // FORK_DRIFT_REPORT: every drift table learns (none is applied) and is
+  // measured (the drift counters; with the ledger, a `drift_ledger` line
+  // after each `prune_ledger` row), so the search keeps its tree.
+  bool drift_report_ = false;
+  // Crucial-point ground truth: FORK_EVAL_SITES=N,M samples every Nth
+  // main-search and every Mth quiescence evaluation site (0: none).
+  std::uint64_t eval_site_every_main_ = 0;
+  std::uint64_t eval_site_every_quiesce_ = 0;
+  std::uint64_t eval_site_seen_main_ = 0;
+  std::uint64_t eval_site_seen_quiesce_ = 0;
+  LedgerForce ledger_force_ = LedgerForce::Keep;
+  int ledger_force_ply_ = -1;
+  SearchCounters ledger_saved_counters_;
+#if defined(FORK_EVAL_NNUE)
+  FeatureStackTally ledger_saved_tally_;
+#endif
 #endif
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;
   FeatureStack features_;
 #endif
 };
+
+// A multi-threaded search's shared setup, run once per go by its
+// coordinator before any thread searches (SearchStart): the TT's new age and
+// policy from `switches` (the main searcher's), and the root's ranking by the
+// endgame tables into `start`.
+void prepare_start(TransTable& tt, const SearchSwitches& switches, const Position& pos, SearchStart& start);
 
 }  // namespace forkeng

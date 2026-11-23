@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // The transposition table (DESIGN.md §5.2, deliverable 3).
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "core/splitmix.hpp"
@@ -132,6 +134,55 @@ TEST_CASE("tt", "an entry mixing the words of two writes is not returned") {
   CHECK_EQ(spliced, 4);
   t.storage[0].entries[0] = second;  // and the whole entry still reads
   CHECK(t.table.fetch(key, hit) && hit.depth == 11);
+}
+
+// DESIGN.md §5, Phase 6's shared-TT test plan (owner, 2026-10-24), built with
+// Lazy SMP (§5.6 step 17a): threads write and read the same two buckets at
+// once, and every hit a reader accepts must be one writer's complete entry.
+// Each key's fields are a function of the key alone, so any accepted entry
+// with other fields mixes two writes. The keys' low 24 bits differ, so a
+// whole entry of another key never passes the check; a torn one passes only
+// on a 24-bit digest collision (about 6e-8 per torn read: the test can fail
+// by chance, rarely). Run under TSan too (the "tt" suite is in CI's threaded
+// list), where it also proves the accesses race-free.
+TEST_CASE("tt", "threads writing and reading the same buckets only ever read whole entries") {
+  TestTable t(2);
+  constexpr int KeyCount = 24;
+  Key keys[KeyCount];
+  for (int i = 0; i < KeyCount; ++i)
+    keys[i] = (splitmix_finalize(static_cast<std::uint64_t>(i) + 1) & ~std::uint64_t{0xFFFFFF}) |
+              static_cast<std::uint64_t>(i * 0x10101 + 7);  // distinct low 24 bits
+  const auto move_of = [](int i) { return Move(i % 64, (i * 7 + 3) % 64, Quiet); };
+  const auto score_of = [](int i) { return 1000 - 37 * i; };
+  const auto eval_of = [](int i) { return -500 + 41 * i; };
+  const auto depth_of = [](int i) { return 3 + i % 17; };
+  constexpr int Writers = 3, Readers = 3, Rounds = 60000;
+  std::atomic<long> hits{0}, wrong{0};
+  std::vector<std::thread> threads;
+  for (int w = 0; w < Writers; ++w)
+    threads.emplace_back([&, w] {
+      for (int r = 0; r < Rounds; ++r) {
+        const int i = (r * 5 + w * 11) % KeyCount;
+        t.table.deposit(keys[i], move_of(i), score_of(i), eval_of(i), depth_of(i), TtBound::Exact,
+                        (i & 1) != 0);
+      }
+    });
+  for (int rd = 0; rd < Readers; ++rd)
+    threads.emplace_back([&, rd] {
+      for (int r = 0; r < Rounds; ++r) {
+        const int i = (r * 7 + rd * 13) % KeyCount;
+        TtHit hit{};
+        if (!t.table.fetch(keys[i], hit)) continue;
+        hits.fetch_add(1, std::memory_order_relaxed);
+        if (!(hit.move == move_of(i)) || hit.score != score_of(i) || hit.eval != eval_of(i) ||
+            hit.depth != depth_of(i) || hit.bound != TtBound::Exact || hit.was_pv != ((i & 1) != 0))
+          wrong.fetch_add(1, std::memory_order_relaxed);
+      }
+    });
+  for (std::thread& th : threads) th.join();
+  CHECK_MSG(hits.load() > 0, "no reader ever hit: the test exercised nothing");
+  CHECK_MSG(wrong.load() == 0, wrong.load()
+                                   << " accepted entries mixed two writes, of " << hits.load() << " hits");
 }
 
 TEST_CASE("tt", "mate and tablebase scores convert between root and node distance") {

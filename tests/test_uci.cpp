@@ -13,11 +13,14 @@
 //   startpos, 1000 x (g1f3 g8f6 f3g1 f6g8) is 4000 legal plies back to the
 //   start placement: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4000 2001
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -29,8 +32,11 @@
 #include "engine_process.hpp"
 #include "harness.hpp"
 #include "search/hash_memory.hpp"
+#include "search/score_bounds.hpp"
+#include "search/searcher.hpp"
 #include "search/time_budget.hpp"
 #include "suite.hpp"
+#include "tune/params.hpp"
 #include "uci/tokens.hpp"
 #include "uci_message.hpp"
 
@@ -186,14 +192,29 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
   g.send("uci");
   CHECK(g.next("uciok").has_value());
   const std::vector<std::string> out = g.texts();
-  const std::vector<std::string> options = {
+  std::vector<std::string> options = {
       "option name Hash type spin default 16 min 1 max 4194304",
       "option name Clear Hash type button",
       "option name Threads type spin default 1 min 1 max 4096",
       "option name Move Overhead type spin default 100 min 0 max 10000",
       "option name SyzygyPath type string default <empty>",
-      "option name LogFile type string default <empty>",
+      "option name SyzygyProbeDepth type spin default 1 min 1 max 250",
+      "option name SyzygyProbeLimit type spin default 7 min 0 max 7",
   };
+#ifdef FORK_TUNE
+  // Tuning builds also declare every search switch as a check option and every
+  // search parameter as a spin option, before LogFile (src/uci/session.cpp).
+#define FORK_TEST_SWITCH(member, option, value)                                  \
+  options.push_back(std::string("option name " #option " type check default ") + \
+                    ((value) ? "true" : "false"));
+  FORK_SEARCH_SWITCHES(FORK_TEST_SWITCH)
+#undef FORK_TEST_SWITCH
+  for (const TuneParam& p : param_table())
+    options.push_back("option name " + std::string(p.name) + " type spin default " +
+                      std::to_string(p.default_value) + " min " + std::to_string(p.lowest) + " max " +
+                      std::to_string(p.highest));
+#endif
+  options.push_back("option name LogFile type string default <empty>");
   CHECK_EQ(out.size(), options.size() + 3);
   if (out.size() == options.size() + 3) {
     CHECK_MSG(starts_with(out[0], "id name Fork 0."), out[0]);
@@ -275,6 +296,46 @@ TEST_CASE("uci_protocol", "ponder: bestmove only after ponderhit or stop") {
   CHECK(g.next("bestmove").has_value());
   g.check_transcript();
   g.quit();
+}
+
+// Lazy SMP (DESIGN.md §5.6 step 17a): with helper threads every go still gets
+// exactly one bestmove right after its final info line (check_transcript),
+// and stop, ponderhit, isready, ucinewgame, Threads changes between searches
+// and quit mid-search work as with one thread. In CI's TSan threaded list.
+TEST_CASE("uci_protocol", "Threads 4: go, stop, ponder, ucinewgame, Threads changes and quit") {
+  Gui g;
+  g.send("setoption name Threads value 4");
+  CHECK(g.sync());
+  g.send("position startpos moves e2e4 e7e5");
+  g.send("go depth 6");
+  CHECK(g.next("bestmove").has_value());
+  g.send("go infinite");
+  std::this_thread::sleep_for(50ms);
+  CHECK(g.sync());
+  CHECK_EQ(g.count("bestmove"), 1);
+  g.send("stop");
+  CHECK(g.next("bestmove").has_value());
+  g.send("go ponder wtime 1000 btime 1000");
+  std::this_thread::sleep_for(50ms);
+  CHECK_EQ(g.count("bestmove"), 2);
+  g.send("ponderhit");
+  CHECK(g.next("bestmove").has_value());
+  g.send("ucinewgame");
+  // Small: the gcc-tsan Debug build with four threads on a 4-vCPU runner searched 20,000 main-thread nodes
+  // in more than the 10 s patience (CI 43774097220, cc52377); the smp suite checks the node limit itself.
+  g.send("go nodes 4000");
+  CHECK(g.next("bestmove").has_value());
+  for (const char* threads : {"2", "1", "3"}) {
+    g.send(std::string("setoption name Threads value ") + threads);
+    g.send("position startpos");
+    g.send("go movetime 30");
+    CHECK(g.next("bestmove").has_value());
+  }
+  g.send("go infinite");  // quit while the helpers search
+  CHECK(g.sync());
+  g.quit();
+  CHECK_EQ(g.count("bestmove"), 8);
+  g.check_transcript();
 }
 
 TEST_CASE("uci_protocol", "quit during a search: bestmove, then exit status 0") {
@@ -608,17 +669,27 @@ TEST_CASE("uci_protocol", "the mate in 2 is reported within depth 6, after other
 
 // Audit-1 Q-1: a clock go ends between its soft and hard limits. Two bounds
 // that load cannot break falsely (a slow machine only makes times larger):
-// - bestmove comes no sooner than the soft limit after go was sent: before
-//   it, every finished iteration starts another (depth, mate and nodes do
-//   not limit this go);
-// - no iteration starts after the soft limit: every depth reported, except
-//   the deepest, was first reported (as an exact line; the engine's own
-//   clock, counted from go) before the soft limit. Without the soft check
-//   (mutant M57) iterations go on until the hard-limit rule (3/5 of the hard
-//   limit) or the hard limit itself.
+// - bestmove comes no sooner than the smallest soft limit time management
+//   can scale to after go was sent (scaled_soft_ms at the smallest factor
+//   soft_scale_permille gives at any depth: the most stable best move with
+//   the largest share; never more than the plain soft limit): before it,
+//   every finished iteration starts another (depth, mate and nodes do not
+//   limit this go);
+// - no iteration starts after the soft limit as time management can scale
+//   it (UseStabilityTime, UseShareTime): every depth reported, except the
+//   deepest, was first reported (as an exact line; the engine's own clock,
+//   counted from go) before the largest scaled soft limit the engine's rule
+//   allows. That bound is scaled_soft_ms at the largest factor
+//   soft_scale_permille gives at any depth (it is non-increasing in
+//   stability and share, so stability 1 and the smallest share give the
+//   largest), and never less than the plain soft limit. Without the soft
+//   check (mutant M57) iterations go on until the hard-limit rule (3/5 of
+//   the hard limit) or the hard limit itself.
 // The limits are plan_time's for White's clock and the default Move Overhead
 // of 100 ms: 2900 ms over 30 moves, soft 96 ms, hard 4 x 96 = 384 ms.
-TEST_CASE("uci_protocol", "a clock go: bestmove not before the soft limit, no iteration started after it") {
+TEST_CASE("uci_protocol",
+          "a clock go: bestmove not before the smallest scaled soft limit, no iteration started after the "
+          "largest") {
   Gui g;
   g.send("position startpos");
   CHECK(g.sync());
@@ -636,7 +707,17 @@ TEST_CASE("uci_protocol", "a clock go: bestmove not before the soft limit, no it
   if (best) {
     const std::vector<OutputLine> all = g.engine.lines();
     const double ms = std::chrono::duration<double, std::milli>(all[*best].at - sent).count();
-    CHECK_MSG(ms >= static_cast<double>(plan.soft_ms), "bestmove after " << ms << " ms");
+    int narrowest = 1000;  // the smallest soft-limit factor, per mille
+    for (const TimeScaleVariant variant :
+         {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
+      for (int depth = 0; depth < MaxPly; ++depth)
+        for (const bool deep : {false, true})  // UseDeepTimeDepth either way (E2)
+          narrowest = std::min(narrowest, soft_scale_permille(variant, {depth, MaxPly, 1000, 0}, deep));
+    const std::int64_t earliest =
+        std::min(plan.soft_ms, scaled_soft_ms(plan.soft_ms, plan.hard_ms, narrowest));
+    CHECK_MSG(ms >= static_cast<double>(earliest), "bestmove after "
+                                                       << ms << " ms, before the smallest scaled soft limit ("
+                                                       << earliest << " ms)");
     std::vector<std::pair<std::int64_t, std::int64_t>>
         first_seen;  // (depth, time) of each depth's first exact line
     for (std::size_t i = mark; i < *best; ++i) {
@@ -651,10 +732,17 @@ TEST_CASE("uci_protocol", "a clock go: bestmove not before the soft limit, no it
     CHECK(!first_seen.empty());
     std::int64_t deepest = 0;
     for (const auto& [depth, time] : first_seen) deepest = std::max(deepest, depth);
+    int widest = 1000;  // the largest soft-limit factor, per mille
+    for (const TimeScaleVariant variant :
+         {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
+      for (int depth = 0; depth < MaxPly; ++depth)
+        for (const bool deep : {false, true})  // UseDeepTimeDepth either way (E2)
+          widest = std::max(widest, soft_scale_permille(variant, {depth, 1, 1, 0}, deep));
+    const std::int64_t bound = std::max(plan.soft_ms, scaled_soft_ms(plan.soft_ms, plan.hard_ms, widest));
     for (const auto& [depth, time] : first_seen)
-      CHECK_MSG(depth == deepest || time < plan.soft_ms, "depth " << depth << " finished at " << time
-                                                                  << " ms, past the soft limit, and depth "
-                                                                  << deepest << " still started");
+      CHECK_MSG(depth == deepest || time < bound,
+                "depth " << depth << " finished at " << time << " ms, past the largest scaled soft limit ("
+                         << bound << " ms), and depth " << deepest << " still started");
   }
   g.check_transcript();
   g.quit();
@@ -711,7 +799,7 @@ TEST_CASE("uci_options", "setoption: case, spaces, unknown names, bad values") {
                            "setoption name SyzygyPath value <empty>", "setoption name Hash value 1"})
     g.send(good);
   CHECK(g.sync());
-  CHECK_EQ(g.count("info string", mark), 1);  // only the allocation report
+  CHECK_EQ(g.count("info string", mark), 1);  // the allocation report (Threads is back at 1 by then)
   CHECK_EQ(g.count("info string Hash 1 MB allocated", mark), 1);
   mark = g.cursor;
   const std::vector<std::string> bad = {"setoption name Ponder value true",
@@ -728,6 +816,41 @@ TEST_CASE("uci_options", "setoption: case, spaces, unknown names, bad values") {
   CHECK(g.sync());
   CHECK_EQ(g.count("info string", mark), static_cast<int>(bad.size()));
   CHECK_EQ(g.count("info string Hash", mark), 3);  // the three rejected Hash values; no reallocation
+  g.check_transcript();
+  g.quit();
+}
+
+// Bug review 2026-11-11, E4: Threads bounds the Hash clear's workers,
+// Threads 1 included (the clear used max(Threads, hardware threads)). 256 MB
+// allows 128 workers. Fault-checked then: with the old clear rule on a
+// machine with more than one hardware thread, this case fails. Since Lazy
+// SMP (DESIGN.md §5.6 step 17a) Threads also sets the search threads, so
+// the E4 notice ("the search runs on one thread") is gone; a Threads value
+// is reported only when fewer threads run (one per hardware thread at most).
+TEST_CASE("uci_options", "Threads: bounds the Hash clear's workers and reports nothing it can run") {
+  Gui g;
+  CHECK(g.sync());
+  std::size_t mark = g.cursor;
+  g.send("setoption name Threads value 1");
+  g.send("setoption name Hash value 256");
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string Threads", mark), 0);
+  CHECK_EQ(g.count("info string Hash 256 MB allocated", mark), 1);
+  for (const std::string& line : g.texts(mark))
+    if (starts_with(line, "info string Hash 256 MB allocated and cleared in"))
+      CHECK_MSG(line.find(" by 1 threads") != std::string::npos, line);
+  mark = g.cursor;
+  g.send("setoption name Threads value 3");
+  g.send("setoption name Clear Hash");
+  g.send("setoption name Hash value 64");
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string Threads", mark), std::thread::hardware_concurrency() >= 3 ? 0 : 1);
+  for (const std::string& line : g.texts(mark))
+    if (starts_with(line, "info string Hash 64 MB allocated and cleared in"))
+      CHECK_MSG(line.find(" by 3 threads") != std::string::npos, line);
+  CHECK_EQ(g.count("info string Hash 64 MB allocated", mark), 1);
+  g.send("go depth 1");
+  CHECK(g.next("bestmove").has_value());
   g.check_transcript();
   g.quit();
 }
@@ -810,6 +933,38 @@ TEST_CASE("uci_options", "SyzygyPath counts table files; a missing directory is 
   fs::remove_all(dir);
 }
 
+// SyzygyProbeDepth and SyzygyProbeLimit reach the search (owner, 2026-11-16;
+// their effect on probing is tested in test_endgame_tables.cpp). KQvKP with
+// Black to move, a loss (test_endgame_tables.cpp's KqkpMated, from the
+// lichess tablebase API): by default the root is ranked and the search
+// probes; a limit of 2 pieces probes nothing; a probe depth of 250, more
+// than any search reaches, leaves the root ranking's one probe.
+TEST_CASE("uci_options", "SyzygyProbeDepth and SyzygyProbeLimit change the search's tbhits") {
+  Gui g;
+  g.send(std::string("setoption name SyzygyPath value ") + FORK_SYZYGY345_DIR);
+  CHECK(g.sync());
+  const auto tbhits = [&g](const char* setting) {
+    if (*setting != '\0') g.send(setting);
+    g.send("ucinewgame");
+    g.send("position fen 8/2p5/8/8/2Q5/k7/2K5/8 b - - 0 1");
+    const std::size_t mark = g.cursor;
+    g.send("go depth 3");
+    CHECK(g.next("bestmove").has_value());
+    std::optional<std::int64_t> hits;
+    for (const std::string& line : g.texts(mark))
+      if (starts_with(line, "info depth ")) hits = info_number(line, "tbhits");
+    return hits.value_or(-1);
+  };
+  const std::int64_t by_default = tbhits("");
+  CHECK_MSG(by_default > 1, "tbhits " << by_default);
+  CHECK_EQ(tbhits("setoption name SyzygyProbeLimit value 2"), std::int64_t{0});
+  CHECK_EQ(tbhits("setoption name SyzygyProbeLimit value 7"), by_default);
+  CHECK_EQ(tbhits("setoption name SyzygyProbeDepth value 250"), std::int64_t{1});
+  CHECK_EQ(tbhits("setoption name SyzygyProbeDepth value 1"), by_default);
+  g.check_transcript();
+  g.quit();
+}
+
 TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
   namespace fs = std::filesystem;
   const fs::path log = fs::temp_directory_path() / "fork-uci-test-log.txt";
@@ -864,17 +1019,21 @@ TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
 // includes start-up; the first isready allocates and clears the default
 // 16 MB Hash. Each check takes the best of three fresh engines, so one
 // scheduler hiccup on this shared machine does not fail it; all three are
-// printed. Debug (sanitizer) builds are timed against ten times the limits.
+// printed. Debug and sanitizer builds are timed against ten times the
+// limits; that includes MSan, which is a Release build (scripts/msan.sh).
+// Under MSan, start-up (uci to uciok) takes about 3.3 times the instructions
+// of a release build and about 6.5 times its CPU time, mostly reading and
+// checksumming the network and building the ray tables (perf in WSL,
+// 2026-11-12). With the release limit it had no room left: CI run
+// 43233691535 failed at 54.7 / 57.1 / 51.4 ms.
 // The search looks at the stop flag every StopCheckInterval (1,024) nodes,
 // so a build that searches slowly enough takes longer than that to stop:
 // gcc-tsan with a network searches about 9,400 nodes/s (CI, 2026-10-29),
 // 109 ms per 1,024 nodes. The stop limit therefore grows to twice the time
 // the engine needs for 1,024 nodes at the slowest node rate it reports in
 // the three runs, capped at 1 s, and never falls below 10 ms (release) or
-// 100 ms (debug) (owner, 2026-10-29).
+// 100 ms (debug and sanitizer builds) (owner, 2026-10-29).
 namespace {
-
-constexpr double Slack = Optimized ? 1.0 : 10.0;
 
 // True in AddressSanitizer, ThreadSanitizer and MemorySanitizer builds (the
 // tests are built with the engine's flags): their shadow memory multiplies
@@ -890,6 +1049,8 @@ constexpr bool SanitizedBuild = false;
 #else
 constexpr bool SanitizedBuild = false;
 #endif
+
+constexpr double Slack = (Optimized && !SanitizedBuild) ? 1.0 : 10.0;
 
 // While test games run (scripts/env.sh sets FORK_GAMES_RUNNING=1) or
 // development runs at low priority (FORK_LOW_PRIORITY=1), timings say nothing
@@ -978,20 +1139,23 @@ TEST_CASE("uci_timing", "uci to uciok, first isready to readyok, stop to bestmov
 TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
   Gui g;
   CHECK(g.sync());
-  struct Bound {
+  struct OptionRange {
     const char* name;
     std::int64_t min, max;
   };
-  for (const Bound& b :
-       {Bound{"Threads", 1, 4096}, Bound{"Move Overhead", 0, 10000}, Bound{"Hash", 1, 4194304}}) {
+  for (const OptionRange& b : {OptionRange{"Threads", 1, 4096}, OptionRange{"Move Overhead", 0, 10000},
+                               OptionRange{"SyzygyProbeDepth", 1, 250}, OptionRange{"SyzygyProbeLimit", 0, 7},
+                               OptionRange{"Hash", 1, 4194304}}) {
     const std::string set = std::string("setoption name ") + b.name + " value ";
     for (std::int64_t v : {b.min, b.max}) {
       const std::size_t mark = g.cursor;
       g.send(set + std::to_string(v));
       CHECK(g.sync());
-      // Accepted: no complaint about the value (Hash reports its allocation).
+      // Accepted: no complaint about the value (Hash reports its allocation,
+      // Threads above the hardware's threads how many search threads run).
       for (const std::string& line : g.texts(mark))
-        CHECK_MSG(line == "readyok" || starts_with(line, "info string Hash "),
+        CHECK_MSG(line == "readyok" || starts_with(line, "info string Hash ") ||
+                      starts_with(line, "info string Threads " + std::to_string(v) + ": "),
                   b.name << ' ' << v << ": " << line);
     }
     for (std::int64_t v : {b.min - 1, b.max + 1}) {
@@ -1172,6 +1336,46 @@ TEST_CASE("uci_options", "Clear Hash with a Hash change in the same batch still 
   const std::string got = nodes_of_depth_6(g);
   CHECK_MSG(got == want && want != "?",
             "fresh engine " << want << " nodes, after Hash change + Clear Hash " << got);
+  g.quit();
+}
+
+// The info line's score is the search's own, as computed (the owner,
+// 2026-11-13, removed CalibratedScore, a display-only rescaling of it): a
+// fresh engine's go depth 6 on Kiwipete reports, at depth 6, the score and
+// nodes of the same search run here from an empty table of the default Hash
+// (16 MB) and an empty history. The score is checked to be one a rescaling
+// would have changed (|score| >= 2, below the tablebase band).
+TEST_CASE("uci_options", "info score cp is the search's own score, not rescaled") {
+  constexpr int Depth = 6;
+  std::vector<TtBucket> buckets(hash_bytes_for_mb(16) / sizeof(TtBucket));
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  auto searcher = std::make_unique<Searcher>(table);
+  const std::atomic<bool> stop{false};
+  SearchQuota limits;
+  limits.depth = Depth;
+  Position pos;
+  CHECK(pos.set_fen(perft_suite()[1].fen));  // Kiwipete
+  const SearchResult direct = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+  CHECK_MSG(std::abs(direct.score) >= 2 && std::abs(direct.score) < TbWinScore - MaxPly,
+            "score " << direct.score << ": a rescaling could not be told apart");
+
+  Gui g;
+  g.send("position fen " + std::string(perft_suite()[1].fen));
+  const std::size_t mark = g.cursor;
+  g.send("go depth " + std::to_string(Depth));
+  CHECK(g.next("bestmove").has_value());
+  std::string last;
+  for (const std::string& line : g.texts(mark))
+    if (starts_with(line, "info depth " + std::to_string(Depth) + " ") &&
+        line.find(" lowerbound") == std::string::npos && line.find(" upperbound") == std::string::npos)
+      last = line;
+  CHECK_MSG(
+      info_number(last, "nodes") == std::optional<std::int64_t>(static_cast<std::int64_t>(direct.nodes)),
+      "not the same search: '" << last << "', direct nodes " << direct.nodes);
+  CHECK_MSG(info_number(last, "cp") == std::optional<std::int64_t>(direct.score),
+            "reported '" << last << "', the search's score " << direct.score);
+  g.check_transcript();
   g.quit();
 }
 

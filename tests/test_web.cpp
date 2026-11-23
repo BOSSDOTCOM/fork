@@ -209,4 +209,31 @@ TEST_CASE("web", "each finished iteration is reported while the search runs") {
   CHECK_EQ(reported_lines.size(), std::size_t{0});
 }
 
+// A search stopped mid-iteration that plays the unfinished iteration's move
+// reports that move's line at the unfinished depth; the result then gives the
+// same depth and score (fix/partial-iteration-report, 2026-11-10). Before the
+// fix, after 1. e4 at 21,000 nodes the last line was "depth 8 score cp -10 ...
+// pv c7c5 ..." and the result "bestmove c7c5 score cp -10 depth 7": depth 8's
+// score and line under depth 7 (also at 1,000, 5,000 and 21,500-24,000
+// nodes; the case above, at 20,000, stopped after a finished iteration). The
+// limits are swept so the case keeps a stop mid-iteration as the tree changes.
+TEST_CASE("web", "after a stop mid-iteration the result's depth and score are its last line's") {
+  CHECK_EQ(fork_web_init(4), 1);
+  for (int nodes = 1000; nodes <= 25000; nodes += 500) {
+    CHECK_EQ(fork_web_set_position("startpos", "e2e4"), 1);
+    fork_web_new_game();
+    reported_lines.clear();
+    fork_web_set_iteration_hook(keep_line);
+    const std::string result = fork_web_search(nodes);
+    fork_web_set_iteration_hook(nullptr);
+    CHECK_MSG(!reported_lines.empty(), result);
+    if (reported_lines.empty()) continue;
+    const std::string& last = reported_lines.back();
+    CHECK_MSG(field(last, "depth") == field(result, "depth") && field(last, "cp") == field(result, "cp") &&
+                  field(last, "mate") == field(result, "mate") &&
+                  field(last, "pv") == field(result, "bestmove"),
+              nodes << " nodes: last line '" << last << "', result '" << result << "'");
+  }
+}
+
 }  // namespace forkeng::test

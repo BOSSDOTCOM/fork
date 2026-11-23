@@ -48,7 +48,8 @@ if [ -n "$net" ]; then
 fi
 bash "$src/.github/ci/bench-parity.sh" "$fork" >"$out/parity.log" 2>&1 ||
   { cat "$out/parity.log" >&2; echo "spsa_build.sh: the tuning build fails bench parity" >&2; exit 1; }
-options=$(printf 'uci\nquit\n' | "$fork" | tr -d '\r')
+# CalibratedScore off (owner, 2026-11-13: every harness), though only the option lines are read here.
+options=$(printf 'uci\nsetoption name CalibratedScore value false\nquit\n' | "$fork" | tr -d '\r')
 rows=$(sed -n '/^#define FORK_SEARCH_PARAMS/,/^$/p' "$src/src/tune/params.hpp" | grep '^ *X(' |
   sed -E 's/^ *X\(([A-Za-z0-9_]+), *(-?[0-9]+), *(-?[0-9]+), *(-?[0-9]+), *(-?[0-9]+)\).*/\1 \2 \3 \4/')
 [ -n "$rows" ] || { echo "spsa_build.sh: no FORK_SEARCH_PARAMS rows in the commit" >&2; exit 1; }

@@ -1,0 +1,18 @@
+{
+ "dump": "g4c-w00-td90.dump",
+ "positions": 600000,
+ "checks": {
+  "checked": 12000,
+  "xl_mismatch": 0,
+  "xx_mismatch": 0,
+  "pin_mismatch": 0,
+  "disc_mismatch": 0,
+  "pinq_mismatch": 0,
+  "loose_mismatch": 0,
+  "under_mismatch": 0,
+  "pins_seen": 1954,
+  "disc_seen": 338,
+  "pinq_seen": 364
+ },
+ "seconds": 75
+}

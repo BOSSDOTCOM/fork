@@ -13,8 +13,33 @@
 # supervisor it refuses; it takes its own run by title even when another
 # run was dispatched just after it; every dispatched run is in the ledger;
 # RUN_ID needs a ledger record; a stage folder the ledger does not record
-# stops it, unmerged. Uses python3 (or $PYTHON) for the merge and the
-# ledger.
+# stops it, unmerged. Since 2026-11-07 (design R, owner, DESIGN.md §6
+# decision 2): the kinds search, network and fixed with their bounds,
+# alpha/beta, caps and the futility stop after 2 stages; the declared
+# design cannot change on a restart; the two-try limit per idea and time
+# control class. Since 2026-11-08: a transient gh failure (injected) of the
+# commit check, the conclusion or the download is retried, its message
+# logged; a lasting one still stops it. Since 2026-11-10 (owner: a scheduled
+# nightly no longer holds a stage back): a stage goes out beside other
+# workflows' runs when the jobs they still hold leave room for its shards and
+# build within FORK_GH_JOBS (40 by default since 2026-11-11, 20 before); a run whose jobs are not listed yet counts
+# as full. Since 2026-11-10 9:30 PM (owner, GitHub Pro): another sprt run counts its jobs like any
+# other run instead of blocking (two SPRT lanes); FORK_SPRT_SERIAL=1 restores the block. Since 2026-11-12 (the
+# owner's rule of 2026-11-11: TT-policy tests at a pressure-matched Hash): --hash MB sets both engines' Hash for every
+# kind and is part of the declared design (a restart with another Hash is refused); a bad value or a differing HASH
+# is refused before any dispatch; without it the default (16; 64 at LTC) is unchanged. Since 2026-11-12 the custom
+# (positional) form writes the verdict file too: H1 accepted, H0 accepted, or capped at its last stage. Since 2026-11-13 (owner:
+# CalibratedScore off in every harness, branch workflows included): a REF older than c7a61ea (no
+# tools/check_score_display_off.py) is refused before any dispatch when an engine has the option, and allowed when
+# neither has it (the option was removed the same day; c7a61ea's engine stands in for one that has it). Since
+# 2026-11-15 (idea 84's plan, owner: one multi-threaded game at a time per runner): --concurrency N (1 to 64) is sent
+# as sprt.yml's concurrency input for every kind and is part of a kind's declared design when given (a restart with
+# another value, without it, or with it after a design without it is refused); a bad value, or a REF whose sprt.yml
+# lacks the input, is refused before any dispatch; without it nothing is sent, as before. Since 2026-11-15 (the
+# factorial removal round, DESIGN.md §5.6 step 18): kind factorial (each shard its permuted design row, checked by
+# the merge; the one look), kind guard ([-6, 0], beta 0.20, cap 8, no futility look, a try) and --tune (the tuning
+# build on both sides), each refused before any dispatch when REF's sprt.yml lacks its inputs; without them no
+# tune or rows input is sent. Uses python3 (or $PYTHON) for the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -31,63 +56,7 @@ export PYTHON=${PYTHON:-python3}
 sha=$(git -C "$here" rev-parse HEAD)
 other=ffffffffffffffffffffffffffffffffffffffff
 
-cat >"$tmp/gh" <<'EOF'
-#!/usr/bin/env bash
-# The fake gh. State in $FAKE_GH: busy (runs still to report busy), latest
-# (the newest sprt run id), titles (each run's "ID TITLE", newest first),
-# intruder (if present, another run is dispatched right after each of
-# ours), commits (shas on GitHub), run.<id> (its inputs), fail.<id>,
-# foreign.<id>, ptnml (each shard's pentanomial counts).
-st=$FAKE_GH
-echo "$*" >>"$st/calls"
-case "$1 $2" in
-  "api "*)
-    grep -qx "${2##*/}" "$st/commits" ;;
-  "run list")
-    if [[ "$*" == *displayTitle* ]]; then
-      cat "$st/titles" 2>/dev/null
-    else
-      n=$(cat "$st/busy")
-      if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$st/busy"; echo 1; else echo 0; fi
-    fi ;;
-  "workflow run")
-    id=$(($(cat "$st/latest") + 1))
-    echo "$id busy=$(cat "$st/busy") $*" >>"$st/dispatches"
-    for a in "$@"; do case $a in base=* | test=* | stage=*) echo "$a" >>"$st/run.$id" ;; esac; done
-    . "$st/run.$id"
-    { echo "$id sprt $base $test stage $stage"; cat "$st/titles" 2>/dev/null; } >"$st/titles.new"
-    mv "$st/titles.new" "$st/titles"
-    if [ -f "$st/intruder" ]; then  # someone else's run, newer than ours
-      id=$((id + 1))
-      printf 'base=%s\ntest=%s\nstage=0\n' "$base" ffffffffffffffffffffffffffffffffffffffff >"$st/run.$id"
-      { echo "$id sprt $base ffffffffffffffffffffffffffffffffffffffff stage 0"; cat "$st/titles"; } >"$st/titles.new"
-      mv "$st/titles.new" "$st/titles"
-    fi
-    echo $id >"$st/latest" ;;
-  "run view")
-    if [[ "$*" == *conclusion* ]]; then
-      if [ -f "$st/fail.$3" ]; then echo failure; else echo success; fi
-    else
-      echo completed
-    fi ;;
-  "run download")
-    id=$3
-    dir=${!#}  # the last argument, -D's
-    . "$st/run.$id"
-    [ -f "$st/foreign.$id" ] && test=ffffffffffffffffffffffffffffffffffffffff
-    for k in $(seq 0 $((SHARDS - 1))); do
-      mkdir -p "$dir/shard-$stage-$k"
-      start=$(((stage * SHARDS + k) * 50 + 1))
-      cat >"$dir/shard-$stage-$k/result.json" <<JSON
-{"ptnml": $(cat "$st/ptnml"), "pairs": 50, "finished_games": 100, "time_losses": 0, "abnormal": 0, "status": "done",
- "meta": {"base": "$base", "test": "$test", "stage": "$stage", "shard": "$k", "shards": "$SHARDS", "tc": "8+0.08",
-          "hash": "16", "base_opts": "", "test_opts": "", "tables": "3-4-5", "book_sha": "x",
-          "opening_start": "$start", "rounds": "50"}}
-JSON
-    done ;;
-  *) echo "fake gh: unexpected $*" >&2; exit 1 ;;
-esac
-EOF
+cp "$here/fake_gh.sh" "$tmp/gh"  # the fake gh (state in files; see its header)
 chmod +x "$tmp/gh"
 
 # One scenario: a fresh state, then the driver (args...); its exit status
@@ -98,21 +67,24 @@ setup() {  # label busy ptnml
   echo "$2" >"$st/busy"
   echo 500 >"$st/latest"
   echo "$sha" >"$st/commits"
+  echo "$sha" >"$st/ref.test"  # REF (test) points to this repository's HEAD, which forces CalibratedScore off
   echo "$3" >"$st/ptnml"
   : >"$st/dispatches"
 }
 drive() {  # label args...
   local label=$1
   shift
-  FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data \
-    FORK_JOBS=$tmp/$label/jobs SPRT_UNSUPERVISED=${UNSUPERVISED-1} \
+  FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=${DRIVE_SHARDS:-2} REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data \
+    FORK_JOBS=${JOBS:-$tmp/$label/jobs} SPRT_UNSUPERVISED=${UNSUPERVISED-1} GH_TRIES=3 GH_RETRY_WAIT=0 \
     bash "$here/sprt_run.sh" "$label" "$@" >"$tmp/$label/out" 2>&1
   echo $? >"$tmp/$label/rc"
 }
-ledger() {  # label args...
+. "$here/../jobs/paths.sh" || exit 1
+ledger() {  # label args...; the paths in the form $PYTHON takes (DESIGN.md section 1)
   local label=$1
   shift
-  FORK_JOBS=$tmp/$label/jobs "$PYTHON" -I "$here/../jobs/ledger.py" "$@"
+  FORK_JOBS=$(fork_path_for "$PYTHON" "$tmp/$label/jobs") \
+    "$PYTHON" -I "$(fork_path_for "$PYTHON" "$here/../jobs/ledger.py")" "$@"
 }
 rc() { cat "$tmp/$1/rc"; }
 dispatches() { wc -l <"$tmp/$1/dispatches" | tr -d ' '; }
@@ -129,6 +101,63 @@ check "dispatched only after the busy runs finished" grep -q "^501 busy=0 " "$tm
 check "the merged verdict is logged" grep -q "H1 accepted" "$tmp/h1/data/h1/driver.log"
 check "the games and time losses are logged" grep -q "Shards: 2 (done); pairs 100, games 200 (200 finished, time losses 0" "$tmp/h1/data/h1/driver.log"
 
+# The capacity check (owner, 2026-11-10): a nightly holding one job does not
+# hold a stage back; a run holding 38 of the 40 jobs does until it drops to 37
+# (40 - 37 = 3 = 2 shards + the build); a run whose jobs are not listed yet
+# counts as full. FORK_GH_JOBS is 40 by default (owner, 2026-11-11; 20 before);
+# a hang is cut at 30 s.
+drive_t() {  # label args... (as drive, with a time limit)
+  local label=$1
+  shift
+  FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data     FORK_JOBS=$tmp/$label/jobs SPRT_UNSUPERVISED=1 GH_TRIES=3 GH_RETRY_WAIT=0     timeout 30 bash "$here/sprt_run.sh" "$label" "$@" >"$tmp/$label/out" 2>&1
+  echo $? >"$tmp/$label/rc"
+}
+setup nightly 0 "$strong"
+echo "900 nightly 1" >"$tmp/nightly/active"
+drive_t nightly "$sha" "$sha" 0 5
+check "a nightly holding one job does not hold the stage back" [ "$(rc nightly)" = 0 ]
+check "dispatched beside the nightly" grep -q "^501 busy=0 jobs=1 " "$tmp/nightly/dispatches"
+setup full 0 "$strong"
+echo "901 ci 38" >"$tmp/full/active"
+: >"$tmp/full/drain"
+drive_t full "$sha" "$sha" 0 5
+check "a run holding 38 of 40 jobs waits, then the stage goes" [ "$(rc full)" = 0 ]
+# The fake lowers a run's count after each query: the query that saw 37 (3 free) leaves 36 at the dispatch; a
+# dispatch on the query that saw 38 would show 37.
+check "dispatched only when 3 jobs were free" grep -q "^501 busy=0 jobs=36 " "$tmp/full/dispatches"
+setup was20 0 "$strong"
+echo "906 ci 18" >"$tmp/was20/active"
+drive_t was20 "$sha" "$sha" 0 5
+check "the default is 40: a run holding 18 jobs (full under the old 20) does not hold the stage back" grep -q "^501 busy=0 jobs=18 " "$tmp/was20/dispatches"
+setup unlisted 0 "$strong"
+echo "902 ci 0" >"$tmp/unlisted/active"
+drive_t unlisted "$sha" "$sha" 0 5
+check "a run with no jobs listed yet counts as full: no dispatch" [ "$(dispatches unlisted)" = 0 ]
+setup ghost 0 "$strong"
+echo "907 gauntlet 0 2026-01-01T00:00:00Z" >"$tmp/ghost/active"
+drive_t ghost "$sha" "$sha" 0 5
+check "a run listing no jobs long after its creation is a ghost: the stage goes" [ "$(rc ghost)" = 0 ]
+check "the ghost is named in the log" grep -q "ignored as a ghost" "$tmp/ghost/out"
+setup fresh0 0 "$strong"
+echo "908 ci 0 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$tmp/fresh0/active"
+drive_t fresh0 "$sha" "$sha" 0 5
+check "a fresh run listing no jobs yet still counts as full: no dispatch" [ "$(dispatches fresh0)" = 0 ]
+setup lane2 0 "$strong"
+echo "903 sprt 1" >"$tmp/lane2/active"
+drive_t lane2 "$sha" "$sha" 0 5
+check "another SPRT holding one job does not block: the stage goes beside it" [ "$(rc lane2)" = 0 ]
+check "dispatched beside the other SPRT" grep -q "^501 busy=0 jobs=1 " "$tmp/lane2/dispatches"
+setup lane2full 0 "$strong"
+echo "904 sprt 38" >"$tmp/lane2full/active"
+: >"$tmp/lane2full/drain"
+drive_t lane2full "$sha" "$sha" 0 5
+check "another SPRT holding 38 of 40 jobs: waits for room, then goes" [ "$(rc lane2full)" = 0 ]
+check "dispatched beside it only when 3 jobs were free" grep -q "^501 busy=0 jobs=36 " "$tmp/lane2full/dispatches"
+setup serial 0 "$strong"
+echo "905 sprt 1" >"$tmp/serial/active"
+FORK_SPRT_SERIAL=1 drive_t serial "$sha" "$sha" 0 5
+check "FORK_SPRT_SERIAL=1: another SPRT pending blocks the dispatch" [ "$(dispatches serial)" = 0 ]
+
 # 4-6: undecided runs every stage in order, then exits 2.
 setup undecided 0 "$even"
 drive undecided "$sha" "$sha" 0 5 0 2
@@ -136,6 +165,29 @@ check "undecided exits 2" [ "$(rc undecided)" = 2 ]
 check "three stages dispatched" [ "$(dispatches undecided)" = 3 ]
 check "stages 0, 1, 2 in order" [ "$(grep -o 'stage=[0-9]*' "$tmp/undecided/dispatches" | tr '\n' ' ')" = "stage=0 stage=1 stage=2 " ]
 check "bounds passed as given" grep -q "bounds=0 5" "$tmp/undecided/dispatches"
+check "custom, undecided at the last stage: the verdict file says capped" \
+  [ "$(cat "$tmp/undecided/data/undecided/verdict" 2>/dev/null)" = capped ]
+
+# The shards' progress artifacts (2026-11-14, display only): the same SPRT with progress-STAGE-SHARD/progress.json
+# beside every shard-* folder in the downloads merges and decides exactly as without them.
+setup undecidedp 0 "$even"
+touch "$tmp/undecidedp/progress"
+drive undecidedp "$sha" "$sha" 0 5 0 2
+merged_lines() { grep '^    ' "$tmp/$1/data/$1/driver.log"; }
+check "progress artifacts: they are in the downloads" \
+  [ "$(find "$tmp/undecidedp/data/undecidedp" -name progress.json | wc -l)" = 6 ]
+check "progress artifacts: the same exit, dispatches and verdict" \
+  [ "$(rc undecidedp) $(dispatches undecidedp) $(cat "$tmp/undecidedp/data/undecidedp/verdict")" = \
+    "$(rc undecided) $(dispatches undecided) $(cat "$tmp/undecided/data/undecided/verdict")" ]
+check "progress artifacts: every merged result logged byte for byte as without them" \
+  eval '[ -n "$(merged_lines undecided)" ] && [ "$(merged_lines undecidedp)" = "$(merged_lines undecided)" ]'
+
+# The custom form writes the verdict file like the kinds (2026-11-12): H1 and H0 from the merge's LLR line.
+check "custom H1: the verdict file says H1 accepted" [ "$(cat "$tmp/h1/data/h1/verdict" 2>/dev/null)" = "H1 accepted" ]
+setup c-h0 0 '[25, 20, 5, 0, 0]'
+drive c-h0 "$sha" "$sha" -3 0
+check "custom H0 (LLR -5.14 on [-3, 0]) after two stages exits 0" eval '[ "$(rc c-h0)" = 0 ] && [ "$(dispatches c-h0)" = 2 ]'
+check "custom H0: the verdict file says H0 accepted" [ "$(cat "$tmp/c-h0/data/c-h0/verdict" 2>/dev/null)" = "H0 accepted" ]
 
 # 7-8: a failed run stops it.
 setup failed 0 "$even"
@@ -204,6 +256,472 @@ cp "$tmp/undecided/data/undecided/s0/shard-0-0/result.json" "$tmp/stray/data/str
 drive stray "$sha" "$sha" 0 5 1 1
 check "an unrecorded stage folder exits 1" [ "$(rc stray)" = 1 ]
 check "the stray stage is named, nothing merged" bash -c "grep -q \"stage 0's results (run 400) are not in the ledger\" '$tmp/stray/out' && ! grep -q LLR '$tmp/stray/out'"
+
+# Design R (owner, DESIGN.md §6 2026-11-07 decision 2): kind search is [0, 6] nElo, alpha 0.05, beta
+# 0.20, a cap of 8 stages (6 at LTC by default, 4-6 allowed), one futility look after 2 stages; kind
+# network keeps [0, 5] at alpha = beta = 0.05; kind fixed plays exactly --cap stages. Every kind but the
+# positional (custom) one needs an idea id. A refusal: exit 1, no new dispatch, the reason named.
+futile='[6, 11, 20, 9, 4]'  # per stage nElo -27.08, LLR -0.30 on [0, 6]: -0.60 after 2 stages
+verdict() { cat "$tmp/$1/data/$1/verdict" 2>/dev/null; }
+stages() { grep -o 'stage=[0-9]*' "$tmp/$1/dispatches" | tr '\n' ' '; }
+check "the futile counts stay inside design R's LLR bounds after 2 stages (a futility stop is not an H0)" \
+  "$PYTHON" -I -c "
+import sys; sys.path.insert(0, sys.argv[1]); import sprt_merge as sm
+p = [4 * x for x in [6, 11, 20, 9, 4]]; lo, hi = sm.bounds(0.05, 0.20)
+sys.exit(not (lo < sm.llr(p, 0, 6) < hi and sm.nelo(p) < 0))" "$here/../cloud"
+
+setup r-h1 0 "$strong"
+drive r-h1 --kind search --idea t1 "$sha" "$sha"
+check "design R: H1 exits 0 after one dispatch" [ "$(rc r-h1):$(dispatches r-h1)" = 0:1 ]
+check "design R: the LLR bounds are alpha 0.05, beta 0.20's" grep -q "LLR: .* (-1.56, 2.77) \[0.00, 6.00\] nElo: H1 accepted" "$tmp/r-h1/out"
+check "design R: bounds, alpha and beta dispatched" grep -q "bounds=0 6 0.05 0.20" "$tmp/r-h1/dispatches"
+check "design R: the verdict file says H1" [ "$(verdict r-h1)" = "H1 accepted" ]
+check "design R: the header names the design and the try" grep -q "bounds \[0, 6\], stages 0 to 7, ref test, kind search, stc, alpha 0.05, beta 0.20, cap 8, futility after 2 stages, idea t1 (try 1 of 2)" "$tmp/r-h1/out"
+
+setup r-futility 0 "$futile"
+drive r-futility --kind search --idea t2 "$sha" "$sha"
+check "futility: exits 0 (decided) after exactly 2 dispatches" [ "$(rc r-futility):$(dispatches r-futility)" = 0:2 ]
+check "futility: the stop and its estimate are logged" grep -q "decided after stage 1: futility stop (nElo -27.08 < 0 after 2 stages), rejected" "$tmp/r-futility/data/r-futility/driver.log"
+check "futility: the verdict file says so" [ "$(verdict r-futility)" = "futility stop" ]
+
+setup r-stage-cap 0 "$even"
+drive r-stage-cap --kind search --idea t3 "$sha" "$sha"
+check "cap: undecided exits 2 after exactly 8 stages, 0 to 7" [ "$(rc r-stage-cap):$(stages r-stage-cap)" = "2:stage=0 stage=1 stage=2 stage=3 stage=4 stage=5 stage=6 stage=7 " ]
+check "cap: logged as capped" grep -q "undecided after stage 7: capped (8 of 8 stages, undecided), not passed" "$tmp/r-stage-cap/out"
+check "cap: the verdict file says capped" [ "$(verdict r-stage-cap)" = capped ]
+
+setup r-origin 0 "$futile"
+drive r-origin --kind search --idea t4 --origin 3 "$sha" "$sha"
+check "origin 3: stages 3 and 4 only, then the futility stop" [ "$(rc r-origin):$(stages r-origin)" = "0:stage=3 stage=4 " ]
+
+setup r-ltc 0 "$even"
+TC=40+0.4 drive r-ltc --kind search --idea t5 --cap 7 "$sha" "$sha"
+check "LTC: a cap of 7 is refused before any dispatch" eval '[ "$(rc r-ltc)" = 1 ] && [ "$(dispatches r-ltc)" = 0 ] && grep -qF -- "kind search at LTC takes --cap 4, 5 or 6" "$tmp/r-ltc/out"'
+TC=40+0.4 drive r-ltc --kind search --idea t5 --cap 4 "$sha" "$sha"
+check "LTC: --cap 4 plays 4 stages" [ "$(rc r-ltc):$(dispatches r-ltc)" = 2:4 ]
+check "LTC: 1,664 games and 64 MB per stage" grep -q "tc=40+0.4 -f hash=64 -f games=1664" "$tmp/r-ltc/dispatches"
+setup r-ltc6 0 "$even"
+TC=40+0.4 drive r-ltc6 --kind search --idea t5b "$sha" "$sha"
+check "LTC: the default cap is 6 stages" [ "$(rc r-ltc6):$(dispatches r-ltc6)" = 2:6 ]
+setup r-stc-cap 0 "$even"
+drive r-stc-cap --kind search --idea t6 --cap 6 "$sha" "$sha"
+check "STC: design R's cap of 8 cannot be changed" eval '[ "$(rc r-stc-cap)" = 1 ] && [ "$(dispatches r-stc-cap)" = 0 ] && grep -qF -- "kind search at STC has design R'\''s cap of 8 stages" "$tmp/r-stc-cap/out"'
+setup r-oddtc 0 "$even"
+TC=120+1.2 drive r-oddtc --kind search --idea t6b "$sha" "$sha"
+check "another time control is refused for kind search" eval '[ "$(rc r-oddtc)" = 1 ] && [ "$(dispatches r-oddtc)" = 0 ] && grep -qF -- "kind search runs at TC 8+0.08 (STC) or 40+0.4 (LTC)" "$tmp/r-oddtc/out"'
+
+setup r-network 0 "$futile"
+drive r-network --kind network --idea n1 "$sha" "$sha"
+check "network: [0, 5] at alpha = beta = 0.05 dispatched" grep -q "bounds=0 5 0.05 0.05" "$tmp/r-network/dispatches"
+check "network: no futility stop (more than 2 stages, none logged)" bash -c "[ \$(wc -l <'$tmp/r-network/dispatches') -gt 2 ] && grep -q 'no futility stop' '$tmp/r-network/out' && ! grep -q 'futility stop (nElo' '$tmp/r-network/out'"
+
+setup r-fixed 0 "$strong"
+drive r-fixed --kind fixed --idea f1 --cap 2 "$sha" "$sha"
+check "fixed: an H1 does not stop it; exactly 2 stages, exit 0" [ "$(rc r-fixed):$(dispatches r-fixed)" = 0:2 ]
+check "fixed: the verdict file says complete" [ "$(verdict r-fixed)" = complete ]
+
+drive r-stage-cap --kind network --idea t3 "$sha" "$sha"
+check "redesign: a restart with another design is refused" eval '[ "$(rc r-stage-cap)" = 1 ] && [ "$(dispatches r-stage-cap)" = 8 ] && grep -qF -- "differs from the declared design" "$tmp/r-stage-cap/out"'
+
+setup r-missing-stage 0 "$even"
+drive r-missing-stage --kind search --idea t7 --first 1 "$sha" "$sha"
+check "resume past a stage with no results exits 1 before any dispatch" eval '[ "$(rc r-missing-stage)" = 1 ] && [ "$(dispatches r-missing-stage)" = 0 ] && grep -qF -- "resuming at stage 1: stage 0 has no recorded results" "$tmp/r-missing-stage/out"'
+
+setup r-noidea 0 "$strong"
+drive r-noidea --kind search "$sha" "$sha"
+check "kind search without --idea is refused" eval '[ "$(rc r-noidea)" = 1 ] && [ "$(dispatches r-noidea)" = 0 ] && grep -qF -- "kind search needs --idea" "$tmp/r-noidea/out"'
+drive r-noidea --kind network "$sha" "$sha"
+check "kind network without --idea is refused" eval '[ "$(rc r-noidea)" = 1 ] && [ "$(dispatches r-noidea)" = 0 ] && grep -qF -- "kind network needs --idea" "$tmp/r-noidea/out"'
+drive r-noidea --kind search --idea t8 "$sha" "$sha" 0 6
+check "kind search with positional bounds is refused" eval '[ "$(rc r-noidea)" = 1 ] && [ "$(dispatches r-noidea)" = 0 ] && grep -qF -- "kind search takes its bounds from its design" "$tmp/r-noidea/out"'
+
+# The two-try limit, per idea and time control class, in one jobs folder (run ids kept apart).
+tries=$tmp/tries-jobs
+n=600
+for t in r-tries-a r-tries-b r-tries-c r-tries-d; do setup $t 0 "$strong"; echo $n >"$tmp/$t/latest"; n=$((n + 100)); done
+JOBS=$tries drive r-tries-a --kind search --idea t9 "$sha" "$sha"
+JOBS=$tries drive r-tries-b --kind search --idea t9 "$sha" "$sha"
+check "tries: the first two run" [ "$(rc r-tries-a):$(rc r-tries-b)" = 0:0 ]
+JOBS=$tries drive r-tries-c --kind search --idea t9 "$sha" "$sha"
+check "tries: a third is refused before any dispatch" eval '[ "$(rc r-tries-c)" = 1 ] && [ "$(dispatches r-tries-c)" = 0 ] && grep -qF -- "another needs --owner-override" "$tmp/r-tries-c/out"'
+check "tries: the refusal names the earlier tries" grep -q "already has 2 stc tries (r-tries-a, r-tries-b)" "$tmp/r-tries-c/out"
+JOBS=$tries drive r-tries-a --kind search --idea t9 "$sha" "$sha"
+check "tries: a restart of a recorded try is not a new try" [ "$(rc r-tries-a)" = 0 ]
+JOBS=$tries drive r-tries-c --kind search --idea t9 --owner-override "owner test: third try" "$sha" "$sha"
+check "tries: with an owner override the third runs" [ "$(rc r-tries-c):$(dispatches r-tries-c)" = 0:1 ]
+check "tries: the override is recorded verbatim" grep -q '"override": "owner test: third try"' "$tries/tries.jsonl"
+check "tries: and named in the header" grep -q "idea t9 (try 3, owner override: owner test: third try)" "$tmp/r-tries-c/out"
+check "tries: three records" [ "$(wc -l <"$tries/tries.jsonl" | tr -d ' ')" = 3 ]
+TC=40+0.4 JOBS=$tries drive r-tries-d --kind search --idea t9 --cap 4 "$sha" "$sha"
+check "tries: an LTC test of the same idea is counted apart" [ "$(rc r-tries-d)" = 0 ]
+
+# 26-29: transient gh failures (2026-11-08: a download and a commit check failed within a minute while
+# GitHub was healthy) are retried: two injected failures each of the commit check, the conclusion and the
+# download, with three tries allowed, still decide the SPRT, and gh's message is in the driver's log.
+setup flaky 0 "$strong"
+for k in api conclusion download; do echo 2 >"$tmp/flaky/flaky.$k"; done
+drive flaky "$sha" "$sha" 0 5
+check "transient gh failures are retried: H1 exits 0" [ "$(rc flaky)" = 0 ]
+check "still one dispatch" [ "$(dispatches flaky)" = 1 ]
+check "gh's message is logged" grep -q "attempt 1 of 3 failed: fake gh: download: connection reset (injected)" "$tmp/flaky/data/flaky/driver.log"
+# 30-31: a lasting failure still stops it, unmerged.
+setup flakyall 0 "$strong"
+echo 9 >"$tmp/flakyall/flaky.download"
+drive flakyall "$sha" "$sha" 0 5
+check "a lasting download failure exits 1" [ "$(rc flakyall)" = 1 ]
+check "it is named, nothing merged" bash -c "grep -q \"run 501's download failed\" '$tmp/flakyall/out' && ! grep -q LLR '$tmp/flakyall/out'"
+
+# Bug review 2026-11-11, T3 (owner, the same day): only complete shards are merged. A shard left "running" (its
+# final snapshot never written) or one pair short of its planned rounds in a green run stops the SPRT at that
+# stage, unmerged and undecided, before the next dispatch.
+setup partial 0 "$even"
+touch "$tmp/partial/partial.502"
+drive partial --kind search --idea p1 "$sha" "$sha"
+check "a partial shard: exit 1 after stage 1, no stage 2" [ "$(rc partial):$(dispatches partial)" = 1:2 ]
+check "a partial shard: the refusal names it" grep -q "stage 1: run 502's results were not merged: sprt_merge.py: merge refused: 1 of 4 shards incomplete: stage 1 shard 0 has status 'running', not 'done' (50 pairs)" "$tmp/partial/out"
+check "a partial shard: no verdict file, stage 1 unmerged" bash -c "[ ! -f '$tmp/partial/data/partial/verdict' ] && [ \$(grep -c 'merged$' '$tmp/partial/out') = 1 ]"
+setup short 0 "$strong"
+touch "$tmp/short/short.501"
+drive short "$sha" "$sha" 0 5
+check "a shard short of its pairs (custom kind): exit 1, nothing merged" bash -c "[ \$(cat '$tmp/short/rc') = 1 ] && ! grep -q LLR '$tmp/short/out'"
+check "a short shard is named" grep -q "stage 0 shard 0 has 50 pairs of 51 planned" "$tmp/short/out"
+
+# Bug review 2026-11-11, T6: the SPRT's name is in the run's title when REF's sprt.yml takes it, so another lane's
+# run of the same commits and stage, dispatched right after ours, is never taken.
+setup lanes 0 "$strong"
+touch "$tmp/lanes/twin"
+drive lanes "$sha" "$sha" 0 5
+check "two lanes, one commit pair: H1 exits 0" [ "$(rc lanes)" = 0 ]
+check "the name is dispatched" grep -q -- "-f name=lanes" "$tmp/lanes/dispatches"
+check "it took its own run 501 (titled with its name), not the other lane's 502" grep -q "stage 0: run 501 dispatched" "$tmp/lanes/out"
+check "the ledger records stage 0 as run 501" [ "$(ledger lanes runs lanes)" = "0 501 $sha $sha" ]
+# A ref whose sprt.yml predates the input: no name sent, the title as before (a driver from before the change
+# finds its runs the same way).
+setup noname 0 "$strong"
+touch "$tmp/noname/noname"
+drive noname "$sha" "$sha" 0 5
+check "an older sprt.yml: no name sent, H1 exits 0" bash -c "[ \$(cat '$tmp/noname/rc') = 0 ] && ! grep -q -- 'name=' '$tmp/noname/dispatches'"
+check "an older sprt.yml: the title without the name" grep -qx "501 sprt $sha $sha stage 0" "$tmp/noname/titles"
+# Without names, two lanes' runs look alike: the driver stops rather than guess (the hazard the name removes).
+setup twins 0 "$strong"
+touch "$tmp/twins/noname" "$tmp/twins/twin"
+drive twins "$sha" "$sha" 0 5
+check "an older sprt.yml and a twin run: stopped, not adopted" bash -c "[ \$(cat '$tmp/twins/rc') = 1 ] && grep -q 'more than one new run titled' '$tmp/twins/out'"
+
+# The pressure-matched Hash (owner's rule, 2026-11-11: TT-policy tests run with a Hash matching TCEC's nodes per
+# move over TT entries): --hash MB sets both engines' Hash for every kind and is part of the declared design;
+# without it nothing changes.
+check "without --hash the STC default is unchanged: Hash 16" grep -q -- "-f hash=16 -f games=1600" "$tmp/r-h1/dispatches"
+check "without --hash the header does not name a Hash" bash -c "! grep -q -- '(--hash)' '$tmp/r-h1/out'"
+setup r-hash 0 "$strong"
+drive r-hash --kind search --idea h1 --hash 5 "$sha" "$sha"
+check "--hash 5: H1 exits 0 after one dispatch" [ "$(rc r-hash):$(dispatches r-hash)" = 0:1 ]
+check "--hash 5: dispatched as both engines' Hash" grep -q -- "-f hash=5 -f games=1600" "$tmp/r-hash/dispatches"
+check "--hash 5: recorded in design.json" grep -q '"hash": "5"' "$tmp/r-hash/data/r-hash/design.json"
+check "--hash 5: named in the header" grep -q "ref test, hash 5 MB (--hash), kind search, stc" "$tmp/r-hash/out"
+drive r-hash --kind search --idea h1 --hash 6 "$sha" "$sha"
+check "a restart with another --hash is refused before any dispatch" eval '[ "$(rc r-hash)" = 1 ] && [ "$(dispatches r-hash)" = 1 ] && grep -qF -- "hash '\''6'\'' differs from the declared design'\''s '\''5'\''" "$tmp/r-hash/out"'
+drive r-hash --kind search --idea h1 "$sha" "$sha"
+check "a restart without --hash (the default 16) is refused too" eval '[ "$(rc r-hash)" = 1 ] && [ "$(dispatches r-hash)" = 1 ] && grep -qF -- "hash '\''16'\'' differs from the declared design'\''s '\''5'\''" "$tmp/r-hash/out"'
+setup r-hash-ltc 0 "$strong"
+TC=40+0.4 drive r-hash-ltc --kind search --idea h2 --cap 4 --hash 22 "$sha" "$sha"
+check "LTC --hash 22: 1,664 games at Hash 22" eval '[ "$(rc r-hash-ltc)" = 0 ] && grep -q -- "tc=40+0.4 -f hash=22 -f games=1664" "$tmp/r-hash-ltc/dispatches" && grep -q "\"hash\": \"22\"" "$tmp/r-hash-ltc/data/r-hash-ltc/design.json"'
+setup r-hash-custom 0 "$strong"
+drive r-hash-custom --hash 9 "$sha" "$sha" 0 5
+check "custom kind --hash 9: dispatched as the Hash" eval '[ "$(rc r-hash-custom)" = 0 ] && grep -q -- "-f hash=9 -f games=1600" "$tmp/r-hash-custom/dispatches"'
+setup r-hash-env 0 "$strong"
+HASH=8 drive r-hash-env --kind search --idea h3 --hash 7 "$sha" "$sha"
+check "--hash 7 with HASH=8 is refused before any dispatch" eval '[ "$(rc r-hash-env)" = 1 ] && [ "$(dispatches r-hash-env)" = 0 ] && grep -qF -- "--hash 7 and HASH=8 differ" "$tmp/r-hash-env/out"'
+HASH=7 drive r-hash-env --kind search --idea h3 --hash 7 "$sha" "$sha"
+check "--hash 7 with HASH=7 runs at Hash 7" eval '[ "$(rc r-hash-env)" = 0 ] && grep -q -- "-f hash=7 -f games" "$tmp/r-hash-env/dispatches"'
+setup r-hash-bad 0 "$strong"
+for v in 0 08 12x -4 4194305 ''; do
+  drive r-hash-bad --kind search --idea h4 --hash "$v" "$sha" "$sha"
+  check "--hash '$v' is refused before any dispatch" eval '[ "$(rc r-hash-bad)" = 1 ] && [ "$(dispatches r-hash-bad)" = 0 ] && grep -qF -- "is not a whole number of MB from 1 to 4194304" "$tmp/r-hash-bad/out"'
+done
+drive r-hash-bad --kind search --idea h4 "$sha" "$sha" --hash
+check "--hash with no value is refused" eval '[ "$(rc r-hash-bad)" = 1 ] && [ "$(dispatches r-hash-bad)" = 0 ] && grep -qF -- "--hash needs a value" "$tmp/r-hash-bad/out"'
+
+# Games at once per shard (owner, 2026-11-15, idea 84's plan: Threads 2 engines one game at a time per 4-vCPU
+# runner): --concurrency N goes out as sprt.yml's concurrency input and, for the kinds, into the declared design;
+# without it nothing changes.
+check "without --concurrency no concurrency is sent" bash -c "! grep -q -- 'concurrency=' '$tmp/r-h1/dispatches'"
+check "without --concurrency the header does not name it" bash -c "! grep -q -- '(--concurrency)' '$tmp/r-h1/out'"
+check "without --concurrency design.json has no concurrency" bash -c "! grep -q concurrency '$tmp/r-h1/data/r-h1/design.json'"
+setup r-conc 0 "$strong"
+drive r-conc --kind search --idea c1 --concurrency 1 "$sha" "$sha"
+check "--concurrency 1: H1 exits 0 after one dispatch" [ "$(rc r-conc):$(dispatches r-conc)" = 0:1 ]
+check "--concurrency 1: dispatched as sprt.yml's concurrency" grep -q -- "-f concurrency=1" "$tmp/r-conc/dispatches"
+check "--concurrency 1: recorded in design.json" grep -q '"concurrency": "1"' "$tmp/r-conc/data/r-conc/design.json"
+check "--concurrency 1: named in the header" grep -q "ref test, concurrency 1 (--concurrency), kind search, stc" "$tmp/r-conc/out"
+drive r-conc --kind search --idea c1 --concurrency 2 "$sha" "$sha"
+check "a restart with another --concurrency is refused before any dispatch" eval '[ "$(rc r-conc)" = 1 ] && [ "$(dispatches r-conc)" = 1 ] && grep -qF -- "concurrency '\''2'\'' differs from the declared design'\''s '\''1'\''" "$tmp/r-conc/out"'
+drive r-conc --kind search --idea c1 "$sha" "$sha"
+check "a restart without --concurrency is refused too" eval '[ "$(rc r-conc)" = 1 ] && [ "$(dispatches r-conc)" = 1 ] && grep -qF -- "concurrency None differs from the declared design'\''s '\''1'\''" "$tmp/r-conc/out"'
+setup r-conc-late 0 "$even"
+drive r-conc-late --kind fixed --idea c2 --cap 2 "$sha" "$sha"
+drive r-conc-late --kind fixed --idea c2 --cap 2 --concurrency 1 "$sha" "$sha"
+check "a restart adding --concurrency to a design without it is refused before any dispatch" eval '[ "$(rc r-conc-late)" = 1 ] && [ "$(dispatches r-conc-late)" = 2 ] && grep -qF -- "concurrency '\''1'\'' differs from the declared design'\''s None" "$tmp/r-conc-late/out"'
+setup r-conc-fixed 0 "$even"
+drive r-conc-fixed --kind fixed --idea c3 --cap 2 --concurrency 1 "$sha" "$sha"
+check "fixed --cap 2 --concurrency 1: both stages dispatched with concurrency 1, complete" eval '[ "$(rc r-conc-fixed)" = 0 ] && [ "$(grep -c -- "-f concurrency=1" "$tmp/r-conc-fixed/dispatches")" = 2 ] && [ "$(cat "$tmp/r-conc-fixed/data/r-conc-fixed/verdict")" = complete ]'
+setup r-conc-custom 0 "$strong"
+drive r-conc-custom --concurrency 3 "$sha" "$sha" 0 5
+check "custom kind --concurrency 3: dispatched as the concurrency" eval '[ "$(rc r-conc-custom)" = 0 ] && grep -q -- "-f concurrency=3" "$tmp/r-conc-custom/dispatches"'
+setup r-conc-old 0 "$strong"
+touch "$tmp/r-conc-old/noconcurrency"
+drive r-conc-old --kind search --idea c4 --concurrency 1 "$sha" "$sha"
+check "--concurrency with a REF whose sprt.yml lacks the input is refused before any dispatch" eval '[ "$(rc r-conc-old)" = 1 ] && [ "$(dispatches r-conc-old)" = 0 ] && grep -qF -- "has no concurrency input" "$tmp/r-conc-old/out"'
+setup r-conc-old2 0 "$strong"
+touch "$tmp/r-conc-old2/noconcurrency"
+drive r-conc-old2 --kind search --idea c5 "$sha" "$sha"
+check "an older sprt.yml without --concurrency runs as before (H1, no concurrency sent)" eval '[ "$(rc r-conc-old2)" = 0 ] && ! grep -q -- "concurrency=" "$tmp/r-conc-old2/dispatches"'
+setup r-conc-bad 0 "$strong"
+for v in 0 08 65 100 12x -1 ''; do
+  drive r-conc-bad --kind search --idea c6 --concurrency "$v" "$sha" "$sha"
+  check "--concurrency '$v' is refused before any dispatch" eval '[ "$(rc r-conc-bad)" = 1 ] && [ "$(dispatches r-conc-bad)" = 0 ] && grep -qF -- "is not a whole number from 1 to 64" "$tmp/r-conc-bad/out"'
+done
+drive r-conc-bad --kind search --idea c6 --concurrency 64 "$sha" "$sha"
+check "--concurrency 64 (the maximum) is accepted" eval '[ "$(rc r-conc-bad)" = 0 ] && grep -q -- "-f concurrency=64" "$tmp/r-conc-bad/dispatches"'
+drive r-conc-bad --kind search --idea c7 "$sha" "$sha" --concurrency
+check "--concurrency with no value is refused" eval '[ "$(rc r-conc-bad)" = 1 ] && grep -qF -- "--concurrency needs a value" "$tmp/r-conc-bad/out"'
+
+# The factorial removal round (DESIGN.md §5.6 step 18; docs/research/phase4-designs/factorial-removal-round.md):
+# kind factorial plays a design's rows, one per shard, permuted per stage by the SHA-256 permutation of the name
+# and stage (§3.3), on one tuning build of one commit (§3.2), for --cap stages, with the one look of §4.4
+# (--look 16 --cap 24); kind guard is the combined guard of §3.6 / §5.3 ([-6, 0], alpha 0.05, beta 0.20, cap 8,
+# no futility look, a try); --tune plays any kind on the tuning build. A test design: 3 switches, one off per row,
+# 4 rows (the first switch twice), so the stages have 4 shards.
+fdesign=$tmp/design-k3.json
+printf '%s\n' '{"format": "fork-factorial-design/1", "factors": ["UseLmp", "UseAspiration", "UseMateDistance"],' \
+  ' "m": 1, "rows": [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]]}' >"$fdesign"
+fdesign_py=$(fork_path_for "$PYTHON" "$fdesign")
+fit_py=$(fork_path_for "$PYTHON" "$here/factorial_fit.py")
+stage_rows() { "$PYTHON" -I "$fit_py" rows --design "$fdesign_py" --name "$1" --stage "$2" | tr -d '\r'; }
+fdrive() { DRIVE_SHARDS=4 drive "$@"; }
+
+setup f-pilot 0 "$even"
+fdrive f-pilot --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+check "factorial pilot (--cap 1): one dispatch, exit 0, complete" \
+  [ "$(rc f-pilot):$(dispatches f-pilot):$(verdict f-pilot)" = "0:1:complete" ]
+check "factorial: the tuning build and the rows are dispatched" \
+  bash -c "grep -q -- '-f tune=on' '$tmp/f-pilot/dispatches' && grep -q -- '-f rows={' '$tmp/f-pilot/dispatches'"
+check "factorial: the rows sent are the recomputed permutation of the name and stage" \
+  [ "$(cat "$tmp/f-pilot/run.501.rows")" = "$(stage_rows f-pilot 0)" ]
+check "factorial: the stage's dispatch record holds them" \
+  [ "$(tr -d '\r' <"$tmp/f-pilot/data/f-pilot/dispatch/s0.json")" = "$(stage_rows f-pilot 0)" ]
+check "factorial: no test options of its own are sent" grep -q -- "-f test_opts= " "$tmp/f-pilot/dispatches"
+check "factorial: design.json records the design digest, the look and the tuning build" \
+  bash -c "grep -q '\"design\": \"[0-9a-f]\{64\}\"' '$tmp/f-pilot/data/f-pilot/design.json' &&
+    grep -q '\"look\": \"none\"' '$tmp/f-pilot/data/f-pilot/design.json' && grep -q '\"tune\": \"on\"' '$tmp/f-pilot/data/f-pilot/design.json'"
+check "factorial: the merge checked every shard's row" grep -q "Rows: every shard played its permuted row" "$tmp/f-pilot/out"
+check "factorial: the fit is logged and written" \
+  bash -c "grep -q 'Factorial fit: f-pilot, stages 0-0 (1), 4 shards' '$tmp/f-pilot/data/f-pilot/driver.log' && [ -s '$tmp/f-pilot/data/f-pilot/fit.json' ]"
+check "factorial: not a try" bash -c "grep -q 'factorial screen, not a try' '$tmp/f-pilot/out' && [ ! -s '$tmp/f-pilot/jobs/tries.jsonl' ]"
+check "factorial: the header names the design and the tuning build" grep -q "tuning build, design [0-9a-f]\{12\} (4 rows), look none, kind factorial, stc" "$tmp/f-pilot/out"
+
+setup f-swap 0 "$even"
+touch "$tmp/f-swap/swaprows.502"
+fdrive f-swap --kind factorial --idea r30-pilot --design "$fdesign" --cap 3 "$sha" "$sha"
+check "factorial: shards that swapped rows stop it at that stage, unmerged" \
+  bash -c "[ \$(cat '$tmp/f-swap/rc') = 1 ] && [ \$(wc -l <'$tmp/f-swap/dispatches') = 2 ] && grep -q \"stage 1: run 502's results were not merged: sprt_merge.py: merge refused: stage 1 shard 0 played row\" '$tmp/f-swap/out'"
+check "factorial: no verdict after a refused merge" [ -z "$(verdict f-swap)" ]
+check "factorial: each stage has its own permutation (stages 0 and 1 differ here)" \
+  [ "$(stage_rows f-swap 0)" != "$(stage_rows f-swap 1)" ]
+
+for missing in rows tune; do
+  setup f-no$missing 0 "$even"
+  touch "$tmp/f-no$missing/no$missing"
+  fdrive f-no$missing --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+  check "factorial with a REF whose sprt.yml has no $missing input: refused before any dispatch" \
+    eval '[ "$(rc f-no'$missing')" = 1 ] && [ "$(dispatches f-no'$missing')" = 0 ] && grep -qF -- "has no '$missing' input" "$tmp/f-no'$missing'/out"'
+done
+setup f-refuse 0 "$even"
+refused() {  # label, the refusal's text: exit 1, no dispatch
+  [ "$(rc "$1")" = 1 ] && [ "$(dispatches "$1")" = 0 ] && grep -qF -- "$2" "$tmp/$1/out"
+}
+drive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+check "factorial: SHARDS other than the design's rows refused" refused f-refuse "SHARDS 2, but 4 rows"
+TEST_OPTS=option.UseLmp=false fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+check "factorial: TEST_OPTS refused (the rows give them)" refused f-refuse "TEST_OPTS must be empty"
+fdrive f-refuse --kind factorial --idea r30-pilot --cap 1 "$sha" "$sha"
+check "factorial: no --design refused" refused f-refuse "kind factorial needs --design FILE"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" "$sha" "$sha"
+check "factorial: no --cap refused" refused f-refuse "kind factorial needs --cap N"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 24 --look 8 "$sha" "$sha"
+check "factorial: a look other than 16 refused" refused f-refuse "one look is after 16 stages, with --cap 24"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 20 --look 16 "$sha" "$sha"
+check "factorial: the look with a cap other than 24 refused" refused f-refuse "one look is after 16 stages, with --cap 24"
+TC=40+0.4 fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+check "factorial: LTC refused (the screen is STC)" refused f-refuse "kind factorial runs at STC only"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" HEAD~1
+check "factorial: BASE and TEST must be one commit" refused f-refuse "BASE and TEST must be the same commit"
+printf '%s\n' '{"format": "fork-factorial-design/1", "factors": ["UseLmp", "UseLmp"], "m": 1, "rows": [[1, 0], [0, 1]]}' \
+  >"$tmp/design-bad.json"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$tmp/design-bad.json" --cap 1 "$sha" "$sha"
+check "factorial: a malformed design refused" refused f-refuse "factors must be distinct option names"
+fdrive f-refuse --kind search --idea s1 --design "$fdesign" "$sha" "$sha"
+check "--design with another kind refused" refused f-refuse "--design and --look belong to kind factorial"
+printf '%s\n' '{"format": "fork-factorial-design/1", "factors": ["UseLmp", "UseAspiration", "UseMateDistance"],' \
+  ' "m": 1, "rows": [[0, 1, 0], [1, 0, 0], [0, 0, 1], [1, 0, 0]]}' >"$tmp/design-k3b.json"
+fdrive f-pilot --kind factorial --idea r30-pilot --design "$tmp/design-k3b.json" --cap 1 "$sha" "$sha"
+check "factorial: a restart with another design refused before any dispatch (design.json's digest)" \
+  bash -c "[ \$(cat '$tmp/f-pilot/rc') = 1 ] && [ \$(wc -l <'$tmp/f-pilot/dispatches') = 1 ] && grep -q \"design '[0-9a-f]*' differs from the declared design's\" '$tmp/f-pilot/out'"
+
+# The one look (design §4.4): with every switch's effect large the screen stops after 16 stages; with one switch
+# at exactly 0 it plays on to 24. The fake moves 6 pairs of 50 per switch off (effects).
+setup f-stop 0 "$even"
+printf '%s\n' "UseLmp -6" "UseAspiration -6" "UseMateDistance 6" >"$tmp/f-stop/effects"
+fdrive f-stop --kind factorial --idea r30-main --design "$fdesign" --cap 24 --look 16 "$sha" "$sha"
+check "the look, every estimate clear: 16 stages, exit 0, complete" \
+  [ "$(rc f-stop):$(dispatches f-stop):$(verdict f-stop)" = "0:16:complete" ]
+check "the look: stop recorded" bash -c "[ \"\$(cat '$tmp/f-stop/data/f-stop/look')\" = stop ] && grep -q 'the one look after 16 stages: stop (3 of 3 estimates more than 1 SE from 0): the screen stops' '$tmp/f-stop/out'"
+check "the look: the merge's fixed length is the look's" grep -q "Verdict: complete (16 of 16 stages, fixed length)" "$tmp/f-stop/out"
+check "the fit: a switch whose removal costs is kept, one whose removal gains is a removal candidate" \
+  bash -c "grep -E '^UseLmp +[0-9]' '$tmp/f-stop/data/f-stop/fit.txt' | grep -q 'keep' &&
+    grep -E '^UseMateDistance +-[0-9]' '$tmp/f-stop/data/f-stop/fit.txt' | grep -q 'remove (subject to the guard)'"
+setup f-extend 0 "$even"
+printf '%s\n' "UseLmp -6" "UseMateDistance -6" >"$tmp/f-extend/effects"
+fdrive f-extend --kind factorial --idea r30-main --design "$fdesign" --cap 24 --look 16 "$sha" "$sha"
+check "the look, one estimate at 0: on to 24 stages, exit 0, complete" \
+  [ "$(rc f-extend):$(dispatches f-extend):$(verdict f-extend)" = "0:24:complete" ]
+check "the look: extend recorded, then the cap's fixed length" bash -c "[ \"\$(cat '$tmp/f-extend/data/f-extend/look')\" = extend ] &&
+  grep -q 'the one look after 16 stages: extend (2 of 3 estimates more than 1 SE from 0): on to 24 stages' '$tmp/f-extend/out' &&
+  grep -q 'Verdict: complete (24 of 24 stages, fixed length)' '$tmp/f-extend/out'"
+check "the final fit covers the 24 stages" grep -q "Factorial fit: f-extend, stages 0-23 (24), 96 shards" "$tmp/f-extend/data/f-extend/fit.txt"
+fdrive f-stop --kind factorial --idea r30-main --design "$fdesign" --cap 24 --look 16 --first 16 "$sha" "$sha"
+check "past a look that said stop: refused before any dispatch" \
+  bash -c "[ \$(cat '$tmp/f-stop/rc') = 1 ] && [ \$(wc -l <'$tmp/f-stop/dispatches') = 16 ] && grep -q 'past the one look after 16 stages, which did not say extend' '$tmp/f-stop/out'"
+
+# The combined guard (design §3.6, §5.3).
+near='[5, 11, 19, 10, 5]'  # per stage nElo -4.45: inside [-6, 0], undecided at 8 stages; below 0 (a futility look would stop it)
+setup g-stc 0 "$near"
+TEST_OPTS="option.UseLmp=false option.UseMateDistance=false" drive g-stc --kind guard --idea r30-guard "$sha" "$sha"
+check "guard: [-6, 0] at alpha 0.05, beta 0.20, the tuning build, the removals as test options" \
+  bash -c "grep -q 'bounds=-6 0 0.05 0.20' '$tmp/g-stc/dispatches' && grep -q -- '-f tune=on' '$tmp/g-stc/dispatches' &&
+    grep -q -- '-f test_opts=option.UseLmp=false option.UseMateDistance=false' '$tmp/g-stc/dispatches' && ! grep -q -- '-f rows=' '$tmp/g-stc/dispatches'"
+check "guard: no futility stop after 2 stages; capped after 8, exit 2" \
+  bash -c "[ \$(cat '$tmp/g-stc/rc') = 2 ] && [ \$(wc -l <'$tmp/g-stc/dispatches') = 8 ] && grep -q 'cap 8, no futility stop' '$tmp/g-stc/out'"
+check "guard: capped is not passed (the verdict file)" [ "$(verdict g-stc)" = capped ]
+setup g-h0 0 "$futile"
+TEST_OPTS=option.UseLmp=false drive g-h0 --kind guard --idea r30-guard-b "$sha" "$sha"
+check "guard: a set that costs (nElo -27 per stage) is decided H0" [ "$(rc g-h0):$(verdict g-h0)" = "0:H0 accepted" ]
+check "guard: a try of its idea" grep -q '"idea": "r30-guard", "kind": "guard"' "$tmp/g-stc/jobs/tries.jsonl"
+setup g-refuse 0 "$even"
+TEST_OPTS=option.UseLmp=false drive g-refuse --kind guard --idea r30-guard --cap 6 "$sha" "$sha"
+check "guard: STC's cap of 8 cannot be changed" refused g-refuse "kind guard at STC has a cap of 8 stages"
+TC=40+0.4 TEST_OPTS=option.UseLmp=false drive g-refuse --kind guard --idea r30-guard "$sha" "$sha"
+check "guard: LTC needs --cap 4, 5 or 6 (the owner's choice)" refused g-refuse "kind guard at LTC needs --cap 4, 5 or 6"
+drive g-refuse --kind guard --idea r30-guard "$sha" "$sha"
+check "guard: without TEST_OPTS refused" refused g-refuse "kind guard needs TEST_OPTS"
+TEST_OPTS=option.UseLmp=false drive g-refuse --kind guard --idea r30-guard "$sha" HEAD~1
+check "guard: BASE and TEST must be one commit" refused g-refuse "BASE and TEST must be the same commit"
+setup g-ltc 0 "$even"
+TC=40+0.4 TEST_OPTS=option.UseLmp=false drive g-ltc --kind guard --idea r30-guard-ltc --cap 4 "$sha" "$sha"
+check "guard at LTC --cap 4: 4 stages at 40+0.4, Hash 64" \
+  bash -c "[ \$(wc -l <'$tmp/g-ltc/dispatches') = 4 ] && grep -q -- 'tc=40+0.4 -f hash=64 -f games=1664' '$tmp/g-ltc/dispatches'"
+
+# --tune on another kind (e.g. a block check: kind fixed, a block switched off).
+setup t-fixed 0 "$even"
+TEST_OPTS=option.UseLmp=false drive t-fixed --kind fixed --idea x9 --cap 2 --tune "$sha" "$sha"
+check "--tune with kind fixed: tune=on in both dispatches, complete" \
+  [ "$(rc t-fixed):$(grep -c -- '-f tune=on' "$tmp/t-fixed/dispatches"):$(verdict t-fixed)" = "0:2:complete" ]
+check "--tune: recorded in design.json" grep -q '"tune": "on"' "$tmp/t-fixed/data/t-fixed/design.json"
+TEST_OPTS=option.UseLmp=false drive t-fixed --kind fixed --idea x9 --cap 2 "$sha" "$sha"
+check "a restart without --tune refused" bash -c "[ \$(cat '$tmp/t-fixed/rc') = 1 ] && grep -qF -- \"tune None differs from the declared design's 'on'\" '$tmp/t-fixed/out'"
+setup t-notune 0 "$even"
+touch "$tmp/t-notune/notune"
+drive t-notune --kind fixed --idea x9b --cap 1 --tune "$sha" "$sha"
+check "--tune with a REF whose sprt.yml has no tune input: refused before any dispatch" refused t-notune "has no tune input"
+check "without --tune or a factorial kind: no tune or rows input sent (search, network, fixed, custom)" \
+  bash -c "! grep -qE -- '-f (tune|rows)=' '$tmp/r-h1/dispatches' '$tmp/r-network/dispatches' '$tmp/r-fixed/dispatches' '$tmp/h1/dispatches'"
+
+# Per-side time controls (idea 212's time odds; owner, 2026-11-22): a tc=T in BASE_OPTS or TEST_OPTS goes out in
+# sprt.yml's base_opts / test_opts inputs (TC still the kind's class), is named in the header and the declared design,
+# needs a REF whose run_shard.sh has the capability (HEAD here), and every shard merged must record both clocks.
+# Without it the dispatch is exactly as before: the line below is what the driver at 8d186ea8 sent for r-fixed.
+check "no per-side tc: kind fixed's first dispatch is byte for byte as before" test "$(head -1 "$tmp/r-fixed/dispatches")" = \
+  "501 busy=0 jobs=0 workflow run sprt.yml -R owner/fork --ref test -f base=$sha -f test=$sha -f bounds=0 6 0.05 0.20 -f tc=8+0.08 -f hash=16 -f games=1600 -f shards=2 -f stage=0 -f tables=on -f test_opts= -f base_opts= -f name=r-fixed"
+check "no per-side tc: the header does not name one" bash -c "! grep -q 'per-side tc' '$tmp/r-fixed/out' '$tmp/h1/out'"
+setup ptc-stc 0 "$even"
+BASE_OPTS=tc=4+0.04 drive ptc-stc --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+check "base tc=4+0.04, kind fixed --cap 2: both stages, complete, exit 0" \
+  [ "$(rc ptc-stc):$(dispatches ptc-stc):$(verdict ptc-stc)" = "0:2:complete" ]
+check "base tc=4+0.04: dispatched as base_opts beside the STC tc, games and Hash" \
+  [ "$(grep -c -- '-f tc=8+0.08 -f hash=16 -f games=1600 .* -f test_opts= -f base_opts=tc=4+0.04 ' "$tmp/ptc-stc/dispatches")" = 2 ]
+check "base tc=4+0.04: named in the header" grep -q "per-side tc: base 4+0.04, test 8+0.08, kind fixed, stc" "$tmp/ptc-stc/out"
+check "base tc=4+0.04: in the declared design" grep -q '"base_opts": "tc=4+0.04"' "$tmp/ptc-stc/data/ptc-stc/design.json"
+check "base tc=4+0.04: REF's run_shard.sh checked (HEAD has the capability)" grep -q "REF test ($sha): score_display_guard" "$tmp/ptc-stc/out"
+BASE_OPTS=tc=5+0.05 drive ptc-stc --kind fixed --idea i212-time --cap 2 --first 1 "$sha" "$sha"
+check "a restart with another base tc is refused (the declared design)" \
+  bash -c "[ \$(cat '$tmp/ptc-stc/rc') = 1 ] && [ \$(wc -l <'$tmp/ptc-stc/dispatches') = 2 ] && grep -qF \"base_opts 'tc=5+0.05' differs\" '$tmp/ptc-stc/out'"
+setup ptc-ltc 0 "$even"
+TC=40+0.4 BASE_OPTS=tc=20+0.2 TEST_OPTS="option.Threads=1 tc=40+0.4" drive ptc-ltc --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+check "LTC, both sides' tc: complete, dispatched at 40+0.4 with LTC's games and Hash" \
+  bash -c "[ \$(cat '$tmp/ptc-ltc/rc') = 0 ] && [ \$(grep -c -- '-f tc=40+0.4 -f hash=64 -f games=1664 .* -f test_opts=option.Threads=1 tc=40+0.4 -f base_opts=tc=20+0.2 ' '$tmp/ptc-ltc/dispatches') = 2 ]"
+check "LTC, both sides' tc: the header" grep -q "per-side tc: base 20+0.2, test 40+0.4, kind fixed, ltc" "$tmp/ptc-ltc/out"
+setup ptc-custom 0 "$strong"
+TEST_OPTS=tc=16+0.16 drive ptc-custom "$sha" "$sha" 0 5
+check "the custom form: test tc=16+0.16 against TC, H1 after one stage" \
+  bash -c "[ \$(cat '$tmp/ptc-custom/rc') = 0 ] && grep -q -- '-f tc=8+0.08 .* -f test_opts=tc=16+0.16 -f base_opts= ' '$tmp/ptc-custom/dispatches' && grep -q 'per-side tc: base 8+0.08, test 16+0.16' '$tmp/ptc-custom/out'"
+setup ptc-oneclock 0 "$even"
+touch "$tmp/ptc-oneclock/oneclock"
+BASE_OPTS=tc=4+0.04 drive ptc-oneclock --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+check "shards that do not record both clocks stop it after the first stage, unmerged" \
+  bash -c "[ \$(cat '$tmp/ptc-oneclock/rc') = 1 ] && [ \$(wc -l <'$tmp/ptc-oneclock/dispatches') = 1 ] && grep -qF 'do not record base tc 4+0.04, test tc 8+0.08' '$tmp/ptc-oneclock/out' && ! grep -q 'stage 0: run .* merged' '$tmp/ptc-oneclock/out' && [ ! -f '$tmp/ptc-oneclock/data/ptc-oneclock/verdict' ]"
+setup ptc-bad 0 "$even"
+for bad in "tc=4" "tc=4+0.04 tc=8+0.08" "nodes=1 tc=40/60+0.6" "tc="; do
+  BASE_OPTS=$bad drive ptc-bad --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+  check "BASE_OPTS '$bad' refused before any dispatch" refused ptc-bad "at most one tc=SECONDS+INCREMENT"
+done
+TEST_OPTS="tc=4+0.04 option.UseLmp=false" drive ptc-bad --kind fixed --idea i212-time --cap 2 --tune "$sha" "$sha"
+check "a per-side tc with the tuning build refused before any dispatch" refused ptc-bad "a per-side tc with the tuning build"
+noclock=8d186ea850aebca156ad8d52a8d90151bac89c5d  # phase-4 just before per-engine tc: run_shard.sh plays -each tc
+if git -C "$here" cat-file -e "$noclock^{commit}" 2>/dev/null; then
+  setup ptc-oldref 0 "$even"
+  echo "$noclock" >"$tmp/ptc-oldref/ref.test"
+  BASE_OPTS=tc=4+0.04 drive ptc-oldref --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+  check "a per-side tc with a REF whose run_shard.sh lacks it: refused before any dispatch" \
+    refused ptc-oldref "REF test ($noclock): its tools/cloud/run_shard.sh has no per-engine tc"
+  setup ptc-oldref-plain 0 "$strong"
+  echo "$noclock" >"$tmp/ptc-oldref-plain/ref.test"
+  drive ptc-oldref-plain "$sha" "$sha" 0 5
+  check "the same REF without a per-side tc: runs as before (H1)" [ "$(rc ptc-oldref-plain):$(dispatches ptc-oldref-plain)" = 0:1 ]
+else
+  echo "SKIP  per-side tc REF checks: $noclock is not in this clone"
+fi
+
+# CalibratedScore (owner, 2026-11-13): sprt.yml and its tools come from REF, the engines from BASE and TEST. REF at
+# c7a61ea's parent has no tools/check_score_display_off.py, so it would play c7a61ea's engine (which has the option,
+# default on) with the option on: refused before any dispatch. With both engines from before c7a61ea it is allowed.
+# The option was removed the same day (owner, about 7:10 PM EST), so HEAD's engine no longer has it: the engine with
+# the option is c7a61ea itself, not HEAD. Needs c7a61ea in this clone (a shallow clone skips these checks).
+adopted=c7a61ea987595b7de3b105098b27e7360a73763f
+pre=$(git -C "$here" rev-parse --verify --quiet $adopted^)
+if [ -n "$pre" ]; then
+  setup oldref 0 "$strong"
+  echo "$pre" >"$tmp/oldref/ref.test"
+  echo "$adopted" >>"$tmp/oldref/commits"
+  drive oldref "$adopted" "$adopted" 0 5
+  check "a REF older than CalibratedScore with an engine that has it: refused before any dispatch" eval     '[ "$(rc oldref)" = 1 ] && [ "$(dispatches oldref)" = 0 ] && grep -q "REF test ($pre): score_display_guard: refused" "$tmp/oldref/out"'
+  setup oldboth 0 "$strong"
+  echo "$pre" >"$tmp/oldboth/ref.test"
+  echo "$pre" >>"$tmp/oldboth/commits"
+  drive oldboth "$pre" "$pre" 0 5
+  check "the same REF with both engines older than the option: allowed (H1 after one stage)" eval     '[ "$(rc oldboth)" = 0 ] && [ "$(dispatches oldboth)" = 1 ] && grep -q "no engine has CalibratedScore" "$tmp/oldboth/out"'
+  setup oldtest 0 "$strong"
+  echo "$pre" >"$tmp/oldtest/ref.test"
+  printf '%s
+' "$pre" "$adopted" >>"$tmp/oldtest/commits"
+  drive oldtest "$pre" "$adopted" 0 5
+  check "the same REF with only the test engine having the option: refused" eval '[ "$(rc oldtest)" = 1 ] && [ "$(dispatches oldtest)" = 0 ]'
+  setup newref 0 "$strong"
+  echo "$adopted" >>"$tmp/newref/commits"
+  drive newref "$adopted" "$adopted" 0 5
+  check "a REF that forces it off (HEAD) is checked and named in the log" eval     '[ "$(rc newref)" = 0 ] && grep -q "REF test ($sha): score_display_guard: allowed: harness" "$tmp/newref/out"'
+else
+  echo "SKIP  CalibratedScore REF checks: c7a61ea's parent is not in this clone"
+fi
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"

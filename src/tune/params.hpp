@@ -13,7 +13,14 @@
 //   (tests/test_params.cpp).
 // - The defaults are justified in DESIGN.md §5.2 ("Search constants"); the
 //   ranges and steps follow the rule recorded there (they bound a tuner, they
-//   are never played as such).
+//   are never played as such), except eleven bounds widened past it for the
+//   final retune (owner, 2026-11-09; DESIGN.md §5.6 step 19): RfpMargin,
+//   LmpQuietAllowance, FutilityOffset, FutilityGrowth, SingularMarginPerPly,
+//   SingularMinDepth, LmrMinMove and LmpMaxDepth lower; NoMoveReduceMinDepth,
+//   ReplyWeight and NullSurplusPliesMax higher; and four set by the owner
+//   on 2026-11-12 (final-retune.md sections 3.1 and 3.2):
+//   AspirationHalfWidth 8-40, FollowWeight 0-16, MinorDriftShare 16-64 and
+//   SingularMarginPerPly 2-16.
 // - A tuning build changes a value only through set_param, between searches
 //   (UCI setoption); nothing writes them during a search.
 // - Constants that are not tuned stay where they are, each with its reason in
@@ -28,45 +35,66 @@
 // X(name, default, lowest, highest, step), in groups: aspiration and the
 // iteration rule; reverse futility and the null move; endgame tables; late
 // move reductions and pruning; futility and SEE pruning; the singular test;
-// history; the TT
-// victim policy; the time budget.
-#define FORK_SEARCH_PARAMS(X)             \
-  X(AspirationMinDepth, 5, 2, 10, 1)      \
-  X(AspirationHalfWidth, 12, 6, 24, 1)    \
-  X(IterationGrowthThirds, 5, 3, 10, 1)   \
-  X(ForcedMoveFraction, 8, 4, 16, 1)      \
-  X(RfpMaxDepth, 6, 3, 12, 1)             \
-  X(RfpMargin, 80, 40, 160, 6)            \
-  X(NullMinDepth, 3, 1, 6, 1)             \
-  X(NullSurplusPerPly, 300, 150, 600, 23) \
-  X(NullSurplusPliesMax, 2, 0, 4, 1)      \
-  X(TableProbeMinDepth, 1, 1, 4, 1)       \
-  X(LmrMinDepth, 3, 1, 6, 1)              \
-  X(LmrMinMove, 4, 2, 8, 1)               \
-  X(LmrDivisorTenths, 45, 23, 90, 3)      \
-  X(LmrCorrectionStrength, 64, 0, 128, 6) \
-  X(LmpMaxDepth, 4, 2, 8, 1)              \
-  X(LmpQuietAllowance, 12, 6, 24, 1)      \
-  X(FutilityMaxDepth, 6, 3, 12, 1)        \
-  X(FutilityOffset, 100, 50, 200, 8)      \
-  X(FutilityGrowth, 70, 35, 140, 5)       \
-  X(SeePruneMaxDepth, 6, 3, 12, 1)        \
-  X(QuietSeeFloor, 60, 30, 120, 5)        \
-  X(CaptureSeeFloor, 100, 50, 200, 8)     \
-  X(SingularMinDepth, 6, 4, 12, 1)        \
-  X(SingularEntrySlack, 3, 0, 6, 1)       \
-  X(SingularMarginPerPly, 6, 3, 12, 1)    \
-  X(NoMoveReduceMinDepth, 8, 2, 10, 1)    \
-  X(HistoryBonusFactor, 25, 12, 50, 2)    \
-  X(HistoryBonusCap, 1250, 625, 2500, 94) \
-  X(ReplyWeight, 6, 0, 8, 1)              \
-  X(FollowWeight, 4, 0, 8, 1)             \
-  X(TakeWeight, 4, 0, 16, 1)              \
-  X(StaleDepthPerSearch, 2, 1, 4, 1)      \
-  X(AssumedMovesLeft, 30, 15, 60, 2)      \
-  X(MaxMovesToGo, 40, 20, 80, 3)          \
-  X(HardOverSoft, 4, 2, 8, 1)             \
-  X(ReserveDivisor, 10, 5, 20, 1)         \
+// the no-move reduction, the cut-node reduction and ProbCut; the quiescence
+// move cap (B16); the drift tables (R34, E4); history; the TT victim policy;
+// the time budget.
+#define FORK_SEARCH_PARAMS(X)                  \
+  X(AspirationMinDepth, 5, 2, 10, 1)           \
+  X(AspirationHalfWidth, 12, 8, 40, 1)         \
+  X(IterationGrowthThirds, 5, 3, 10, 1)        \
+  X(ForcedMoveFraction, 8, 4, 16, 1)           \
+  X(RfpMaxDepth, 6, 3, 12, 1)                  \
+  X(RfpMargin, 55, 30, 160, 6)                 \
+  X(NullMinDepth, 3, 1, 6, 1)                  \
+  X(NullSurplusPerPly, 301, 150, 600, 23)      \
+  X(NullSurplusPliesMax, 2, 0, 6, 1)           \
+  X(TableProbeMinDepth, 1, 1, 4, 1)            \
+  X(LmrMinDepth, 3, 2, 6, 1)                   \
+  X(LmrMinMove, 4, 1, 8, 1)                    \
+  X(LmrDivisorTenths, 45, 23, 90, 3)           \
+  X(LmrCorrectionStrength, 64, 0, 128, 6)      \
+  X(LmpMaxDepth, 4, 1, 8, 1)                   \
+  X(LmpQuietAllowance, 8, 3, 24, 1)            \
+  X(LmpImprovingEighths, 1, 0, 4, 1)           \
+  X(FutilityMaxDepth, 6, 3, 12, 1)             \
+  X(FutilityOffset, 86, 30, 200, 8)            \
+  X(FutilityGrowth, 50, 25, 140, 5)            \
+  X(SeePruneMaxDepth, 6, 3, 12, 1)             \
+  X(QuietSeeFloor, 60, 30, 120, 5)             \
+  X(CaptureSeeFloor, 118, 50, 200, 8)          \
+  X(SingularMinDepth, 6, 3, 12, 1)             \
+  X(SingularEntrySlack, 3, 0, 6, 1)            \
+  X(SingularMarginPerPly, 6, 2, 16, 1)         \
+  X(NoMoveReduceMinDepth, 8, 2, 16, 1)         \
+  X(CutNodeLmrSixtyFourths, 64, 0, 192, 10)    \
+  X(LmrNotImprovingSixtyFourths, 64, 0, 192, 10) \
+  X(LmrHistoryPerPly, 10000, 5000, 20000, 750) \
+  X(CaptureProbeMinDepth, 9, 4, 18, 1)         \
+  X(CaptureProbeReduction, 5, 2, 10, 1)        \
+  X(CaptureProbeMargin, 80, 60, 200, 6)        \
+  X(QuiesceMoveCap, 2, 1, 6, 1)                \
+  X(DriftWeightCap, 4, 2, 8, 1)                \
+  X(DriftWeightTotal, 256, 128, 512, 19)       \
+  X(DriftLimit, 300, 150, 600, 23)             \
+  X(PieceDriftShare, 64, 32, 128, 5)           \
+  X(MinorDriftShare, 32, 16, 64, 5)            \
+  X(MajorDriftShare, 64, 32, 128, 5)           \
+  X(ThreatDriftShare, 64, 32, 128, 5)          \
+  X(HistorySkipMaxDepth, 3, 1, 6, 1)           \
+  X(HistorySkipPerPly, 700, 350, 4000, 183)    \
+  X(HistoryBonusFactor, 25, 12, 50, 2)         \
+  X(HistoryBonusCap, 1250, 625, 2500, 94)      \
+  X(LinearBonusPerPly, 125, 63, 250, 9)        \
+  X(HistoryKeepQuarters, 2, 0, 4, 1)           \
+  X(ReplyWeight, 6, 0, 12, 1)                  \
+  X(FollowWeight, 4, 0, 16, 1)                 \
+  X(TakeWeight, 4, 0, 16, 1)                   \
+  X(DirectCheckBonus, 5000, 2500, 10000, 375)  \
+  X(StaleDepthPerSearch, 2, 1, 4, 1)           \
+  X(AssumedMovesLeft, 30, 15, 60, 2)           \
+  X(MaxMovesToGo, 40, 20, 80, 3)               \
+  X(HardOverSoft, 4, 2, 8, 1)                  \
+  X(ReserveDivisor, 10, 5, 20, 1)              \
   X(DangerZoneOverheads, 2, 1, 4, 1)
 
 // Functions that read a parameter are constexpr only where the parameter is

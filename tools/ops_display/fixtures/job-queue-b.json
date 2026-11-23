@@ -1,0 +1,17 @@
+{
+ "command": [
+  "C:\\Program Files\\Git\\bin\\bash.exe",
+  "C:/Users/user/fork-jobs/night/chain-b.sh"
+ ],
+ "cwd": "C:\\Users\\user\\fork",
+ "id": "128b87a3da5f4cf1",
+ "keeper": 2324,
+ "log": "C:\\Users\\user\\fork-jobs\\jobs\\night-queue-b.log",
+ "name": "night-queue-b",
+ "parent": null,
+ "pid": 30528,
+ "started": "2026-11-10T21:29:35-0500",
+ "state": "running",
+ "type": "github2",
+ "wslenv": true
+}

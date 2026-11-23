@@ -37,12 +37,30 @@
 //!   (S512+PP; ideas.md 40; owner, 2026-11-06): 608 links after the 768
 //!   piece inputs, numbered as S512cl's in their own space; the output as
 //!   s512's.
+//! - h512pp: s512pp's piece inputs copied per own-king region (bake-off
+//!   round 3's option a, H512+PP; owner, 2026-11-14) with h512's shared
+//!   factoriser, the 608 links after the region and factoriser rows, shared
+//!   by every region; the map M4 (XGR's fixed regions: e1; f1-h1; rank 2;
+//!   ranks 3-8) unless --regions names another; no first-layer clip, as
+//!   s512pp (a warm start from an s512pp net, tools/nnue/extend_weights.py
+//!   --arch h512pp: regions zero, the factoriser the source's piece rows);
+//!   saved as region + factoriser per region, then the links; the output as
+//!   s512's.
+//! - s512ppxl: s512pp plus XGR's exposure inputs (640 and their 10-input
+//!   factoriser, merged when saved) with the exposure rule's lower-class half
+//!   only: a non-king piece is exposed when an enemy piece of a lower class
+//!   attacks it, so a pawn never is (bake-off round 3's x_lower arm,
+//!   S512+PPXL, architecture 10; owner, 2026-11-14); the exposure block after
+//!   the piece inputs, the 608 links after it; no first-layer clip, as s512pp
+//!   (a warm start from an s512pp net, tools/nnue/extend_weights.py --arch
+//!   s512ppxl: the exposure inputs zero); saved as the piece rows, the
+//!   exposure rows, then the links; the output as s512's.
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
 //!   fork-train check    --arch A [maps] --out DIR
 //!   fork-train order    --data SHARD... [--count N]   (the file of each game of an --interleave pass)
-//!   fork-train dump     --data SHARD --count N
+//!   fork-train dump     --data SHARD --count N [--keep-all] [--state]
 //!   fork-train stats    --data SHARD... [--positions N]   (king squares, phase, piece counts)
 //!   fork-train features --arch A [maps] (--epd FILE | --data SHARD --count N)
 //!   fork-train train    --arch A [maps] --data SHARD... --out DIR --scale S [--val SHARD --patience P]
@@ -54,6 +72,12 @@
 //! [maps] are --regions (32 comma-separated region numbers) and --buckets (25
 //! bucket numbers), as the architecture needs; the files in
 //! tools/nnue/ hold the fitted ones.
+//!
+//! Each decoded position carries its halfmove clock and castling rights in
+//! the packed board's three spare bytes (decode_game, packed_state; owner,
+//! 2026-11-14: no data format change), from the replay the decoding already
+//! does; nothing reads them yet, so the features and targets are unchanged.
+//! tools/datagen/check_trainer_state.py checks them against python-chess.
 //!
 //! With --val, the loss on the first --val-positions (default 20,000) kept positions of a
 //! held-out shard is measured after every superbatch (written to val.txt);
@@ -76,7 +100,10 @@ use bullet_trainer::{
     run::{train, DefaultDevice, HostPool, Step, TrainingSchedule, TrainingSteps},
 };
 use bulletformat::{BulletFormat, ChessBoard};
-use viriformat::dataformat::{Filter, Game};
+use viriformat::{
+    chess::{board::Board as RecordBoard, piece::Colour},
+    dataformat::{Filter, Game},
+};
 
 // Positions are dropped when |score| exceeds Fork's evaluation range
 // (EvalLimit, src/eval/eval_scale.hpp): those are mate or tablebase scores.
@@ -84,6 +111,9 @@ const MAX_SCORE: u32 = 20000;
 const PIECE_SQUARES: usize = 768;
 const EXPOSURE_ROWS: usize = 640; // own/enemy x 5 non-king types x 64 squares
 const EXPOSURE_FACTORS: usize = 10; // own/enemy x 5 types
+// The exposure rule's value classes (pawn < knight = bishop < rook < queen <
+// king), by piece type pawn .. king.
+const EXPOSURE_CLASS: [u8; 6] = [1, 2, 2, 3, 4, 5];
 // XGR's fixed regions of the mirrored own-king square (cell = rank * 4 +
 // file - 4): e1; f1-h1; the second rank; everything from the third rank up.
 const XGR_REGIONS: [u8; 32] = [0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3];
@@ -102,6 +132,8 @@ enum Arch {
     S512x,
     S512cl,
     S512pp,
+    H512pp,
+    S512ppxl,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -120,6 +152,8 @@ struct Spec {
     region_count: usize,
     factoriser: bool,
     exposure: bool,
+    /// The exposure rule's lower-class half only (S512+PPXL; Board::exposed_lower).
+    exposure_lower: bool,
     contacts: bool,
     /// S512+PP's links of rank limit PP_LINK_RANKS (no contacts).
     links: bool,
@@ -147,6 +181,8 @@ impl Spec {
             "s512x" => Arch::S512x,
             "s512cl" => Arch::S512cl,
             "s512pp" => Arch::S512pp,
+            "h512pp" => Arch::H512pp,
+            "s512ppxl" => Arch::S512ppxl,
             other => panic!("unknown --arch {other}"),
         };
         let mut s = Spec {
@@ -157,6 +193,7 @@ impl Spec {
             region_count: 1,
             factoriser: false,
             exposure: false,
+            exposure_lower: false,
             contacts: false,
             links: false,
             qat: a.0.iter().any(|x| x == "--qat"),
@@ -193,9 +230,24 @@ impl Spec {
                 s.links = true;
                 s.picker = Picker::Phase;
             }
+            Arch::H512pp => {
+                match a.get("--regions") {
+                    Some(text) => s.regions.copy_from_slice(&parse_list(text, 32, "--regions")),
+                    None => s.regions = XGR_REGIONS,
+                }
+                s.factoriser = true;
+                s.links = true;
+                s.picker = Picker::Phase;
+            }
+            Arch::S512ppxl => {
+                s.exposure = true;
+                s.exposure_lower = true;
+                s.links = true;
+                s.picker = Picker::Phase;
+            }
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
-        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp), "--qat: the S-512 family only");
+        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl), "--qat: the S-512 family only");
         match s.picker {
             Picker::None => {}
             Picker::Phase => s.table = parse_list(a.need("--buckets"), FULL_PHASE + 1, "--buckets"),
@@ -215,10 +267,12 @@ impl Spec {
     fn exposure_start(&self) -> usize {
         self.factor_start() + if self.factoriser { PIECE_SQUARES } else { 0 }
     }
-    /// First contact input, first link input (S512cl: right after the
-    /// piece inputs).
+    /// First contact input, first link input: after the piece, factoriser
+    /// and exposure blocks (S512cl, S512+PP: right after the piece inputs).
+    /// They started at factor_start() before 2026-11-14, on top of a
+    /// factoriser or exposure block when combined with one.
     fn contact_start(&self) -> usize {
-        self.factor_start()
+        self.exposure_start() + if self.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 }
     }
     fn link_start(&self) -> usize {
         self.contact_start() + if self.contacts { contact_tables().contacts } else { 0 }
@@ -231,8 +285,7 @@ impl Spec {
         if self.links { rank_links().links } else { 0 }
     }
     fn inputs(&self) -> usize {
-        self.exposure_start() + if self.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 } + self.contact_inputs()
-            + self.pp_link_inputs()
+        self.contact_start() + self.contact_inputs() + self.pp_link_inputs()
     }
     /// At most 8 contacts per non-king piece (8 rays or knight squares) and
     /// a link per pair of the 16 pawns.
@@ -321,12 +374,9 @@ impl Board {
         }
         out
     }
-    /// XGR's exposure rule: a non-king piece is exposed when an enemy piece
-    /// of a lower value class attacks it (pawn < knight = bishop < rook <
-    /// queen < king), or when an enemy piece attacks it and none of its own
-    /// defends it. Returns a bitboard of exposed squares.
-    fn exposed(&self) -> u64 {
-        const CLASS: [u8; 6] = [1, 2, 2, 3, 4, 5];
+    /// The lowest value class (EXPOSURE_CLASS) of each side's attackers per
+    /// square (u8::MAX where it attacks none), and each side's attacked squares.
+    fn lowest_attackers(&self) -> ([[u8; 64]; 2], [u64; 2]) {
         let mut lowest = [[u8::MAX; 64]; 2]; // lowest attacker class per (attacking side, square)
         let mut hit = [0u64; 2];
         for s in 0..64 {
@@ -336,10 +386,18 @@ impl Board {
                 while a != 0 {
                     let t = a.trailing_zeros() as usize;
                     a &= a - 1;
-                    lowest[side][t] = lowest[side][t].min(CLASS[kind]);
+                    lowest[side][t] = lowest[side][t].min(EXPOSURE_CLASS[kind]);
                 }
             }
         }
+        (lowest, hit)
+    }
+    /// XGR's exposure rule: a non-king piece is exposed when an enemy piece
+    /// of a lower value class attacks it (pawn < knight = bishop < rook <
+    /// queen < king), or when an enemy piece attacks it and none of its own
+    /// defends it. Returns a bitboard of exposed squares.
+    fn exposed(&self) -> u64 {
+        let (lowest, hit) = self.lowest_attackers();
         let mut out = 0u64;
         for s in 0..64 {
             if let Some((kind, side)) = self.piece[s] {
@@ -348,7 +406,7 @@ impl Board {
                 }
                 let enemy = 1 - side;
                 let bit = 1u64 << s;
-                let attacked_by_lower = lowest[enemy][s] < CLASS[kind];
+                let attacked_by_lower = lowest[enemy][s] < EXPOSURE_CLASS[kind];
                 let loose = hit[enemy] & bit != 0 && hit[side] & bit == 0;
                 if attacked_by_lower || loose {
                     out |= bit;
@@ -356,6 +414,30 @@ impl Board {
             }
         }
         out
+    }
+    /// S512+PPXL's exposure rule, the lower-class half of XGR's: a non-king
+    /// piece attacked by an enemy piece of a lower value class (so never a
+    /// pawn). Returns a bitboard of exposed squares.
+    fn exposed_lower(&self) -> u64 {
+        let (lowest, _) = self.lowest_attackers();
+        let mut out = 0u64;
+        for s in 0..64 {
+            if let Some((kind, side)) = self.piece[s] {
+                if kind != 5 && lowest[1 - side][s] < EXPOSURE_CLASS[kind] {
+                    out |= 1u64 << s;
+                }
+            }
+        }
+        out
+    }
+}
+
+/// The exposed squares under the architecture's rule (none without the exposure plane).
+fn exposed_of(spec: &Spec, b: &Board) -> u64 {
+    match (spec.exposure, spec.exposure_lower) {
+        (false, _) => 0,
+        (true, false) => b.exposed(),
+        (true, true) => b.exposed_lower(),
     }
 }
 
@@ -632,7 +714,7 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                 let l1 = builder.new_affine("l1", 2 * h, 1);
                 l1.forward(l0.forward(stm).crelu().concat(l0.forward(ntm).crelu()))
             }
-            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp => {
+            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl => {
                 let l0 = builder.new_affine("l0", n, h);
                 let l1 = builder.new_affine("l1", 2 * h, nb);
                 if s.qat {
@@ -685,7 +767,8 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
 /// stores it) with its factoriser inputs added into the inputs they share
 /// (an f32 addition each, KB bullet-internals.md §1.5) and dropped; an
 /// architecture without the piece factoriser keeps its piece inputs as they
-/// are.
+/// are. The contact and link inputs follow unchanged (before 2026-11-14 the
+/// merge dropped them).
 fn merge_factors(spec: &Spec, rows: usize, v: &[f32]) -> Vec<f32> {
     let col = |c: usize| &v[c * rows..(c + 1) * rows];
     let mut out = Vec::with_capacity(rows * spec.saved_inputs());
@@ -707,6 +790,7 @@ fn merge_factors(spec: &Spec, rows: usize, v: &[f32]) -> Vec<f32> {
             out.extend(a.iter().zip(b).map(|(x, y)| x + y));
         }
     }
+    out.extend_from_slice(&v[spec.contact_start() * rows..spec.inputs() * rows]);
     out
 }
 
@@ -729,7 +813,7 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
             SavedFormat::id("l1w").round().quantise::<i16>(64),
             SavedFormat::id("l1b").round().quantise::<i32>(255 * 64),
         ],
-        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp => vec![
+        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl => vec![
             first_layer(spec, "l0w", h).round().quantise::<i16>(255),
             SavedFormat::id("l0b").round().quantise::<i16>(255),
             SavedFormat::id("l1w").transpose().round().quantise::<i16>(64),
@@ -762,10 +846,14 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
 /// each, so a merged weight stays within 1.98 (judgement.md §1.1, §4); every
 /// other tensor at bullet's default +-1.98. S512x and S512cl keep S-512's rule (no
 /// first-layer clip: a warm start from S512r2 must not move its weights; Fork
-/// sums its exposure rows in 32 bits, so their size needs no bound).
+/// sums its exposure rows in 32 bits, so their size needs no bound). H512+PP too:
+/// its warm start puts an S512+PP net's piece rows in the factoriser, and a clip
+/// at 0.99 would move the ones beyond it at step 0 (the int16 bound of the saved
+/// rows is the converter's and the reader's, tools/nnue/pp_bound.py). S512+PPXL too: its warm start is an S512+PP
+/// net with zero exposure inputs, its exposure rows are summed in 32 bits, and its links have S512+PP's bound.
 fn clipped(spec: &Spec) -> Vec<&'static str> {
     match spec.arch {
-        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp => vec![],
+        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl => vec![],
         Arch::H512 | Arch::AfS => vec!["l0w", "l0b"],
         Arch::Xgr512 => vec!["l0w", "l0b", "s0w", "s0b"],
     }
@@ -775,7 +863,7 @@ fn clipped(spec: &Spec) -> Vec<&'static str> {
 /// bucket.
 fn fill(spec: &Spec, pos: &ChessBoard, stm: &mut [i32], ntm: &mut [i32]) -> usize {
     let b = Board::from_chessboard(pos);
-    let exposed = if spec.exposure { b.exposed() } else { 0 };
+    let exposed = exposed_of(spec, &b);
     for (persp, out) in [(0, &mut *stm), (1, &mut *ntm)] {
         let n = perspective_features(spec, &b, exposed, persp, out);
         // Pooled batch buffers are reused uncleared: end short lists (KB §13).
@@ -810,6 +898,48 @@ impl SplitMix {
 
 fn filter() -> Filter {
     Filter { filter_check: true, filter_tactical: true, max_eval: MAX_SCORE, ..Filter::UNRESTRICTED }
+}
+
+/// Set in extra[1] of every board the decoder fills (decode_game), so a board
+/// parsed from a FEN (all three spare bytes zero) is told apart.
+const STATE_CARRIED: u8 = 0x80;
+
+/// A position's halfmove clock and castling rights in the packed board's
+/// three spare bytes (bulletformat's `extra`, which neither bullet nor the
+/// mapper reads; owner, 2026-11-14: "no data format change"): extra[0] the
+/// halfmove clock (plies since the last capture or pawn move), extra[1] the
+/// castling rights side to move first, as the packed board is (bit 0 its
+/// O-O, bit 1 its O-O-O, bit 2 the other side's O-O, bit 3 the other side's
+/// O-O-O), with STATE_CARRIED; extra[2] zero.
+fn packed_state(board: &RecordBoard) -> [u8; 3] {
+    let r = board.castling_rights();
+    let white = u8::from(r.wk.is_some()) | u8::from(r.wq.is_some()) << 1;
+    let black = u8::from(r.bk.is_some()) | u8::from(r.bq.is_some()) << 1;
+    let (own, other) = if board.turn() == Colour::White { (white, black) } else { (black, white) };
+    [board.fifty_move_counter(), STATE_CARRIED | own | other << 2, 0]
+}
+
+/// The positions of `game` that pass `filter`, in order, as viriformat's own
+/// conversion gives them (Game::splat_to_bulletformat), each with its
+/// halfmove clock and castling rights (packed_state) from the same replay:
+/// the filter sees each position's board just before the conversion packs it.
+fn decode_game(game: &Game, filter: &Filter, mut f: impl FnMut(ChessBoard)) {
+    let state = std::cell::Cell::new([0u8; 3]);
+    game.splat_to_bulletformat_with_filter_callback(
+        |mut b| {
+            b.extra = state.get();
+            f(b);
+            Ok(())
+        },
+        |mv, eval, board, outcome, rng| {
+            let skip = filter.should_filter(mv, eval, board, outcome, rng);
+            if !skip {
+                state.set(packed_state(board));
+            }
+            skip
+        },
+    )
+    .expect("splat");
 }
 
 /// Reads Fork's shards (viriformat games) forever, in file order, through
@@ -903,14 +1033,9 @@ impl DataReader<ChessBoard> for ShardReader {
             if self.interleave {
                 let mut stop = false;
                 for_each_interleaved(&self.files, |_, game| {
-                    game.splat_to_bulletformat(
-                        |b| {
-                            buf.push(b);
-                            Ok(())
-                        },
-                        &filter,
-                    )
-                    .expect("splat");
+                    decode_game(&game, &filter, |b| {
+                        buf.push(b);
+                    });
                     if buf.len() >= self.buffer {
                         stop = emit_shuffled(&mut buf, &mut rng, &mut f);
                     }
@@ -930,14 +1055,9 @@ impl DataReader<ChessBoard> for ShardReader {
                     if stop {
                         return;
                     }
-                    game.splat_to_bulletformat(
-                        |b| {
-                            buf.push(b);
-                            Ok(())
-                        },
-                        &filter,
-                    )
-                    .expect("splat");
+                    decode_game(&game, &filter, |b| {
+                        buf.push(b);
+                    });
                     if buf.len() >= self.buffer {
                         stop = emit_shuffled(&mut buf, &mut rng, &mut f);
                     }
@@ -961,14 +1081,9 @@ fn read_positions(path: &Path, limit: usize) -> Vec<ChessBoard> {
     let filter = filter();
     ShardReader::for_each_game(path, |game| {
         if out.len() < limit {
-            game.splat_to_bulletformat(
-                |b| {
-                    out.push(b);
-                    Ok(())
-                },
-                &filter,
-            )
-            .expect("splat");
+            decode_game(&game, &filter, |b| {
+                out.push(b);
+            });
         }
     });
     out.truncate(limit);
@@ -1001,6 +1116,11 @@ impl Args {
     }
     fn need(&self, key: &str) -> &str {
         self.get(key).unwrap_or_else(|| panic!("missing {key}"))
+    }
+    /// A switch that takes no value: present anywhere, the last argument included (bug review 2026-11-11, T9:
+    /// `get(key).is_some()` needed a word after it, so `dump ... --keep-all` at the end silently filtered).
+    fn flag(&self, key: &str) -> bool {
+        self.0.iter().any(|a| a == key)
     }
 }
 
@@ -1044,23 +1164,25 @@ fn main() {
         }
         "dump" => {
             // Positions exactly as training sees them (side-to-move relative):
-            // "piece:square ... | score | result" per kept position.
+            // "piece:square ... | score | result" per kept position; with
+            // --state also "| halfmove clock | castling byte" (extra[0] and
+            // extra[1], packed_state's layout).
             let mut left: usize = a.num("--count", 1000);
-            let filter = if a.get("--keep-all").is_some() { Filter::UNRESTRICTED } else { filter() };
+            let filter = if a.flag("--keep-all") { Filter::UNRESTRICTED } else { filter() };
+            let state = a.flag("--state");
             let out = std::io::stdout();
             let mut out = out.lock();
             ShardReader::for_each_game(Path::new(a.need("--data")), |game| {
-                game.splat_to_bulletformat(
-                    |b: ChessBoard| {
-                        if left > 0 {
-                            left -= 1;
-                            writeln!(out, "{} | {} | {}", pieces_text(&b), b.score(), b.result()).unwrap();
+                decode_game(&game, &filter, |b: ChessBoard| {
+                    if left > 0 {
+                        left -= 1;
+                        write!(out, "{} | {} | {}", pieces_text(&b), b.score(), b.result()).unwrap();
+                        if state {
+                            write!(out, " | {} | {}", b.extra()[0], b.extra()[1]).unwrap();
                         }
-                        Ok(())
-                    },
-                    &filter,
-                )
-                .expect("splat");
+                        writeln!(out).unwrap();
+                    }
+                });
             });
         }
         "stats" => {
@@ -1072,24 +1194,19 @@ fn main() {
             for f in a.all("--data") {
                 let filter = filter();
                 ShardReader::for_each_game(Path::new(&f), |game| {
-                    game.splat_to_bulletformat(
-                        |pos: ChessBoard| {
-                            if n < limit {
-                                n += 1;
-                                let b = Board::from_chessboard(&pos);
-                                for persp in 0..2 {
-                                    let k = if persp == 0 { b.king(0) } else { b.king(1) ^ 56 };
-                                    let k = if k % 8 < 4 { k ^ 7 } else { k };
-                                    kings[(k / 8) * 4 + k % 8 - 4] += 1;
-                                }
-                                phase[b.phase()] += 1;
-                                pieces[b.count] += 1;
+                    decode_game(&game, &filter, |pos: ChessBoard| {
+                        if n < limit {
+                            n += 1;
+                            let b = Board::from_chessboard(&pos);
+                            for persp in 0..2 {
+                                let k = if persp == 0 { b.king(0) } else { b.king(1) ^ 56 };
+                                let k = if k % 8 < 4 { k ^ 7 } else { k };
+                                kings[(k / 8) * 4 + k % 8 - 4] += 1;
                             }
-                            Ok(())
-                        },
-                        &filter,
-                    )
-                    .expect("splat");
+                            phase[b.phase()] += 1;
+                            pieces[b.count] += 1;
+                        }
+                    });
                 });
             }
             let join = |v: &[u64]| v.iter().map(u64::to_string).collect::<Vec<_>>().join(" ");
@@ -1309,6 +1426,26 @@ fn main() {
 }
 
 #[cfg(test)]
+mod args_tests {
+    use super::Args;
+
+    fn args(words: &[&str]) -> Args {
+        Args(words.iter().map(|w| w.to_string()).collect())
+    }
+
+    #[test]
+    fn a_switch_counts_wherever_it_stands() {
+        // Bug review 2026-11-11, T9: last, first or between options.
+        assert!(args(&["dump", "--data", "x.bin", "--keep-all"]).flag("--keep-all"));
+        assert!(args(&["dump", "--keep-all", "--data", "x.bin"]).flag("--keep-all"));
+        assert!(args(&["dump", "--data", "x.bin", "--keep-all", "--count", "5"]).flag("--keep-all"));
+        assert!(!args(&["dump", "--data", "x.bin", "--count", "5"]).flag("--keep-all"));
+        // What the old test, get(..).is_some(), gave for the last argument.
+        assert!(args(&["dump", "--data", "x.bin", "--keep-all"]).get("--keep-all").is_none());
+    }
+}
+
+#[cfg(test)]
 mod interleave_tests {
     use super::interleave_next;
 
@@ -1335,5 +1472,398 @@ mod interleave_tests {
         assert_eq!(interleave_next(&[0, 0], &[10, 10], &[false, false]), Some(0));
         assert_eq!(interleave_next(&[5, 0], &[10, 10], &[false, true]), Some(0));
         assert_eq!(interleave_next(&[5, 5], &[10, 10], &[true, true]), None);
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    // The start position and Kiwipete, as tests/suite.hpp holds them (the
+    // CPW perft suite).
+    const FENS: [&str; 2] = [
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+    ];
+    // Any valid maps (tools/nnue/test_bakeoff.py's REGIONS and PHASE).
+    const REGIONS: &str = "0,1,2,2,1,1,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3";
+    const BUCKETS: &str = "0,0,0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7";
+
+    /// `arch` with the piece factoriser (over REGIONS) and the exposure
+    /// plane switched on as asked: the combinations bake-off round 3 plans.
+    fn with(arch: &str, factoriser: bool, exposure: bool) -> Spec {
+        let words = ["--arch", arch, "--buckets", BUCKETS, "--regions", REGIONS];
+        let mut s = Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()));
+        if factoriser {
+            s.regions.copy_from_slice(&parse_list(REGIONS, 32, "--regions"));
+            s.region_count = 4;
+            s.factoriser = true;
+        }
+        s.exposure = exposure;
+        s
+    }
+
+    /// The training layout's blocks in order, summed from their sizes: the
+    /// first input after the piece, factoriser and exposure blocks.
+    fn after_merged_blocks(s: &Spec) -> usize {
+        PIECE_SQUARES * s.region_count
+            + if s.factoriser { PIECE_SQUARES } else { 0 }
+            + if s.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 }
+    }
+
+    fn features(s: &Spec, fen: &str, persp: usize) -> Vec<usize> {
+        let pos: ChessBoard = format!("{fen} | 0 | 0.0").parse().expect("fen");
+        let b = Board::from_chessboard(&pos);
+        let exposed = exposed_of(s, &b);
+        let mut out = vec![-1i32; s.max_active()];
+        let n = perspective_features(s, &b, exposed, persp, &mut out);
+        out[..n].iter().map(|&i| i as usize).collect()
+    }
+
+    const COMBINATIONS: [(bool, bool); 3] = [(true, false), (false, true), (true, true)];
+
+    #[test]
+    fn link_and_contact_inputs_follow_the_factoriser_and_exposure_blocks() {
+        for arch in ["s512pp", "s512cl"] {
+            let plain = with(arch, false, false);
+            for (factoriser, exposure) in COMBINATIONS {
+                let s = with(arch, factoriser, exposure);
+                let start = after_merged_blocks(&s);
+                assert_eq!(s.inputs(), start + s.contact_inputs() + s.pp_link_inputs(), "{arch} {factoriser} {exposure}");
+                for fen in FENS {
+                    for persp in 0..2 {
+                        // The plain architecture's contact and link inputs,
+                        // as numbers within their blocks (after its 768 piece
+                        // inputs, one per piece).
+                        let pieces = Board::from_chessboard(&format!("{fen} | 0 | 0.0").parse().unwrap()).count;
+                        let own: Vec<usize> = features(&plain, fen, persp)[pieces..].iter().map(|i| i - PIECE_SQUARES).collect();
+                        assert!(!own.is_empty(), "{fen}: no links to place");
+                        let got = features(&s, fen, persp);
+                        let (head, tail) = got.split_at(got.len() - own.len());
+                        let want: Vec<usize> = own.iter().map(|i| start + i).collect();
+                        assert_eq!(tail, &want[..], "{arch} factoriser {factoriser} exposure {exposure}: {fen}, perspective {persp}");
+                        assert!(head.iter().all(|&i| i < start), "{arch}: a piece, factoriser or exposure input past its blocks");
+                        assert!(tail.iter().all(|&i| i < s.inputs()));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn merging_the_factorisers_keeps_the_link_and_contact_rows() {
+        let rows = 2;
+        for arch in ["s512pp", "s512cl"] {
+            for (factoriser, exposure) in COMBINATIONS {
+                let s = with(arch, factoriser, exposure);
+                // Each weight its own index: every column distinct.
+                let v: Vec<f32> = (0..rows * s.inputs()).map(|i| i as f32).collect();
+                let merged = merge_factors(&s, rows, &v);
+                assert_eq!(merged.len(), rows * s.saved_inputs(), "{arch} factoriser {factoriser} exposure {exposure}");
+                // The contact and link columns, unchanged and in order, after
+                // the merged piece and exposure rows.
+                let kept = rows * (s.contact_inputs() + s.pp_link_inputs());
+                let first = rows * after_merged_blocks(&s);
+                assert_eq!(&merged[merged.len() - kept..], &v[first..first + kept], "{arch} factoriser {factoriser} exposure {exposure}");
+            }
+        }
+    }
+
+    /// Kiwipete after Kf1 (Black to move): White's king in region 1 (f1), Black's in region 0 (e8, its e1).
+    const KIWIPETE_KF1: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4K1R b kq - 1 1";
+
+    fn h512pp() -> Spec {
+        let words = ["--arch", "h512pp", "--buckets", BUCKETS];
+        Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()))
+    }
+
+    #[test]
+    fn h512pps_layout_puts_the_links_after_the_regions_and_the_factoriser() {
+        // H512+PP (bake-off round 3's option a): the map M4 by default (e1 | f1-h1 | rank 2 | ranks 3-8,
+        // written out here), 4 x 768 region inputs, the 768-input factoriser, then the 608 links.
+        let s = h512pp();
+        let mut m4 = [3u8; 32];
+        m4[..8].copy_from_slice(&[0, 1, 1, 1, 2, 2, 2, 2]);
+        assert_eq!(s.regions, m4);
+        assert_eq!((s.region_count, s.factor_start(), s.link_start()), (4, 3072, 3840));
+        assert_eq!((s.inputs(), s.saved_inputs(), s.max_active()), (4448, 3680, 128));
+        assert!(s.factoriser && s.links && !s.exposure && !s.contacts);
+        assert!(clipped(&s).is_empty(), "no first-layer clip: the warm start's factoriser is an S512+PP net's piece rows");
+        // Against S512+PP's own inputs: each piece once in its own king's region block and once in the
+        // factoriser, each link 3,840 on. Perspective 0 is the side to move.
+        let pp = with("s512pp", false, false);
+        for (fen, regions) in [(FENS[1], [0usize, 0]), (KIWIPETE_KF1, [0, 1])] {
+            for persp in 0..2 {
+                let plain = features(&pp, fen, persp);
+                let links: Vec<usize> = plain.iter().filter(|&&i| i >= 768).map(|i| i - 768).collect();
+                assert!(!links.is_empty());
+                let mut want: Vec<usize> = Vec::new();
+                for &i in plain.iter().filter(|&&i| i < 768) {
+                    want.push(768 * regions[persp] + i);
+                    want.push(3072 + i);
+                }
+                want.extend(links.iter().map(|l| 3840 + l));
+                want.sort_unstable();
+                let mut got = features(&s, fen, persp);
+                got.sort_unstable();
+                assert_eq!(got, want, "{fen}, perspective {persp}");
+            }
+        }
+    }
+
+    #[test]
+    fn h512pps_merge_adds_the_factoriser_to_every_region_and_keeps_the_links() {
+        let s = h512pp();
+        let rows = 2;
+        let v: Vec<f32> = (0..rows * s.inputs()).map(|i| i as f32).collect();
+        let merged = merge_factors(&s, rows, &v);
+        assert_eq!(merged.len(), rows * 3680);
+        for r in 0..4 {
+            for f in [0usize, 383, 767] {
+                for i in 0..rows {
+                    assert_eq!(merged[rows * (768 * r + f) + i], v[rows * (768 * r + f) + i] + v[rows * (3072 + f) + i]);
+                }
+            }
+        }
+        assert_eq!(&merged[rows * 3072..], &v[rows * 3840..]);
+    }
+
+    #[test]
+    fn h512pp_takes_another_map_when_given() {
+        let words = ["--arch", "h512pp", "--buckets", BUCKETS, "--regions", REGIONS];
+        let s = Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()));
+        assert_eq!(s.regions.to_vec(), parse_list(REGIONS, 32, "--regions"));
+    }
+
+    fn s512ppxl() -> Spec {
+        let words = ["--arch", "s512ppxl", "--buckets", BUCKETS];
+        Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()))
+    }
+
+    fn board(fen: &str) -> Board {
+        Board::from_chessboard(&format!("{fen} | 0 | 0.0").parse().expect("fen"))
+    }
+
+    #[test]
+    fn the_lower_exposure_rule_is_xgrs_first_half() {
+        // Worked by hand (the engine's and the Python reference's cases; a1 = 0, White to move, so the
+        // stored frame is the board's): the knight on e5 is attacked by the pawn on d6 and the queen on b3 by
+        // the bishop on c2 (exposed); the bishop on c2 only by the queen, a higher class (not exposed, though
+        // XGR's whole rule exposes it as undefended). Then the rook on d4 is attacked by the bishop on f6 and
+        // the black queen on d1 by the rook (exposed); the white queen on e1 only by the other queen (not).
+        let b = board("4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1");
+        assert_eq!(b.exposed_lower(), (1 << 36) | (1 << 17));
+        assert_ne!(b.exposed() & (1 << 10), 0);
+        assert_eq!(board("6k1/8/5b2/8/3R4/8/8/3qQ1K1 w - - 0 1").exposed_lower(), (1 << 27) | (1 << 3));
+        assert_eq!(board(FENS[0]).exposed_lower(), 0);
+        // A subset of the whole rule's set, never a pawn or a king.
+        for fen in FENS {
+            let b = board(fen);
+            let lower = b.exposed_lower();
+            assert_eq!(lower & !b.exposed(), 0, "{fen}");
+            for s in 0..64 {
+                if lower & (1u64 << s) != 0 {
+                    assert!(matches!(b.piece[s], Some((1..=4, _))), "{fen}: square {s}");
+                }
+            }
+        }
+        // The architecture picks its rule.
+        let (xl, x) = (s512ppxl(), Spec::from_args(&Args(["--arch", "s512x", "--buckets", BUCKETS].iter().map(|w| w.to_string()).collect())));
+        let kiwipete = board(FENS[1]);
+        assert_eq!(exposed_of(&xl, &kiwipete), kiwipete.exposed_lower());
+        assert_eq!(exposed_of(&x, &kiwipete), kiwipete.exposed());
+        assert_ne!(kiwipete.exposed_lower(), 0);
+    }
+
+    #[test]
+    fn s512ppxls_layout_puts_the_exposure_block_between_the_pieces_and_the_links() {
+        // S512+PPXL (architecture 10, the x_lower arm): 768 piece inputs, the 640 exposure inputs and their 10
+        // factorisers, then the 608 links; saved without the factorisers (2,016 rows).
+        let s = s512ppxl();
+        assert!(s.exposure && s.exposure_lower && s.links && !s.factoriser && !s.contacts);
+        assert_eq!((s.region_count, s.exposure_start(), s.link_start()), (1, 768, 1418));
+        assert_eq!((s.inputs(), s.saved_inputs(), s.max_active()), (2026, 2016, 156));
+        assert!(clipped(&s).is_empty(), "no first-layer clip: the warm start is an S512+PP net");
+        // Against S512+PP's own inputs: the pieces unchanged, the links 650 on, and for each exposed piece
+        // (exposed_lower's set) its exposure input and its factoriser.
+        let pp = with("s512pp", false, false);
+        for fen in FENS {
+            let b = board(fen);
+            for persp in 0..2 {
+                let orient = |sq: usize| if persp == 0 { sq } else { sq ^ 56 };
+                let flip = if orient(b.king(persp)) % 8 < 4 { 7 } else { 0 };
+                let mut want: Vec<usize> =
+                    features(&pp, fen, persp).iter().map(|&i| if i < 768 { i } else { i + 650 }).collect();
+                for sq in 0..64 {
+                    if b.exposed_lower() & (1u64 << sq) != 0 {
+                        let (kind, side) = b.piece[sq].expect("a piece");
+                        let own = usize::from(side != persp);
+                        want.push(768 + 320 * own + 64 * kind + (orient(sq) ^ flip));
+                        want.push(768 + 640 + 5 * own + kind);
+                    }
+                }
+                want.sort_unstable();
+                let mut got = features(&s, fen, persp);
+                got.sort_unstable();
+                assert_eq!(got, want, "{fen}, perspective {persp}");
+            }
+        }
+    }
+
+    #[test]
+    fn s512ppxls_merge_adds_the_exposure_factorisers_and_keeps_the_links() {
+        let s = s512ppxl();
+        let rows = 2;
+        let v: Vec<f32> = (0..rows * s.inputs()).map(|i| i as f32).collect();
+        let merged = merge_factors(&s, rows, &v);
+        assert_eq!(merged.len(), rows * 2016);
+        assert_eq!(&merged[..rows * 768], &v[..rows * 768]);
+        for e in [0usize, 63, 319, 320, 383, 639] {
+            let (own, kind) = (e / 320, (e % 320) / 64);
+            for i in 0..rows {
+                assert_eq!(merged[rows * (768 + e) + i], v[rows * (768 + e) + i] + v[rows * (1408 + 5 * own + kind) + i]);
+            }
+        }
+        assert_eq!(&merged[rows * 1408..], &v[rows * 1418..]);
+    }
+
+    #[test]
+    fn architecture_8s_layout_is_unchanged() {
+        // S512+PP (architecture 8): 768 piece inputs, then its 608 links;
+        // nothing merged when saved.
+        let s = with("s512pp", false, false);
+        assert_eq!((s.factor_start(), s.link_start(), s.pp_link_inputs()), (768, 768, 608));
+        assert_eq!((s.inputs(), s.saved_inputs()), (1376, 1376));
+        assert!(!s.factoriser && !s.exposure && !s.contacts);
+        for fen in FENS {
+            for persp in 0..2 {
+                let got = features(&s, fen, persp);
+                assert!(got.iter().all(|&i| i < 1376));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::*;
+
+    // Two games built from FENs and UCI moves, every position's halfmove clock
+    // and castling rights worked out by hand (side to move first: 1 its O-O,
+    // 2 its O-O-O, 4 the other side's O-O, 8 the other side's O-O-O):
+    // rights lost to a rook move, a king move and a rook captured on its
+    // corner; the clock from a nonzero start, reset by a pawn move and by a
+    // capture.
+    const GAMES: [(&str, &[(&str, u8, u8)]); 2] = [
+        (
+            "r3k2r/p6p/8/8/8/8/P6P/R3K2R w KQkq - 7 30",
+            &[
+                ("a1b1", 7, 15), // white to move, all four rights
+                ("h8g8", 8, 7),  // white lost O-O-O: black's k, q, then white's K
+                ("a2a4", 9, 9),  // black lost O-O: white's K, black's q
+                ("a7a5", 0, 6),  // the pawn move reset the clock
+                ("e1d1", 0, 9),
+                ("a8a6", 1, 2), // white's king moved: black's q only
+                ("d1e1", 2, 0), // black's rook moved: none left
+            ],
+        ),
+        (
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            &[
+                ("a1a8", 0, 15), // the capture on a8 takes white's O-O-O and black's O-O-O
+                ("e8e7", 0, 5),  // black to move: its k, white's K; the capture reset the clock
+                ("h1h2", 1, 1),  // black's king moved: white's K only
+            ],
+        ),
+    ];
+
+    fn record_board(fen: &str) -> RecordBoard {
+        let mut board = RecordBoard::new();
+        board.set_from_fen(fen).expect("fen");
+        board
+    }
+
+    /// The games written as one shard file (Fork's game records) in the
+    /// system's temporary folder; the caller removes it.
+    fn shard(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("fork-train-state-{name}-{}.vf", std::process::id()));
+        let mut f = File::create(&path).expect("shard");
+        for (fen, moves) in GAMES {
+            let mut board = record_board(fen);
+            let mut game = Game::new(&board);
+            for (uci, _, _) in moves {
+                let mv = board.parse_uci(uci).expect("move");
+                assert!(board.make_move_simple(mv), "{uci} is legal");
+                game.add_move(mv, 0);
+            }
+            game.serialise_into(&mut f).expect("write");
+        }
+        path
+    }
+
+    /// Each position's packed board (side to move relative, the spare bytes
+    /// zeroed) with its expected spare bytes and whether the training filter
+    /// keeps it (not in check, its move neither a capture nor a promotion).
+    fn expected() -> Vec<(ChessBoard, [u8; 3], bool)> {
+        let mut out = Vec::new();
+        for (fen, moves) in GAMES {
+            let mut board = record_board(fen);
+            for (uci, clock, rights) in moves {
+                let mv = board.parse_uci(uci).expect("move");
+                let b = board.to_bulletformat(0, 0).expect("pack");
+                let kept = !board.in_check() && !board.is_tactical(mv);
+                out.push((b, [*clock, STATE_CARRIED | rights, 0], kept));
+                board.make_move_simple(mv);
+            }
+        }
+        out
+    }
+
+    fn check(got: &[ChessBoard], keep_all: bool) {
+        let want: Vec<_> = expected().into_iter().filter(|w| keep_all || w.2).collect();
+        assert_eq!(got.len(), want.len());
+        for b in got {
+            let w = want.iter().find(|w| ChessBoard { extra: [0; 3], ..*b } == w.0).expect("a position of the games");
+            assert_eq!(b.extra, w.1, "{}", pieces_text(b));
+        }
+    }
+
+    #[test]
+    fn the_hand_worked_games_are_what_the_test_says() {
+        // Eight of the ten positions are kept: not the one before the
+        // capture a1a8, nor the one in check after it.
+        let e = expected();
+        assert_eq!(e.len(), 10);
+        assert_eq!(e.iter().filter(|w| w.2).count(), 8);
+    }
+
+    #[test]
+    fn every_decoded_position_carries_its_halfmove_clock_and_castling_rights() {
+        let path = shard("decode");
+        // The validation path and the loader (read_positions), the dump
+        // (--keep-all's filter), and the training reader (ShardReader, which
+        // shuffles, in both orders), on the training filter; read first, so
+        // the file is removed before any check fails.
+        let kept = read_positions(&path, usize::MAX);
+        let mut all = Vec::new();
+        ShardReader::for_each_game(&path, |game| decode_game(&game, &Filter::UNRESTRICTED, |b| all.push(b)));
+        let trained: Vec<Vec<ChessBoard>> = [false, true]
+            .into_iter()
+            .map(|interleave| {
+                let reader = ShardReader { files: vec![path.clone()], buffer: 1000, seed: 7, interleave };
+                let mut got = Vec::new();
+                reader.read_chunks(0, |chunk: &[ChessBoard]| {
+                    got.extend_from_slice(chunk);
+                    true
+                });
+                got
+            })
+            .collect();
+        fs::remove_file(&path).expect("remove");
+        check(&kept, false);
+        check(&all, true);
+        for got in &trained {
+            check(got, false);
+        }
     }
 }

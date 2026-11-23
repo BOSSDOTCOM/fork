@@ -33,9 +33,10 @@ on:
 permissions:
   contents: read
 
-# The SPRT workflow's group: an SPSA run and an SPRT run never overlap.
+# Its own group (2026-11-15: sprt.yml's group is per commit pair, and an SPSA iteration shares the runners with
+# the SPRT lanes by the driver's capacity rule, tools/github/spsa_run.sh's room()); one SPSA driver at a time.
 concurrency:
-  group: sprt
+  group: spsa
   cancel-in-progress: false
 
 jobs:
@@ -137,7 +138,7 @@ jobs:
         env:
           PARAMS: ${{ steps.request.outputs.params }}
         run: |
-          printf 'uci\nquit\n' | engine/fork | tr -d '\r' >options.txt
+          printf 'uci\nsetoption name CalibratedScore value false\nquit\n' | engine/fork | tr -d '\r' >options.txt
           python3 -I - "$PARAMS" options.txt <<'EOF'
           import re, sys
           sys.path.insert(0, 'tools/github')
@@ -152,6 +153,10 @@ jobs:
               assert re.search(rf'^option name {name} type ', text, re.M), f'{name} is not an option'
           print(f'{len(tuned)} tuned and {len(fixed)} fixed options checked')
           EOF
+      # The CalibratedScore belt (owner, 2026-11-13; as sprt.yml): if the tuning build has the option, this
+      # checkout's harness must force it off (tools/check_score_display_off.py), else the run stops before any game.
+      - name: CalibratedScore forced off by this harness (if the engine has the option)
+        run: bash .github/ci/score-display-check.sh engine/fork
       - uses: actions/upload-artifact@v4
         with: {name: spsa-engine, path: engine, retention-days: 7}
 

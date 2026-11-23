@@ -46,6 +46,9 @@ DEFAULTS = {
     'tables_wsl': '~/fork-tools/syzygy/3-4-5',
     'openings_wsl': '~/fork-data/openings',
     'engine_paths': ['src', 'cmake', 'CMakeLists.txt', 'CMakePresets.json', 'nets', 'third_party'],
+    # The labeller's build target (cmake/pgo.cmake's ARCH): x86-64-v3, measured at least as fast as native for the
+    # tiled-update head (owner, 2026-11-12; docs/ideas.md 170). start_part.sh builds for it and refuses another.
+    'build_arch': 'x86-64-v3',
 }
 
 

@@ -159,7 +159,7 @@ std::string describe_syzygy_path(const std::string& paths) {
 constexpr std::size_t GameStatePlies = 16384;
 
 UciSession::UciSession(OutputChannel& out, SessionConfig config)
-    : out_(out), config_(config), searcher_(std::make_unique<Searcher>(tt_)) {
+    : out_(out), config_(config), searcher_(std::make_unique<Searcher>(tt_)), pool_(tt_, GameStatePlies) {
   root_.reserve_plies(GameStatePlies);
   spare_.reserve_plies(GameStatePlies);
   declare_options();
@@ -171,7 +171,11 @@ void UciSession::declare_options() {
                     [this](const OptionEntry&, std::string&) { return hash_pending_ = true; });
   options_.add_button("Clear Hash",
                       [this](const OptionEntry&, std::string&) { return clear_pending_ = true; });
-  options_.add_spin("Threads", 1, 1, config_.max_threads);
+  // The search threads (Lazy SMP, DESIGN.md §5.6 step 17a): the main one and
+  // Threads - 1 helpers, made at the next isready, ucinewgame or go (as the
+  // Hash is), outside any search. Threads also bounds the Hash clear's workers.
+  options_.add_spin("Threads", 1, 1, config_.max_threads,
+                    [this](const OptionEntry&, std::string&) { return threads_pending_ = true; });
   options_.add_spin("Move Overhead", 100, 0, 10000);
   options_.add_string("SyzygyPath", "", [this](const OptionEntry& e, std::string& message) {
     syzygy_path_ = e.text;
@@ -180,6 +184,23 @@ void UciSession::declare_options() {
     message = config_.allow_files ? describe_syzygy_path(e.text) : "SyzygyPath: file access disabled";
     return true;
   });
+  // The tables' probe rules (TCEC readiness, owner 2026-11-16): the least
+  // remaining depth at which the search probes, and the most pieces any probe
+  // (the root ranking's too) may have. setoption stops any search first, so
+  // they change only between searches; the helpers copy them at each go. The
+  // defaults are the behaviour before the options: TableProbeMinDepth and
+  // every loaded table. A depth past any the search reaches (MaxPly) leaves
+  // only the root ranking; a limit below 3 pieces turns the tables off.
+  options_.add_spin("SyzygyProbeDepth", TableProbeMinDepth, 1, MaxPly,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->switches.table_probe_depth = static_cast<int>(e.number);
+                      return true;
+                    });
+  options_.add_spin("SyzygyProbeLimit", LargestTablePieces, 0, LargestTablePieces,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->switches.table_probe_pieces = static_cast<int>(e.number);
+                      return true;
+                    });
 #ifdef FORK_TUNE
   // Tuning builds only (CMake FORK_TUNE; DESIGN.md §1 and §5.2): each search
   // switch as a check option, so an SPRT can compare a technique on and off
@@ -224,7 +245,35 @@ unsigned UciSession::hash_workers() const {
   return config_.use_threads ? clear_workers(hash_.bytes(), options_.number("Threads")) : 1;
 }
 
+// The helpers Threads asks for, at most one search thread per hardware
+// thread (more only share cores, and Threads 4096 would ask for some 20 GB of
+// searchers); none in stats builds, whose decision ledger holds every
+// thread's TT writes (the concurrency review, A1.4).
+void UciSession::apply_threads() {
+  threads_pending_ = false;
+  if (!config_.use_threads) return;
+  const std::size_t asked = static_cast<std::size_t>(options_.number("Threads"));
+  std::size_t threads = asked;
+  std::string why;
+#ifdef FORK_SEARCH_STATS
+  if (threads > 1) why = "statistics builds search on one thread";
+  threads = 1;
+#else
+  const unsigned hardware = std::thread::hardware_concurrency();
+  if (hardware > 0 && threads > hardware) {
+    threads = hardware;
+    why = "one per hardware thread";
+  }
+#endif
+  const std::size_t running = pool_.resize(threads - 1) + 1;
+  if (running < threads) why = "no more threads or memory";
+  if (running < asked)
+    out_.send_info_string("Threads " + std::to_string(asked) + ": " + std::to_string(running) +
+                          " search threads (" + why + ")");
+}
+
 bool UciSession::apply_pending() {
+  if (threads_pending_) apply_threads();
   if (tables_pending_) {
     // Never during a search: this runs only where the Hash work runs. An
     // empty path (or "<empty>", the GUIs' way to clear it) unloads quietly.
@@ -249,7 +298,7 @@ bool UciSession::apply_pending() {
     tt_.bind_memory(nullptr, 0);
     const bool ok = hash_.resize(bytes, report);
     // A Clear Hash in the same batch also forgets the history (audit-1, V-2).
-    if (clear_pending_) searcher_->clear_history();
+    if (clear_pending_) clear_histories();
     hash_pending_ = clear_pending_ = false;
     tt_.bind_memory(hash_.data(), hash_.bytes());
     const unsigned workers = hash_workers();
@@ -264,7 +313,7 @@ bool UciSession::apply_pending() {
   if (clear_pending_) {
     clear_pending_ = false;
     hash_.clear(hash_workers());
-    searcher_->clear_history();  // Clear Hash forgets all search memory (review, deliverable 5)
+    clear_histories();  // Clear Hash forgets all search memory (review, deliverable 5)
     return true;
   }
   return false;
@@ -440,7 +489,12 @@ void UciSession::cmd_setoption(const std::vector<LineToken>& tokens, std::size_t
 
 void UciSession::cmd_ucinewgame() {
   if (!apply_pending()) hash_.clear(hash_workers());
+  clear_histories();
+}
+
+void UciSession::clear_histories() {
   searcher_->clear_history();
+  pool_.clear_histories();
 }
 
 void UciSession::cmd_ponderhit() {
@@ -518,7 +572,8 @@ void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first)
   if (go.restrict_sent && go.restrict_to.empty())
     out_.send_info_string("go: no legal move in searchmoves; searching every move");
   apply_pending();
-  SearchQuota limits = quota_for_go(go, root_.side_to_move(), options_.number("Move Overhead"));
+  SearchQuota limits = quota_for_go(go, root_.side_to_move(), options_.number("Move Overhead"),
+                                    searcher_->switches.use_time_guards);
   limits.go_received = go_time;
   const bool infinite = go.infinite;
   {
@@ -565,7 +620,7 @@ void UciSession::stop_search() {
 
 // A ponder search ignores time until ponderhit (the session's pondering flag,
 // not the limits).
-SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhead_ms) {
+SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhead_ms, bool move_guard) {
   SearchQuota l;
   if (go.depth) l.depth = static_cast<int>(std::clamp<std::int64_t>(*go.depth, 1, MaxPly - 1));
   if (go.nodes) l.nodes = static_cast<std::uint64_t>(std::max<std::int64_t>(*go.nodes, 1));
@@ -587,6 +642,7 @@ SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhea
     clock.movestogo = go.movestogo;
     clock.movetime = go.movetime;
     clock.overhead_ms = move_overhead_ms;
+    clock.move_guard = move_guard;
     const TimeBudget budget = plan_time(clock);
     l.soft_ms = budget.soft_ms;
     l.hard_ms = budget.hard_ms;
@@ -598,9 +654,25 @@ void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
   const auto start = std::chrono::steady_clock::now();
   Move best = NoMove;
   bool picked = false;
+  bool helping = false;  // helpers are searching: ended and waited for on every way out
   try {
     InfoWriter writer(out_);
-    const SearchResult r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer);
+    SearchResult r;
+    if (pool_.helper_count() == 0) {
+      r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer);  // one thread
+    } else {
+      // Lazy SMP: the shared setup once, then every helper and this thread
+      // search the same root; this thread keeps time and its move is played.
+      SearchStart plan;
+      prepare_start(tt_, searcher_->switches, pos, plan);
+      helping = pool_.begin_search(pos, searcher_->switches, plan, limits, *searcher_);
+      if (helping) {
+        plan.helpers = pool_.searchers();
+        plan.helper_count = pool_.helper_count();
+      }
+      r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer, &plan);
+      pool_.end_search();  // at once, before a ponder or infinite search waits
+    }
     best = r.best;
     picked = true;
     {
@@ -621,6 +693,12 @@ void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
     // Out of memory while formatting (a failed send_line throws before it
     // writes anything): answer the go once, without allocating.
     answer_without_memory(pos, picked ? best : NoMove, picked);
+  }
+  // After bestmove (a slow helper never delays it), before the search counts
+  // as finished: stop_search's join then means every helper is parked.
+  if (helping) {
+    pool_.end_search();
+    pool_.wait_idle();
   }
   std::scoped_lock lock(signals_.mutex);
   signals_.finished = true;

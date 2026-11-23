@@ -49,7 +49,7 @@ def run_match(fastchess, candidate, baseline, book, games, tc, concurrency, out_
     out.mkdir(parents=True, exist_ok=True)
     cmd = [str(fastchess), '-engine', f'cmd={candidate}', 'name=candidate',
            '-engine', f'cmd={baseline}', 'name=baseline',
-           '-each', f'tc={tc}', 'option.Hash=16', 'option.Threads=1',
+           '-each', f'tc={tc}', 'option.Hash=16', 'option.Threads=1', 'option.CalibratedScore=false',
            '-openings', f'file={book}', 'format=epd', 'order=random', '-srand', '20261027',
            '-rounds', str(games // 2), '-repeat', '-concurrency', str(concurrency),
            '-pgnout', f'file={out / "match.pgn"}']

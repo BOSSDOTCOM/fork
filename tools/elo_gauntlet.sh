@@ -57,7 +57,7 @@ case "${ANCHORS:-a}" in
      ) ;;
   *) echo "elo_gauntlet.sh: ANCHORS must be a, b or c" >&2; exit 2 ;;
 esac
-args=(-engine cmd="$fork" name=Fork option.Hash=16)
+args=(-engine cmd="$fork" name=Fork option.Hash=16 option.CalibratedScore=false)
 : >"$out/anchors.csv"
 for a in "${anchors[@]}"; do
   IFS='|' read -r name file rating <<<"$a"

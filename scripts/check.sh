@@ -5,7 +5,9 @@
 # (scripts/hooks/pre-commit).
 #
 #   scripts/check.sh quick   clang-release build + fast tests (post-edit hook),
-#                            plus the tooling's Python unit tests
+#                            plus the search suites (ctest label quick-search;
+#                            FORK_QUICK_SEARCH=0 skips them, as the post-edit
+#                            hook does) and the tooling's Python unit tests
 #   scripts/check.sh stop    clang-release build + every non-slow test,
 #                            including bench parity and no_alloc; this
 #                            platform only (Stop hook). Skipped when the code
@@ -19,6 +21,12 @@
 #                            Windows also a UCI start-up smoke loop (50 runs)
 #                            of every MinGW GCC preset's engine, then the
 #                            Linux check (below).
+#
+# While data generation runs on this machine (fork_datagen on Windows or in
+# WSL), every mode runs its tests with FORK_LOW_PRIORITY=1, so the timing
+# cases (uci_timing; stop and full run it, quick does not) report SKIPPED and
+# the check prints one line saying so; CI keeps them (owner, 2026-11-12;
+# datagen_running, below).
 #
 # Both platforms on every full check: on Windows, `full` copies the working
 # tree exactly as it is (tracked and untracked, non-ignored files) into
@@ -152,6 +160,50 @@ check_jobs() {
   fi
 }
 
+# Data generation on this machine (owner, 2026-11-12: "Set FORK_LOW_PRIORITY=1
+# for local timing tests while data generation runs (CI keeps them)"): beside a
+# running fork_datagen the timing cases (uci_timing) measure the machine's
+# load, not Fork, so a local check then exports FORK_LOW_PRIORITY=1 before its
+# first test, and tests/test_uci.cpp reports them SKIPPED. Only that variable
+# is set: env.sh, already sourced, does not lower this check's priority or
+# its build jobs. Detected once per check, in under a second: on Windows a
+# fork_datagen.exe process (ps -W) or a fork_datagen process in the WSL distro
+# FORK_WSL_DISTRO (default Ubuntu; asked only while that distro runs, so the
+# check never starts it); on Linux, the WSL legs included, pgrep in this
+# system. Never on CI ($CI or $GITHUB_ACTIONS set), whatever else is set.
+# FORK_DATAGEN_RUNNING=1 or 0 replaces the detection (tests of this rule).
+datagen_running() {
+  local distro=${FORK_WSL_DISTRO:-Ubuntu} out
+  if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then return 1; fi
+  case ${FORK_DATAGEN_RUNNING:-} in 1) return 0 ;; 0) return 1 ;; esac
+  case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*)
+      # Whole outputs, then grep: under pipefail an early-exiting grep -q
+      # would fail the pipeline through the writer's SIGPIPE. ps -W shows a
+      # process started from Git Bash by its MSYS path, without .exe.
+      out=$(ps -W 2>/dev/null)
+      grep -qiE '[\/]fork_datagen(\.exe)?[[:space:]]*$' <<<"$out" && return 0
+      command -v wsl.exe >/dev/null 2>&1 || return 1
+      out=$(timeout 5 wsl.exe -l --running -q 2>/dev/null | tr -d '\0\r')
+      grep -qxF "$distro" <<<"$out" || return 1
+      MSYS_NO_PATHCONV=1 timeout 5 wsl.exe -d "$distro" --exec pgrep -x fork_datagen >/dev/null 2>&1
+      ;;
+    *) command -v pgrep >/dev/null 2>&1 && pgrep -x fork_datagen >/dev/null 2>&1 ;;
+  esac
+}
+
+# Exports FORK_LOW_PRIORITY=1 (and says so, on stderr: `full` captures
+# stdout) when data generation runs; nothing to do when it is already 1.
+# Called before every ctest pass, it detects only on the first.
+skip_timing_beside_datagen() {
+  [ -n "${datagen_checked:-}" ] && return 0
+  datagen_checked=1
+  [ "${FORK_LOW_PRIORITY:-}" = 1 ] && return 0
+  datagen_running || return 0
+  export FORK_LOW_PRIORITY=1
+  echo "fork check $mode: data generation running: timing tests skipped (FORK_LOW_PRIORITY=1)" >&2
+}
+
 # Every check configures with the tree's default evaluator and network:
 # without -U a cached FORK_EVALUATOR or FORK_NET outlives a change of the
 # default (B0 became the default on 2026-10-29, and the local check builds
@@ -162,6 +214,15 @@ build_and_test() {  # preset, ctest filter args...
   shift
   cmake --preset "$preset" -U FORK_EVALUATOR -U FORK_NET >>"$log" 2>&1 || fail "configure $preset"
   cmake --build "build/$preset" -j "$(check_jobs)" >>"$log" 2>&1 || fail "build $preset"
+  run_ctest "$preset" "$@"
+  echo "$out" | grep -qE 'Test +#[0-9]+: no_alloc \.+ +Passed' || fail "no_alloc did not run in $preset"
+}
+
+# One ctest pass over a built preset; sets $out to its output.
+run_ctest() {  # preset, ctest filter args...
+  local preset=$1
+  shift
+  skip_timing_beside_datagen
   out=$(ctest --test-dir "build/$preset" --output-on-failure "$@" 2>&1)
   local status=$?
   echo "$out" >>"$log"
@@ -172,13 +233,13 @@ build_and_test() {  # preset, ctest filter args...
   if [ -f "$last" ] && grep -qE '^(SKIP|NOTE) ' "$last"; then
     grep -E '^(SKIP|NOTE) ' "$last" | sed "s/^/fork check $mode ($preset): /" >&2
   fi
-  echo "$out" | grep -qE 'Test +#[0-9]+: no_alloc \.+ +Passed' || fail "no_alloc did not run in $preset"
 }
 
 # The tooling's own tests (audit-1 U-15): standard-library Python suites
-# (sprt_merge and the book permutation, the evolve harness, pgn_summary, the job supervisor, the SPSA
-# arithmetic, the Control Center), plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
-# tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh with a fake gh (about 40 s).
+# (sprt_merge and the book permutation, the evolve harness, pgn_summary, the gauntlet report, the job supervisor, the
+# Control Center), plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
+# tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh, h2h_run.sh and tools/gauntlet/archive.sh with a fake gh (about 2 min),
+# and on Windows the hooks' self-test.
 tool_tests() {  # python | all
   local py="" c
   for c in .venv/Scripts/python.exe .venv/bin/python python3 python; do
@@ -188,34 +249,83 @@ tool_tests() {  # python | all
   "$py" -I -B -m unittest discover -s tools/cloud -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/cloud"
   "$py" -I -B -m unittest discover -s tools/evolve -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/evolve"
   "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
+  # The CalibratedScore display (owner, 2026-11-12): every harness that plays or searches with Fork sets it off.
+  "$py" -I -B tools/check_score_display_off.py . >>"$log" 2>&1 || fail "tool tests: tools/check_score_display_off.py"
+  # Branch workflows too (owner, 2026-11-13): its workflow rule (every workflow that plays games runs
+  # .github/ci/score-display-check.sh); the dispatchers' guard, tools/jobs/score_display_guard.py, is tested with
+  # tools/jobs below.
+  "$py" -I -B -m unittest discover -s tools -p 'test_check_score_display_off.py' >>"$log" 2>&1 ||
+    fail "tool tests: tools/test_check_score_display_off.py"
+  # The cloud worker's guard (tools/gcp/worker.py): a build with the option runs only from a checkout that forces it off.
+  "$py" -I -B -m unittest discover -s tools/gcp -p 'test_worker.py' -k ScoreDisplayTest >>"$log" 2>&1 ||
+    fail "tool tests: tools/gcp/test_worker.py (ScoreDisplayTest)"
+  # The gauntlet's report (owner, 2026-11-08): the reference opponent kept out of Ordo's fit.
+  "$py" -I -B -m unittest discover -s tools/gauntlet -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/gauntlet"
   # The job supervisor and the run-ID ledger (owner, 2026-11-05): whole-tree stops, one lock per type.
   "$py" -I -B -m unittest discover -s tools/jobs -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/jobs"
-  # The GitHub SPSA driver's arithmetic, spec and state (tools/github/spsa.py; DESIGN.md §5.2).
-  "$py" -I -B -m unittest discover -s tools/github -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/github"
   # The Fork Control Center (owner, 2026-11-06): its parsers on the real formats, the data-generation
   # controls against a simulated supervisor, the seal, and the read-only tabs under a write-blocking guard.
   "$py" -I -B -m unittest discover -s tools/control_center -p 'test_*.py' >>"$log" 2>&1 \
     || fail "tool tests: tools/control_center"
+  # The Fork Operations Display (owner, 2026-11-14): its readers on the real formats (missing, truncated and
+  # corrupt files included), discovery, the alerts, and the display-only guarantee: a guard that fails on any
+  # write or process start, and the allow-list of its read-only commands.
+  "$py" -I -B -m unittest discover -s tools/ops_display -p 'test_*.py' >>"$log" 2>&1 \
+    || fail "tool tests: tools/ops_display"
   # tools/datagen and tools/nnue need python-chess and zstandard (the
   # repository's .venv); the log says when they are missing and the suites are skipped.
   if "$py" -I -c 'import chess, zstandard' >/dev/null 2>&1; then
     "$py" -I -B -m unittest discover -s tools/datagen -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/datagen"
     "$py" -I -B -m unittest discover -s tools/nnue -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/nnue"
+    # Phase 4 step 1's measurement tools (DESIGN.md §5.7); the game replay reads PGNs with python-chess.
+    "$py" -I -B -m unittest discover -s tools/measure -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/measure"
+    # The zugzwang set for B6 (2026-11-12): its rules, the game-file replay and the committed rows.
+    "$py" -I -B -m unittest discover -s tools/zugzwang -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/zugzwang"
   else
     echo "tool tests: tools/datagen skipped (no python-chess or zstandard in $py)" >>"$log"
   fi
   bash scripts/update-test.sh >>"$log" 2>&1 || fail "tool tests: scripts/update-test.sh (update.sh clone mode)"
+  # 2026-11-07: run by `git rebase --exec` in a linked worktree, git's exported GIT_DIR (the worktree's git
+  # directory) reached the toy repositories' commands, which committed, branched, tagged and pushed in the
+  # real repository and its origin. The same setup with a decoy repository, its worktree and its origin: the
+  # test must leave both exactly as they were.
+  decoy=$(mktemp -d)
+  refs() { git -C "$decoy/r" for-each-ref --format='%(refname) %(objectname)'
+           git -C "$decoy/o.git" for-each-ref --format='%(refname) %(objectname)'; }
+  git -c init.defaultBranch=main init -q "$decoy/r" &&
+    git -C "$decoy/r" -c user.name=decoy -c user.email=decoy@example.invalid commit -q --allow-empty -m decoy &&
+    git clone -q --bare "$decoy/r" "$decoy/o.git" && git -C "$decoy/r" remote add origin "$decoy/o.git" &&
+    git -C "$decoy/r" worktree add -q "$decoy/w" -b wb && before=$(refs) &&
+    (cd "$decoy/w" && GIT_DIR="$decoy/r/.git/worktrees/w" bash "$OLDPWD/scripts/update-test.sh") >>"$log" 2>&1 &&
+    [ "$(refs)" = "$before" ] ||
+    { rm -rf "$decoy"; fail "tool tests: scripts/update-test.sh leaks into the repository in GIT_DIR"; }
+  rm -rf "$decoy"
   # The push gate (owner, 2026-11-05): a planted hit of each kind blocks the scan and the push.
   bash scripts/test_scan_push.sh >>"$log" 2>&1 || fail "tool tests: scripts/test_scan_push.sh (the push gate)"
   [ "$1" = all ] || return 0
-  bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
   case $py in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; *) py=$(command -v "$py") ;; esac
-  # The GitHub SPRT driver against a fake gh (its wait, stop and commit-check rules).
+  # tools/sprt.sh runs the CalibratedScore guard (tools/jobs/score_display_guard.py) with $PYTHON.
+  PYTHON=$py bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
+  # audit-1 U-18: no ratings after a failed or short fastchess run, against a fake fastchess and ordo.
+  bash tools/test_elo_gauntlet.sh >>"$log" 2>&1 || fail "tool tests: tools/test_elo_gauntlet.sh"
+  # The GitHub SPRT driver against a fake gh (its wait, stop and commit-check rules; design R's kinds,
+  # futility stop, caps and the two-try limit), and the head-to-head driver on the same fake.
   PYTHON=$py bash tools/github/test_sprt_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_sprt_run.sh"
+  PYTHON=$py bash tools/github/test_h2h_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_h2h_run.sh"
+  # The gauntlet archive (owner, 2026-11-09): manifest, verification and idempotence against a fake gh.
+  PYTHON=$py bash tools/gauntlet/test_archive.sh >>"$log" 2>&1 || fail "tool tests: tools/gauntlet/test_archive.sh"
   PYTHON=$py bash tools/cloud/test_run_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/cloud/test_run_shard.sh"
+  # The SPRT shards' progress uploads (owner, 2026-11-14): a shard with and without the watcher, byte for byte
+  # (fake games; CI also plays real ones).
+  PYTHON=$py bash tools/cloud/test_shard_progress.sh >>"$log" 2>&1 || fail "tool tests: tools/cloud/test_shard_progress.sh"
   # The Control Center's WSL launch script for a data-generation part, with stubs (Linux only).
   if [ "$(uname -s)" = Linux ]; then
     bash tools/control_center/test_start_part.sh >>"$log" 2>&1 || fail "tool tests: tools/control_center/test_start_part.sh"
+  else
+    # The Claude Code hooks' self-test (audit-1 U-15: it ran in no check), Windows only like the hooks
+    # themselves (they call a bare `python`): its stand-in cases, about 8 s; the two cases that build
+    # (--no-build left out) stay a phase-end step.
+    bash .claude/hooks/test_hooks.sh --no-build >>"$log" 2>&1 || fail "tool tests: .claude/hooks/test_hooks.sh"
   fi
   # The cloud safeguards (owner, 2026-10-30): the spot quota check, the
   # cleanup of instances past their limit, a simulated spot interruption,
@@ -224,10 +334,6 @@ tool_tests() {  # python | all
   for t in test_spot_quota test_aws_cleanup test_spot_watch test_aws_spot_datagen test_cost_guard; do
     PYTHON=$py bash "tools/cloud/$t.sh" >>"$log" 2>&1 || fail "tool tests: tools/cloud/$t.sh"
   done
-  # The GitHub SPSA shard with a fake fastchess (the options each side gets per draw, the failure states),
-  # and the SPSA driver against a fake gh and a local push remote (both triggers; about 2 min).
-  PYTHON=$py bash tools/github/test_spsa_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_spsa_shard.sh"
-  PYTHON=$py bash tools/github/test_spsa_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_spsa_run.sh"
 }
 
 native_full() {
@@ -327,8 +433,16 @@ case "$mode" in
     ;;
   quick)
     build_and_test clang-release -R '^(magics|fen|zobrist_ep|perft_edge|pseudo_legal|no_alloc|bench_parity)$'
+    # The search suites (owner, 2026-11-12: switch-on commits had failed search and pruning cases that this
+    # check never ran): the tests labelled quick-search in CMakeLists.txt, about 1.5 min. The after-edit hook
+    # skips them (FORK_QUICK_SEARCH=0) to stay inside its time limit; the pre-commit hook runs them.
+    searched=""
+    if [ "${FORK_QUICK_SEARCH:-1}" != 0 ]; then
+      run_ctest clang-release -L '^quick-search$' --no-tests=error
+      searched=" the search suites and"
+    fi
     tool_tests python
-    echo "fork check quick: ok (with the tooling's Python tests)"
+    echo "fork check quick: ok (with$searched the tooling's Python tests)"
     ;;
   stop)
     mkdir -p build

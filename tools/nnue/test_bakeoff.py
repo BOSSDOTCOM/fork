@@ -24,6 +24,7 @@ import chess
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import contacts  # noqa: E402
 import convert  # noqa: E402
 import extend_weights  # noqa: E402
 import fit_maps  # noqa: E402
@@ -50,7 +51,7 @@ def description(name):
 
 
 def training_inputs(arch):
-    return arch.exposure_start + (models.EXPOSURE_ROWS + 10 if arch.exposure else 0)
+    return arch.link_start + (contacts.link_count(arch.link_ranks) if arch.links else 0)
 
 
 def synthetic_weights(arch, seed):
@@ -62,7 +63,7 @@ def synthetic_weights(arch, seed):
     def r(count, lim):
         return [models.to_f32(rng.uniform(-lim, lim)) for _ in range(count)]
     w = {'l0w': r(n * h, 0.06), 'l0b': r(h, 0.3)}
-    if arch.name in ('s512', 'h512', 's512x'):
+    if arch.name in ('s512', 'h512', 's512x', 's512pp', 'h512pp', 's512ppxl'):
         w.update(l1w=r(8 * 2 * h, 0.5), l1b=r(8, 0.2))
     elif arch.name == 'afs':
         w.update(l1w=r(128 * h, 0.5), l1b=r(128, 0.3), l2w=r(256 * 16, 0.6), l2b=r(256, 0.3),
@@ -279,6 +280,364 @@ class Features(unittest.TestCase):
         self.assertIn(chess.E5, exposed)
         self.assertIn(chess.C2, exposed)
         self.assertNotIn(chess.H1, exposed)
+
+
+class CombinedLayout(unittest.TestCase):
+    """Links and contacts beside a piece factoriser or the exposure plane
+    (bake-off round 3's options (a) and (c)): their inputs start after those
+    blocks and survive the merge (they started on top of them before
+    2026-11-14). The block sizes are summed here, apart from models.py."""
+
+    COMBINATIONS = ((True, False), (False, True), (True, True))
+
+    def combined(self, name, factoriser, exposure):
+        arch = models.Arch(name, regions=REGIONS if factoriser else None, table=PHASE)
+        arch.factoriser, arch.exposure = factoriser, exposure
+        start = (models.PIECE_SQUARES * arch.region_count + (models.PIECE_SQUARES if factoriser else 0)
+                 + (models.EXPOSURE_ROWS + 10 if exposure else 0))
+        saved = models.PIECE_SQUARES * arch.region_count + (models.EXPOSURE_ROWS if exposure else 0)
+        return arch, start, saved
+
+    def test_links_and_contacts_follow_the_merged_blocks(self):
+        for name in ('s512pp', 's512cl'):
+            plain = models.Arch(name, table=PHASE)
+            for factoriser, exposure in self.COMBINATIONS:
+                arch, start, saved = self.combined(name, factoriser, exposure)
+                for fen in FENS:
+                    board = chess.Board(fen)
+                    exposed = models.exposed_squares(board) if exposure else None
+                    for persp in chess.COLORS:
+                        own = [f - models.PIECE_SQUARES for f in models.features(plain, board, persp)
+                               if f >= models.PIECE_SQUARES]
+                        got = models.features(arch, board, persp, exposed)
+                        label = f'{name} factoriser {factoriser} exposure {exposure}: {fen}'
+                        self.assertEqual([f for f in got if f >= start], [start + i for i in own], label)
+                        self.assertEqual(len(got), len([f for f in got if f < start]) + len(own), label)
+                        # Each lands on its own row of the saved file.
+                        self.assertEqual([models.merged_index(arch, start + i) for i in own],
+                                         [saved + i for i in own], label)
+
+    def test_the_merge_keeps_the_link_and_contact_columns(self):
+        rows = 2
+        for name in ('s512pp', 's512cl'):
+            for factoriser, exposure in self.COMBINATIONS:
+                arch, start, saved = self.combined(name, factoriser, exposure)
+                tail = arch.saved_inputs - saved
+                w = [float(i) for i in range(rows * (start + tail))]
+                merged = models.merge(arch, w, rows)
+                label = f'{name} factoriser {factoriser} exposure {exposure}'
+                self.assertEqual(len(merged), rows * arch.saved_inputs, label)
+                self.assertEqual(merged[rows * saved:], w[rows * start:], label)
+
+
+class RegionedLinks(unittest.TestCase):
+    """H512+PP (architecture 9, bake-off round 3's option a): S512+PP's piece
+    inputs per own-king region of the map M4, H-512's factoriser, the links
+    shared after the region rows; and its warm start from an S512+PP net
+    (extend_weights.py), float and integer."""
+
+    M4 = [0, 1, 1, 1] + [2] * 4 + [3] * 24  # e1 | f1-h1 | rank 2 | ranks 3-8, written out apart from models.py
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.tmp = Path(self.dir.name)
+        self.pp = models.Arch('s512pp', table=PHASE)
+        self.kr = models.Arch('h512pp', table=PHASE)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def net_of(self, arch, w, scale=107):
+        """Fork's file for float weights `w` as the trainer saves them (bullet's quantised.bin, converted)."""
+        desc = {'name': arch.name, 'architecture': arch.id, 'inputs': arch.saved_inputs, 'hidden': 512,
+                'qa': 255, 'qb': 64, 'regions': arch.regions if arch.name == 'h512pp' else None,
+                'table': arch.table,
+                'quantised': [{'name': 'l0w', 'rows': 512, 'cols': arch.saved_inputs, 'type': 'i16', 'factor': 255},
+                              {'name': 'l0b', 'rows': 512, 'cols': 1, 'type': 'i16', 'factor': 255},
+                              {'name': 'l1w', 'rows': 8, 'cols': 1024, 'type': 'i16', 'factor': 64},
+                              {'name': 'l1b', 'rows': 8, 'cols': 1, 'type': 'i32', 'factor': 16320}]}
+        _, qbin = bullet_files(arch, desc, w)
+        return convert.convert(qbin, desc, scale)
+
+    def test_the_layout(self):
+        self.assertEqual(self.kr.regions, self.M4)
+        self.assertEqual((self.kr.id, self.kr.region_count, self.kr.factor_start, self.kr.link_start),
+                         (9, 4, 3072, 3840))
+        self.assertEqual(self.kr.saved_inputs, 3072 + 608)
+        self.assertEqual(training_inputs(self.kr), 3840 + 608)
+        desc = json.loads((HERE / 'h512pp.json').read_text(encoding='utf-8'))
+        self.assertEqual((desc['architecture'], desc['inputs'], desc['regions']), (9, 3680, self.M4))
+        self.assertEqual(desc['table'], json.loads((HERE / 's512pp.json').read_text(encoding='utf-8'))['table'])
+
+    def test_features_take_the_own_kings_region_and_the_factoriser(self):
+        # Kiwipete: both kings on e1 / e8 (region 0); after Kf1 White's is in
+        # region 1 (f1), Black's still in region 0.
+        kf1 = 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4K1R b kq - 1 1'
+        for fen, white_region in ((FENS[1], 0), (kf1, 1)):
+            board = chess.Board(fen)
+            for persp in chess.COLORS:
+                plain = models.features(self.pp, board, persp)
+                pieces = [f for f in plain if f < 768]
+                links = [f - 768 for f in plain if f >= 768]
+                region = white_region if persp == chess.WHITE else 0
+                want = sorted([768 * region + f for f in pieces] + [3072 + f for f in pieces] +
+                              [3840 + i for i in links])
+                self.assertEqual(models.features(self.kr, board, persp), want, f'{fen} {persp}')
+                self.assertTrue(links, fen)
+
+    def test_the_merge_adds_the_factoriser_to_every_region_and_keeps_the_links(self):
+        rows = 2
+        w = [float(i) for i in range(rows * training_inputs(self.kr))]
+        merged = models.merge(self.kr, w, rows)
+        self.assertEqual(len(merged), rows * 3680)
+        for r in range(4):
+            for f in (0, 383, 767):
+                got = merged[rows * (768 * r + f):rows * (768 * r + f + 1)]
+                want = [w[rows * (768 * r + f) + i] + w[rows * (3072 + f) + i] for i in range(rows)]
+                self.assertEqual(got, want, (r, f))
+        self.assertEqual(merged[rows * 3072:], w[rows * 3840:])
+
+    def test_legs_pass(self):
+        bake = Bakeoff('test_every_architecture_passes_its_legs')
+        bake.setUp()
+        try:
+            self.assertEqual(description('h512pp')['regions'], self.M4)
+            rc, stats = bake.legs('h512pp')
+        finally:
+            bake.tearDown()
+        self.assertEqual(rc, 0)
+        self.assertEqual(stats['positions'], len(FENS))
+        self.assertLess(stats['loss_max'], 30, stats)
+
+    def test_the_float_warm_start_evaluates_as_its_source_and_saves_its_rows_in_every_region(self):
+        w = synthetic_weights(self.pp, 11)
+        wk = netformat.read_weights_bin(extend_weights.regioned_weights(netformat.write_weights_bin(w)))
+        self.assertEqual(len(wk['l0w']), (3840 + 608) * 512)
+        self.assertTrue(all(x == 0.0 for x in wk['l0w'][:3072 * 512]))
+        self.assertEqual(wk['l0w'][3072 * 512:], w['l0w'])
+        for k in ('l0b', 'l1w', 'l1b'):
+            self.assertEqual(wk[k], w[k])
+        for fen in FENS:
+            board = chess.Board(fen)
+            self.assertEqual(models.r_float(self.kr, wk, board), models.r_float(self.pp, w, board), fen)
+        # Saved by the trainer (each region = region + factoriser) and converted, it is the integer expansion
+        # of the source's own file, byte for byte.
+        self.assertEqual(self.net_of(self.kr, wk), extend_weights.regioned_net(self.net_of(self.pp, w)))
+        with self.assertRaises(ValueError):  # already regioned
+            extend_weights.regioned_weights(netformat.write_weights_bin(wk))
+
+    def test_the_integer_expansion_evaluates_as_its_source(self):
+        source = self.net_of(self.pp, synthetic_weights(self.pp, 12))
+        out = extend_weights.regioned_net(source)
+        head, src_head = netformat.header_fields(out), netformat.header_fields(source)
+        self.assertEqual((head['architecture'], head['inputs'], head['scale'], head['buckets']),
+                         (9, 3680, src_head['scale'], src_head['buckets']))
+        self.assertEqual(len(out), 64 + 128 + 3680 * 1024 + 1024 + 8 * 1024 * 2 + 32)
+        kr = models.arch_from_net('h512pp', out[64:])
+        self.assertEqual((kr.regions, kr.table), (self.M4, PHASE))
+        net, src = models.unpack(kr, out[64:]), models.unpack(self.pp, source[64:])
+        perturbed = extend_weights.regioned_net(source, perturb=3)
+        pnet = models.unpack(kr, perturbed[64:])
+        first = list(src['ftw'][:768 * 512])
+        self.assertEqual(list(pnet['ftw'][:768 * 512]), first)  # region 0 kept
+        for r in (1, 2, 3):
+            block = list(pnet['ftw'][768 * 512 * r:768 * 512 * (r + 1)])
+            self.assertNotEqual(block, first, r)
+            self.assertTrue(all(abs(x) <= abs(y) for x, y in zip(block, first)), r)
+        differs = 0
+        for fen in FENS + ['r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4K1R b kq - 1 1']:
+            board = chess.Board(fen)
+            self.assertEqual(models.r_int(kr, net, 107, board), models.r_int(self.pp, src, 107, board), fen)
+            differs += models.r_int(kr, pnet, 107, board) != models.r_int(self.pp, src, 107, board)
+        self.assertGreater(differs, 0)  # a king off e1 / e8 reads a perturbed region
+        with self.assertRaises(ValueError):
+            extend_weights.regioned_net(out)  # not an S512+PP file
+
+    def test_the_link_clamp_reads_every_regions_piece_rows(self):
+        import pp_bound
+        source = bytearray(self.net_of(self.pp, synthetic_weights(self.pp, 13)))
+        out = bytearray(extend_weights.regioned_net(bytes(source)))
+        _, over8, clamped8, allow8 = pp_bound.bound(source)
+        w, over9, clamped9, allow9 = pp_bound.bound(out)
+        self.assertEqual((over9, clamped9, allow9), (over8, clamped8, allow8))  # equal regions, equal bound
+        at, h = pp_bound.WEIGHTS_AT, 512
+
+        def put(row, unit, value):
+            struct.pack_into('<h', out, at + 2 * (row * h + unit), value)
+        # Unit 7: a region-3 piece weight of 900 leaves (32767 - |bias| - 28,800) // 64 for the links; a link
+        # weight of 200 is over it and is clamped. Unit 9: a piece weight of 1,100 alone breaks the bound.
+        put(768 * 3 + 50, 7, 900)
+        put(3072 + 10, 7, 200)
+        put(768 * 2 + 5, 9, 1100)
+        w, over, clamped, allow = pp_bound.bound(out)
+        self.assertEqual(allow[7], (32767 - abs(struct.unpack_from('<h', out, at + 2 * (3680 * h + 7))[0]) - 28800)
+                         // 64)
+        self.assertEqual(w[(3072 + 10) * h + 7], allow[7])
+        self.assertLess(allow[9], 0)
+        self.assertEqual(pp_bound.piece_bound_units(allow), 1)
+        self.assertEqual([w[r * h + 9] for r in range(3072, 3680)],
+                         [struct.unpack_from('<h', out, at + 2 * (r * h + 9))[0] for r in range(3072, 3680)])
+
+    def test_the_committed_test_net_is_r8brft1_expanded(self):
+        # nets/r8brft1kr4.fnet (CI's network job builds it; its bench is r8brft1's) is reproducible.
+        nets = HERE.parent.parent / 'nets'
+        self.assertEqual(extend_weights.regioned_net((nets / 'r8brft1.fnet').read_bytes()),
+                         (nets / 'r8brft1kr4.fnet').read_bytes())
+
+
+class LowerExposure(unittest.TestCase):
+    """S512+PPXL (architecture 10, bake-off round 3's x_lower arm): S512+PP plus XGR's exposure plane with the
+    rule's lower-class half only, the exposure rows between the piece rows and the links; and its warm start from
+    an S512+PP net (extend_weights.py), float and integer."""
+
+    net_of = RegionedLinks.net_of  # bullet's quantised.bin for float weights, converted to Fork's file
+
+    def setUp(self):
+        self.pp = models.Arch('s512pp', table=PHASE)
+        self.xl = models.Arch('s512ppxl', table=PHASE)
+
+    def test_the_layout(self):
+        xl = self.xl
+        self.assertEqual((xl.id, xl.exposure, xl.exposure_rule, xl.links, xl.factoriser, xl.contacts),
+                         (10, True, 'lower', True, False, False))
+        # Training: 768 pieces, 640 exposure inputs and their 10 factorisers, then the 608 links; saved: the
+        # factorisers merged, so the links follow the 640 exposure rows.
+        self.assertEqual((xl.exposure_start, xl.link_start, xl.saved_inputs), (768, 1418, 2016))
+        self.assertEqual(training_inputs(xl), 1418 + 608)
+        self.assertEqual([models.merged_index(xl, f) for f in (0, 767, 768, 1407, 1408, 1417, 1418, 2025)],
+                         [0, 767, 768, 1407, None, None, 1408, 2015])
+        desc = json.loads((HERE / 's512ppxl.json').read_text(encoding='utf-8'))
+        self.assertEqual((desc['architecture'], desc['inputs'], desc['quantised'][0]['cols']), (10, 2016, 2016))
+        self.assertEqual(desc['table'], json.loads((HERE / 's512pp.json').read_text(encoding='utf-8'))['table'])
+
+    def test_the_rule_is_the_lower_class_half(self):
+        # Worked by hand, the engine's cases (tests/test_nnue.cpp): the knight on e5 is attacked by the pawn on d6
+        # and the queen on b3 by the bishop on c2 (exposed); the bishop on c2 only by the queen (not exposed under
+        # the lower half, though XGR's whole rule exposes it as undefended). In the second, the rook on d4 is
+        # attacked by the bishop on f6 and the black queen on d1 by the rook (exposed); the white queen on e1 only
+        # by the other queen (not exposed).
+        board = chess.Board('4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1')
+        self.assertEqual(models.exposed_lower_squares(board), {chess.E5, chess.B3})
+        self.assertIn(chess.C2, models.exposed_squares(board))
+        board = chess.Board('6k1/8/5b2/8/3R4/8/8/3qQ1K1 w - - 0 1')
+        self.assertEqual(models.exposed_lower_squares(board), {chess.D4, chess.D1})
+        # On the parity positions: a subset of the whole rule's set, never a pawn or a king, and the rule the
+        # architecture names.
+        fens = reference.read_fens(HERE.parent.parent / 'tests' / 'nnue' / 'parity.epd')
+        nonempty = 0
+        for fen in fens:
+            board = chess.Board(fen)
+            lower = models.exposed_lower_squares(board)
+            self.assertLessEqual(lower, models.exposed_squares(board), fen)
+            self.assertFalse(any(board.piece_type_at(s) in (chess.PAWN, chess.KING) for s in lower), fen)
+            self.assertEqual(models.exposed_set(self.xl, board), lower, fen)
+            nonempty += bool(lower)
+        self.assertGreater(nonempty, 50)
+
+    def test_features_put_the_exposure_inputs_between_the_pieces_and_the_links(self):
+        for fen in FENS:
+            board = chess.Board(fen)
+            exposed = models.exposed_lower_squares(board)
+            stm, ntm, k = models.both_perspectives(self.xl, board)
+            for persp, got in ((board.turn, stm), (not board.turn, ntm)):
+                plain = models.features(self.pp, board, persp)
+                want = [f for f in plain if f < 768] + [1418 + f - 768 for f in plain if f >= 768]
+                orient = 0 if persp == chess.WHITE else 56
+                flip = 7 if (board.king(persp) ^ orient) % 8 < 4 else 0
+                for sq in exposed:
+                    piece = board.piece_at(sq)
+                    own, kind = int(piece.color != persp), piece.piece_type - 1
+                    want += [768 + 320 * own + 64 * kind + (sq ^ orient ^ flip), 768 + 640 + 5 * own + kind]
+                self.assertEqual(got, sorted(want), f'{fen} {persp}')
+            self.assertEqual(k, models.bucket(self.pp, board))
+        self.assertTrue(models.exposed_lower_squares(chess.Board(FENS[1])))  # Kiwipete: the knight on c3
+
+    def test_legs_pass(self):
+        bake = Bakeoff('test_every_architecture_passes_its_legs')
+        bake.setUp()
+        try:
+            rc, stats = bake.legs('s512ppxl')
+        finally:
+            bake.tearDown()
+        self.assertEqual(rc, 0)
+        self.assertEqual(stats['positions'], len(FENS))
+        self.assertLess(stats['loss_max'], 30, stats)
+
+    def test_the_float_warm_start_evaluates_as_its_source_and_saves_as_the_integer_expansion(self):
+        w = synthetic_weights(self.pp, 21)
+        wx = netformat.read_weights_bin(extend_weights.exposure_weights(netformat.write_weights_bin(w)))
+        self.assertEqual(len(wx['l0w']), (1418 + 608) * 512)
+        self.assertEqual(wx['l0w'][:768 * 512], w['l0w'][:768 * 512])
+        self.assertTrue(all(x == 0.0 for x in wx['l0w'][768 * 512:1418 * 512]))
+        self.assertEqual(wx['l0w'][1418 * 512:], w['l0w'][768 * 512:])
+        for k in ('l0b', 'l1w', 'l1b'):
+            self.assertEqual(wx[k], w[k])
+        for fen in FENS:
+            board = chess.Board(fen)
+            self.assertEqual(models.r_float(self.xl, wx, board), models.r_float(self.pp, w, board), fen)
+        # Saved by the trainer (the factorisers merged into zero rows) and converted, it is the integer expansion
+        # of the source's own file, byte for byte.
+        self.assertEqual(self.net_of(self.xl, wx), extend_weights.exposure_net(self.net_of(self.pp, w)))
+        with self.assertRaises(ValueError):  # already extended
+            extend_weights.exposure_weights(netformat.write_weights_bin(wx))
+
+    def test_the_integer_expansion_evaluates_as_its_source(self):
+        source = self.net_of(self.pp, synthetic_weights(self.pp, 22))
+        out = extend_weights.exposure_net(source)
+        head, src_head = netformat.header_fields(out), netformat.header_fields(source)
+        self.assertEqual((head['architecture'], head['inputs'], head['scale'], head['buckets']),
+                         (10, 2016, src_head['scale'], src_head['buckets']))
+        self.assertEqual(len(out), 64 + 128 + 2016 * 1024 + 1024 + 8 * 1024 * 2 + 32)
+        xl = models.arch_from_net('s512ppxl', out[64:])
+        self.assertEqual(xl.table, PHASE)
+        net, src = models.unpack(xl, out[64:]), models.unpack(self.pp, source[64:])
+        self.assertEqual(list(net['ftw'][:768 * 512]), list(src['ftw'][:768 * 512]))
+        self.assertTrue(all(x == 0 for x in net['ftw'][768 * 512:1408 * 512]))
+        self.assertEqual(list(net['ftw'][1408 * 512:]), list(src['ftw'][768 * 512:]))
+        seeded = extend_weights.exposure_net(source, perturb=3)
+        pnet = models.unpack(xl, seeded[64:])
+        rows = list(pnet['ftw'][768 * 512:1408 * 512])
+        self.assertTrue(any(rows) and all(abs(x) <= extend_weights.PERTURB_RANGE for x in rows))
+        self.assertEqual(list(pnet['ftw'][:768 * 512]) + list(pnet['ftw'][1408 * 512:]),
+                         list(src['ftw'][:768 * 512]) + list(src['ftw'][768 * 512:]))
+        differs = 0
+        for fen in FENS:
+            board = chess.Board(fen)
+            self.assertEqual(models.r_int(xl, net, 107, board), models.r_int(self.pp, src, 107, board), fen)
+            differs += models.r_int(xl, pnet, 107, board) != models.r_int(self.pp, src, 107, board)
+        self.assertGreater(differs, 0)  # a position with an exposed piece reads the seeded rows
+        with self.assertRaises(ValueError):
+            extend_weights.exposure_net(out)  # not an S512+PP file
+
+    def test_the_link_clamp_leaves_the_exposure_rows_unbounded(self):
+        import pp_bound
+        source = self.net_of(self.pp, synthetic_weights(self.pp, 23))
+        out = bytearray(extend_weights.exposure_net(source))
+        _, over8, clamped8, allow8 = pp_bound.bound(bytearray(source))
+        self.assertEqual(pp_bound.bound(out)[1:], (over8, clamped8, allow8))  # zero exposure rows, the same bound
+        at, h = pp_bound.WEIGHTS_AT, 512
+
+        def put(row, unit, value):
+            struct.pack_into('<h', out, at + 2 * (row * h + unit), value)
+        put(768 + 100, 7, 20000)  # an exposure weight: Fork sums those rows in 32 bits, so no bound applies
+        self.assertEqual(pp_bound.bound(out)[1:], (over8, clamped8, allow8))
+        put(1408 + 10, 7, 2000)  # a link weight far over unit 7's allowance: clamped to it
+        w, over, clamped, allow = pp_bound.bound(out)
+        self.assertEqual(w[(1408 + 10) * h + 7], allow[7])
+        self.assertEqual(w[(768 + 100) * h + 7], 20000)
+        self.assertGreater(clamped, clamped8)
+
+    def test_the_committed_test_files_are_reproducible(self):
+        # nets/r8brft1xl.fnet (CI's network job builds it; its bench is r8brft1's) and the exposed sets of the
+        # parity positions that the engine's test reads (tests/nnue/s512ppxl-exposed.txt).
+        root = HERE.parent.parent
+        self.assertEqual(extend_weights.exposure_net((root / 'nets' / 'r8brft1.fnet').read_bytes()),
+                         (root / 'nets' / 'r8brft1xl.fnet').read_bytes())
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'exposed.txt'
+            self.assertEqual(reference.main(['exposed', '--epd', str(root / 'tests' / 'nnue' / 'parity.epd'),
+                                             '--layout', str(HERE / 's512ppxl.json'), '--out', str(out)]), 0)
+            self.assertEqual(out.read_bytes(), (root / 'tests' / 'nnue' / 's512ppxl-exposed.txt').read_bytes())
 
 
 class FitMaps(unittest.TestCase):

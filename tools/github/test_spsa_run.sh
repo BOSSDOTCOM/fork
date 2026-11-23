@@ -3,8 +3,12 @@
 # Dry runs of tools/github/spsa_run.sh against a fake gh: a shell script that keeps GitHub's state in files
 # (runs not completed, each run's title and inputs, which runs fail or carry other results) and, on "run
 # download", writes the run's shard results with tools/github/fake_spsa_shard.py (each draw's signs and
-# values from its seed, games played on a synthetic quadratic landscape). Checks: no dispatch while any
-# run is busy; a whole SPSA runs every iteration in order, each run in the ledger with its params sha, and
+# values from its seed, games played on a synthetic quadratic landscape). Checks: no dispatch while a run
+# whose jobs are not listed yet is pending; the capacity rule (2026-11-15, sprt_run.sh's): another lane's
+# run holding one job does not hold an iteration back, one holding 38 of 40 does until 3 are free (2 shards
+# plus the build), the default is 40, a run listing no jobs counts as full unless it is older than
+# GHOST_SECS (a ghost, ignored), FORK_SPSA_SERIAL=1 waits for every pending run, the push trigger waits the
+# same way; a whole SPSA runs every iteration in order, each run in the ledger with its params sha, and
 # moves theta toward the landscape's optimum; its own run is taken by title with another run dispatched
 # just after; a failed run stops it, and after a rewind the iteration is played again under a new stage
 # index; results naming another commit, or with a tampered draw, stop it with nothing applied; a commit
@@ -40,14 +44,20 @@ if [ -z "$py" ]; then
 fi
 [ -n "$py" ] || { echo "test_spsa_run.sh: no python found" >&2; exit 1; }
 export PYTHON=$py
+# $tmp in the form $py takes (DESIGN.md section 1, one path helper): Python calls below get paths under it.
+. "$here/../jobs/paths.sh" || exit 1
+tmp=$(fork_path_for "$py" "$tmp") || exit 1
+# The capacity rule's settings come from each test, never from the caller's environment.
+unset FORK_GH_JOBS GHOST_SECS FORK_SPSA_SERIAL
 g() { git -c core.autocrlf=false -c init.defaultBranch=main "$@"; }
 # The tooling under test, committed in a throwaway repository: its commit is also the tuned commit.
 repo=$tmp/repo
-mkdir -p "$repo/tools/github" "$repo/tools/jobs" "$repo/scripts" "$repo/src/tune"
+mkdir -p "$repo/tools/github" "$repo/tools/jobs" "$repo/scripts" "$repo/src/tune" "$repo/src/search"
 cp "$here/spsa.py" "$here/spsa_run.sh" "$here/fake_spsa_shard.py" "$repo/tools/github/"
-cp "$here/../jobs/ledger.py" "$repo/tools/jobs/"
+cp "$here/../jobs/ledger.py" "$here/../jobs/paths.sh" "$repo/tools/jobs/"
 cp "$here/../../scripts/scan-push.sh" "$repo/scripts/"
 cp "$here/../../src/tune/params.hpp" "$repo/src/tune/"
+cp "$here/../../src/search/searcher.hpp" "$repo/src/search/"  # a screen's switch check
 g init -q "$repo"
 g -C "$repo" config user.name test
 g -C "$repo" config user.email test@example.invalid
@@ -61,24 +71,41 @@ cat >"$tmp/gh" <<'EOF'
 # (each run's "ID HEAD_SHA TITLE", newest first; pushes add theirs through the remote's post-receive hook),
 # stall (list no runs for that many more calls), intruder (if present, another run is started right after
 # each of ours), commits (shas on GitHub), run.<id>.json (its inputs), fail.<id>, foreign.<id>, tamper.<id>,
-# landscape.json (the synthetic optimum).
+# landscape.json (the synthetic optimum). The capacity rule (2026-11-15): busy runs are listed as run 900
+# with no jobs (full); active holds other runs not completed, one "ID WORKFLOW JOBS [CREATED]" per line (JOBS
+# their jobs not completed, CREATED an ISO time for the ghost rule); with drain present each jobs query of a
+# run lowers its count by one afterwards. A dispatch or push logs the jobs active held at that moment.
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
 case "$1 $2" in
   "api "*)
-    grep -qx "${2##*/}" "$st/commits" ;;
+    case $2 in
+      */actions/runs/*/jobs*)  # a run's jobs not completed (the driver's capacity rule)
+        rid=${2#*/actions/runs/}
+        rid=${rid%%/*}
+        n=$(awk -v r="$rid" '$1 == r {print $3}' "$st/active" 2>/dev/null)
+        if [ -f "$st/drain" ] && [ "${n:-0}" -gt 0 ]; then
+          awk -v r="$rid" '$1 == r {$3 = $3 - 1} {print}' "$st/active" >"$st/active.new"
+          mv "$st/active.new" "$st/active"
+        fi
+        echo "${n:-0}" ;;
+      *) grep -qx "${2##*/}" "$st/commits" ;;
+    esac ;;
   "run list")
     if [[ "$*" == *displayTitle* ]]; then
       n=$(cat "$st/stall" 2>/dev/null || echo 0)
       if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$st/stall"; else cat "$st/titles" 2>/dev/null; fi
-    else
+    else  # the runs not completed, "ID WORKFLOW CREATED": a busy run (no jobs listed: full), then active's
       n=$(cat "$st/busy")
-      if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$st/busy"; echo 1; else echo 0; fi
+      if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$st/busy"; echo "900 sprt"; fi
+      [ -f "$st/active" ] && awk '{print $1, $2, $4}' "$st/active"
+      true
     fi ;;
   "workflow run")
     ref_sha=0000000000000000000000000000000000000000  # a dispatched run's head commit: the --ref branch's tip
     id=$(($(cat "$st/latest") + 1))
-    echo "$id busy=$(cat "$st/busy") $*" >>"$st/dispatches"
+    held=$(awk '{s += $3} END {print s + 0}' "$st/active" 2>/dev/null)
+    echo "$id busy=$(cat "$st/busy") jobs=${held:-0} $*" >>"$st/dispatches"
     shift 2
     args=()
     while [ $# -gt 0 ]; do [ "$1" = -f ] && args+=("$2"); shift; done
@@ -124,16 +151,18 @@ EOF
 chmod +x "$tmp/gh"
 
 # The SPSA under test: two of R14's margins, the optimum 2 c below RfpMargin's start and 1.5 c above
-# FutilityOffset's.
+# FutilityOffset's. The starts are given (80 and 100, params.hpp's defaults when this was written), so the
+# final retune's new defaults (2026-11-09 on) do not move the test.
 cat >"$tmp/spec.json" <<'EOF'
-{"params": [{"name": "RfpMargin", "c": 6}, {"name": "FutilityOffset", "c": 8}], "fixed": {}, "iterations": 6,
+{"params": [{"name": "RfpMargin", "c": 6, "start": 80}, {"name": "FutilityOffset", "c": 8, "start": 100}],
+ "fixed": {}, "iterations": 6,
  "games": 1600, "shards": 2, "draw_pairs": 1, "tc": "8+0.08", "hash": 16, "loss_budget": 0.5, "pair_sd": 0.21,
  "gain_exponent": 0.602, "stability_offset": 480, "clamp_c": 0.5, "c_decay": 0.0, "average_tail": 0.3,
  "opening_reserve": 2000001}
 EOF
 echo '{"RfpMargin": [68, 6, 1], "FutilityOffset": [112, 8, 1]}' >"$tmp/landscape.json"
 
-setup() {  # label busy
+setup() {  # label busy [spec]
   st=$tmp/$1
   mkdir -p "$st/data"
   echo "$2" >"$st/busy"
@@ -141,15 +170,17 @@ setup() {  # label busy
   echo "$sha" >"$st/commits"
   cp "$tmp/landscape.json" "$st/"
   : >"$st/dispatches"
-  SPSA_DATA=$st/data "$py" -I "$tools/spsa.py" init spsa-t --spec "$tmp/spec.json" --commit "$sha" >"$st/init" 2>&1
+  SPSA_DATA=$st/data "$py" -I "$tools/spsa.py" init spsa-t --spec "${3:-$tmp/spec.json}" --commit "$sha" >"$st/init" 2>&1
 }
 drive() {  # label [env assignments...]; the dispatch trigger unless SPSA_TRIGGER=push is given
-  local label=$1 remote=()
+  # LIMIT=S (if set) cuts a hang, a pending run that never leaves room, after S seconds.
+  local label=$1 remote=() limit=()
   shift
   [ -d "$tmp/$label/remote.git" ] && remote=(SPSA_PUSH_REMOTE="$tmp/$label/remote.git")
+  [ -n "${LIMIT:-}" ] && limit=(timeout "$LIMIT")
   env FAKE_GH="$tmp/$label" FAKE_SHARD="$tools/fake_spsa_shard.py" GH="$tmp/gh" POLL=0 REPO=owner/fork REF="$sha" \
     SPSA_DATA="$tmp/$label/data" FORK_JOBS="$tmp/$label/jobs" SPSA_UNSUPERVISED="${UNSUPERVISED-1}" \
-    SPSA_TRIGGER=dispatch "${remote[@]}" "$@" bash "$tools/spsa_run.sh" spsa-t >"$tmp/$label/out" 2>&1
+    SPSA_TRIGGER=dispatch "${remote[@]}" "$@" "${limit[@]}" bash "$tools/spsa_run.sh" spsa-t >"$tmp/$label/out" 2>&1
   echo $? >"$tmp/$label/rc"
 }
 # A bare remote for the push trigger: phase-4 holds one commit (an empty tree), and its post-receive hook
@@ -167,7 +198,8 @@ st=$FAKE_GH
 while read -r old new ref; do
   [ "$ref" = refs/heads/spsa-run ] || continue
   id=$(($(cat "$st/latest") + 1))
-  echo "$id busy=$(cat "$st/busy") push $new" >>"$st/dispatches"
+  held=$(awk '{s += $3} END {print s + 0}' "$st/active" 2>/dev/null)
+  echo "$id busy=$(cat "$st/busy") jobs=${held:-0} push $new" >>"$st/dispatches"
   git show "$new:.github/spsa-request.json" >"$st/run.$id.json"
   title=$(git log -1 --format=%s "$new")
   { echo "$id $new $title"; cat "$st/titles" 2>/dev/null; } >"$st/titles.new"
@@ -328,6 +360,93 @@ setup_remote pforeign
 touch "$tmp/pforeign/foreign.501"
 drive pforeign SPSA_TRIGGER=push
 check "push: another commit's results exit 1, nothing applied" [ "$(rc pforeign)-$(state pforeign "s['iteration']")" = "1-0" ]
+
+# 43-58: the capacity rule (owner, 2026-11-15; tools/github/sprt_run.sh's room()): the jobs every other run
+# still holds must leave room for the iteration's 2 shards plus its build within FORK_GH_JOBS (default 40).
+# A wait that never ends is cut by LIMIT (exit 124, nothing dispatched or pushed). The fake lowers a drained
+# run's count after each query: the query that saw 37 (3 free) leaves 36 at the dispatch; one on the query
+# that saw 38 would log 37.
+now() { date -u -d "${1:-now}" +%Y-%m-%dT%H:%M:%SZ; }
+setup clane 0
+echo "903 sprt 1" >"$tmp/clane/active"
+LIMIT=60 drive clane SPSA_STOP_AFTER=0
+check "capacity: an SPRT lane's run holding one job does not hold the iteration back" [ "$(rc clane)-$(state clane "s['iteration']")" = "0-1" ]
+check "capacity: dispatched beside it" grep -q "^501 busy=0 jobs=1 " "$tmp/clane/dispatches"
+setup cfull 0
+echo "904 sprt 38" >"$tmp/cfull/active"
+: >"$tmp/cfull/drain"
+LIMIT=60 drive cfull SPSA_STOP_AFTER=0
+check "capacity: a run holding 38 of 40 jobs waits, then the iteration goes" [ "$(rc cfull)-$(dispatches cfull)" = "0-1" ]
+check "capacity: dispatched only when 3 jobs (2 shards + the build) were free" grep -q "^501 busy=0 jobs=36 " "$tmp/cfull/dispatches"
+setup c40 0
+echo "906 ci 18" >"$tmp/c40/active"
+LIMIT=60 drive c40 SPSA_STOP_AFTER=0
+check "capacity: the default is 40, a run holding 18 jobs leaves room" grep -q "^501 busy=0 jobs=18 " "$tmp/c40/dispatches"
+setup c20 0
+echo "906 ci 18" >"$tmp/c20/active"
+LIMIT=10 drive c20 SPSA_STOP_AFTER=0 FORK_GH_JOBS=20
+check "capacity: with FORK_GH_JOBS=20, the same run leaves no room: no dispatch" [ "$(rc c20)-$(dispatches c20)" = "124-0" ]
+setup cfresh 0
+echo "902 ci 0 $(now)" >"$tmp/cfresh/active"
+LIMIT=10 drive cfresh SPSA_STOP_AFTER=0
+check "capacity: a fresh run listing no jobs yet counts as full: no dispatch" [ "$(rc cfresh)-$(dispatches cfresh)" = "124-0" ]
+setup cghost 0
+echo "907 gauntlet 0 2026-01-01T00:00:00Z" >"$tmp/cghost/active"
+LIMIT=60 drive cghost SPSA_STOP_AFTER=0
+check "capacity: a run listing no jobs long after its creation is a ghost: the iteration goes" [ "$(rc cghost)-$(dispatches cghost)" = "0-1" ]
+check "capacity: the ghost is named in the log" grep -q "run 907 (gauntlet) lists no jobs .* ignored as a ghost" "$tmp/cghost/out"
+setup cghost300 0
+echo "908 ci 0 $(now '-300 seconds')" >"$tmp/cghost300/active"
+LIMIT=60 drive cghost300 SPSA_STOP_AFTER=0 GHOST_SECS=120
+check "capacity: GHOST_SECS=120, a run listing no jobs 300 s after its creation is ignored" [ "$(rc cghost300)-$(dispatches cghost300)" = "0-1" ]
+setup cwait300 0
+echo "908 ci 0 $(now '-300 seconds')" >"$tmp/cwait300/active"
+LIMIT=10 drive cwait300 SPSA_STOP_AFTER=0
+check "capacity: under the default GHOST_SECS (900) the same run still counts as full" [ "$(rc cwait300)-$(dispatches cwait300)" = "124-0" ]
+setup cserial 0
+echo "905 sprt 1" >"$tmp/cserial/active"
+LIMIT=10 drive cserial SPSA_STOP_AFTER=0 FORK_SPSA_SERIAL=1
+check "FORK_SPSA_SERIAL=1: a pending run holding one job blocks the dispatch" [ "$(rc cserial)-$(dispatches cserial)" = "124-0" ]
+setup cserial2 2
+LIMIT=60 drive cserial2 SPSA_STOP_AFTER=0 FORK_SPSA_SERIAL=1
+check "FORK_SPSA_SERIAL=1: dispatched once no run is pending" [ "$(rc cserial2)-$(grep -c '^501 busy=0 jobs=0 ' "$tmp/cserial2/dispatches")" = "0-1" ]
+setup cpush 0
+setup_remote cpush
+echo "909 sprt 38" >"$tmp/cpush/active"
+: >"$tmp/cpush/drain"
+LIMIT=60 drive cpush SPSA_TRIGGER=push SPSA_STOP_AFTER=0
+check "capacity, push: beside a run holding 38 of 40 jobs, pushed only when 3 were free" \
+  bash -c "[ '$(rc cpush)' = 0 ] && grep -q '^501 busy=0 jobs=36 push ' '$tmp/cpush/dispatches'"
+setup cpushwait 0
+setup_remote cpushwait
+echo "910 ci 0 $(now)" >"$tmp/cpushwait/active"
+LIMIT=10 drive cpushwait SPSA_TRIGGER=push SPSA_STOP_AFTER=0
+check "capacity, push: a fresh run with no jobs listed: nothing pushed" bash -c "[ '$(rc cpushwait)' = 124 ] && [ -z '$(pushed cpushwait)' ]"
+
+# 59-62: a screen (design S1, spec "mode": "screen") through the driver: every iteration at the defaults with
+# c_screen, theta never moves, the report gives each parameter's D +- SE and its verdict. The same two margins
+# and landscape as above (RfpMargin's optimum below its default, FutilityOffset's above); their defaults come
+# from params.hpp, so the expected values are read from it.
+cat >"$tmp/screen.json" <<'EOF'
+{"mode": "screen", "params": [
+  {"name": "RfpMargin", "c": 6, "group": "G1a", "placeholder": false, "switch": "UseRfp"},
+  {"name": "FutilityOffset", "c": 8, "group": "G1a", "placeholder": false, "switch": "UseFutility"}],
+ "fixed": {}, "iterations": 3, "games": 1600, "shards": 2, "draw_pairs": 1, "tc": "8+0.08", "hash": 16,
+ "pair_sd": 0.204, "opening_reserve": 2010401}
+EOF
+rfp=$(sed -n 's/^ *X(RfpMargin, \([0-9]*\),.*/\1/p' "$repo/src/tune/params.hpp")
+fut=$(sed -n 's/^ *X(FutilityOffset, \([0-9]*\),.*/\1/p' "$repo/src/tune/params.hpp")
+setup screen 0 "$tmp/screen.json"
+drive screen SPSA_STOP_AFTER=0
+check "screen: SPSA_STOP_AFTER=0 stops after iteration 0, theta at the defaults" \
+  [ "$(rc screen)-$(state screen "s['iteration'], s['theta'] == {'RfpMargin': $rfp.0, 'FutilityOffset': $fut.0}")" = "0-1 True" ]
+drive screen
+check "screen: the whole screen exits 0, theta never moved" \
+  [ "$(rc screen)-$(state screen "s['done'], s['theta'] == {'RfpMargin': $rfp.0, 'FutilityOffset': $fut.0}")" = "0-True True" ]
+check "screen: three dispatches, each with the same params (the defaults, c_screen = 2c: 12 and 16)" \
+  [ "$(grep -o 'params=[^ ]*' "$tmp/screen/dispatches" | sort | uniq -c | awk '{print $1, $2}')" = "3 params=RfpMargin=$rfp.000:12.000,FutilityOffset=$fut.000:16.000" ]
+check "screen: the report gives each D +- SE and a verdict, and final.json" \
+  bash -c "grep -q 'a screen, 3 of 3 iterations' '$tmp/screen/out' && grep -q '^| RfpMargin | G1a | $rfp | 6 | 12 | [-+][0-9.]* +- [0-9.]* |' '$tmp/screen/out' && [ -f '$tmp/screen/data/spsa-t/final.json' ]"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"

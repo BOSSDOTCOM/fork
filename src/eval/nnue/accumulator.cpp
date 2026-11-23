@@ -24,16 +24,26 @@ int clamp_cp(std::int64_t cp) {
   return static_cast<int>(std::clamp<std::int64_t>(cp, -(EvalLimit - 1), EvalLimit - 1));
 }
 
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
 bool pawns_changed(const FeatureDelta& d) { return d.pawn_change; }
+
+// The first link row: after the piece rows (H512+PP: after every region's;
+// S512+PP's is the constant 768; S512+PPXL's after its exposure rows, 1,408).
+int link_start(const NetFile& net) {
+  if constexpr (NetRegioned)
+    return NetPieceSquares * net.region_count;
+  else
+    return NetPieceSquares + (NetExposure ? NetExposureRows : 0);
+}
 
 // S512+PP: adds one perspective's link rows (from the two sides' pawns, in
 // frame `flip`) to its sums.
-void add_link_rows(const NetFile& net, const Bitboard (&pawns)[2], Color perspective, int flip, std::int16_t* v) {
+void add_link_rows(const NetFile& net, const Bitboard (&pawns)[2], Color perspective, int flip,
+                   std::int16_t* v) {
   std::int32_t inputs[LinkMaxActive];
   const int n = link_inputs(pawns[White], pawns[Black], perspective, flip, inputs);
   for (int k = 0; k < n; ++k) {
-    const std::int16_t* w = column(net, NetPieceSquares + inputs[k]);
+    const std::int16_t* w = column(net, link_start(net) + inputs[k]);
     for (int i = 0; i < NetHidden; ++i) v[i] = static_cast<std::int16_t>(v[i] + w[i]);
   }
 }
@@ -62,18 +72,18 @@ DeltaColumns columns_for(const NetFile& net, const FeatureDelta& d, Color perspe
     c.add[c.adds] = column(net, c.add_rows[c.adds]);
     ++c.adds;
   }
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
   if (pawns_changed(d)) {
     std::int32_t removed[LinkMaxActive], added[LinkMaxActive];
     int nr = 0, na = 0;
     link_changes(d.pawns_before, d.pawns_after, perspective, f.flip, removed, nr, added, na);
     for (int i = 0; i < nr; ++i) {
-      c.sub_rows[c.subs] = NetPieceSquares + removed[i];
+      c.sub_rows[c.subs] = link_start(net) + removed[i];
       c.sub[c.subs] = column(net, c.sub_rows[c.subs]);
       ++c.subs;
     }
     for (int i = 0; i < na; ++i) {
-      c.add_rows[c.adds] = NetPieceSquares + added[i];
+      c.add_rows[c.adds] = link_start(net) + added[i];
       c.add[c.adds] = column(net, c.add_rows[c.adds]);
       ++c.adds;
     }
@@ -92,26 +102,46 @@ DeltaColumns columns_for(const NetFile& net, const FeatureDelta& d, Color perspe
   }
 }
 
+// The vector paths work in register tiles: a tile of the parent's sums is
+// loaded once, every removed and added row is applied to it, and it is
+// stored once (one pass per row over the tile, so a row's loop overhead is
+// paid once per tile, not once per vector). int16 addition wraps, so the
+// order of the rows cannot change the result, and the net file's bounds keep
+// the final sums in range: every path equals the scalar reference.
 #if defined(__AVX512BW__)
-// 32 int16 lanes per vector.
+// 32 int16 lanes per vector; the whole perspective (16 vectors at 512
+// hidden) fits one tile in AVX-512's 32 registers.
 void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
-  for (int i = 0; i < NetHidden; i += 32) {
-    __m512i x = _mm512_load_si512(src + i);
-    for (int k = 0; k < c.subs; ++k) x = _mm512_sub_epi16(x, _mm512_load_si512(c.sub[k] + i));
-    for (int k = 0; k < c.adds; ++k) x = _mm512_add_epi16(x, _mm512_load_si512(c.add[k] + i));
-    _mm512_store_si512(dst + i, x);
+  constexpr int Lanes = 32, Tile = NetHidden / Lanes < 16 ? NetHidden / Lanes : 16;
+  static_assert(NetHidden % (Lanes * Tile) == 0);
+  for (int i = 0; i < NetHidden; i += Lanes * Tile) {
+    __m512i x[Tile];
+    for (int t = 0; t < Tile; ++t) x[t] = _mm512_load_si512(src + i + Lanes * t);
+    for (int k = 0; k < c.subs; ++k)
+      for (int t = 0; t < Tile; ++t)
+        x[t] = _mm512_sub_epi16(x[t], _mm512_load_si512(c.sub[k] + i + Lanes * t));
+    for (int k = 0; k < c.adds; ++k)
+      for (int t = 0; t < Tile; ++t)
+        x[t] = _mm512_add_epi16(x[t], _mm512_load_si512(c.add[k] + i + Lanes * t));
+    for (int t = 0; t < Tile; ++t) _mm512_store_si512(dst + i + Lanes * t, x[t]);
   }
 }
 #elif defined(__AVX2__)
-// 16 int16 lanes per vector.
+// 16 int16 lanes per vector; tiles of 8 of AVX2's 16 registers.
 void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
-  for (int i = 0; i < NetHidden; i += 16) {
-    __m256i x = _mm256_load_si256(reinterpret_cast<const __m256i*>(src + i));
+  constexpr int Lanes = 16, Tile = 8;
+  static_assert(NetHidden % (Lanes * Tile) == 0);
+  const auto at = [](const std::int16_t* p) {
+    return _mm256_load_si256(reinterpret_cast<const __m256i*>(p));
+  };
+  for (int i = 0; i < NetHidden; i += Lanes * Tile) {
+    __m256i x[Tile];
+    for (int t = 0; t < Tile; ++t) x[t] = at(src + i + Lanes * t);
     for (int k = 0; k < c.subs; ++k)
-      x = _mm256_sub_epi16(x, _mm256_load_si256(reinterpret_cast<const __m256i*>(c.sub[k] + i)));
+      for (int t = 0; t < Tile; ++t) x[t] = _mm256_sub_epi16(x[t], at(c.sub[k] + i + Lanes * t));
     for (int k = 0; k < c.adds; ++k)
-      x = _mm256_add_epi16(x, _mm256_load_si256(reinterpret_cast<const __m256i*>(c.add[k] + i)));
-    _mm256_store_si256(reinterpret_cast<__m256i*>(dst + i), x);
+      for (int t = 0; t < Tile; ++t) x[t] = _mm256_add_epi16(x[t], at(c.add[k] + i + Lanes * t));
+    for (int t = 0; t < Tile; ++t) _mm256_store_si256(reinterpret_cast<__m256i*>(dst + i + Lanes * t), x[t]);
   }
 }
 #else
@@ -156,8 +186,8 @@ void sum_perspective(const NetFile& net, Color perspective, Frame f, ForEach for
   return net.phase_table[game_phase(pos)];
 }
 
-#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8
+#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
 // sum over both halves (side to move first) of v * (v * w), v the clipped
 // value: S-512's and H-512's output, and each of XGR's experts.
 std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
@@ -173,9 +203,11 @@ std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm
 }
 
 #if defined(__AVX2__)
-// v * w is exact in 16 bits (|w| <= 128 is the loader's bound), and each
-// int32 lane adds 2 * 2H / 16 products of at most 8,323,200 (128 at H = 512),
-// far below the int32 limit, so the sum equals the scalar one.
+// v * w is exact in 16 bits (|w| <= 128 is the loader's bound). The lanes
+// and their final reduction add in int32: every partial sum is a sum of some
+// of the products v * v * w, so the loader's bound on QA^2 times the
+// bucket's sum of |w| (net_file.cpp, sums_in_range; bug review 2026-11-11,
+// E3) keeps each within int32, and the sum equals the scalar one.
 std::int64_t squared_sum(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
   const __m256i zero = _mm256_setzero_si256(), qa = _mm256_set1_epi16(NetQa);
   __m256i sum = _mm256_setzero_si256();
@@ -358,6 +390,41 @@ bool add_exposure_rows(const NetFile& net, const Accumulator& acc, const Positio
 }
 #endif
 
+#if FORK_NET_ARCH == 10
+// S512+PPXL: the accumulator (pieces and links) plus the exposed pieces'
+// exposure rows (exposed_lower's set), found and summed at every evaluation
+// by the added-rows kernel: in 32 bits, held to the int16 range in `out` (the
+// net file bounds the piece and link rows, not the exposure rows, and the
+// output clips each value to [0, QA], so holding the sum to int16 first
+// changes nothing). False, with `out` untouched, when no piece is exposed.
+// FORK_DEBUG builds check the set against the square-by-square rule.
+template <bool Scalar>
+bool add_exposure_rows(const NetFile& net, const Accumulator& acc, const Position& pos, Accumulator& out) {
+  const Bitboard exposed = exposed_lower(pos);
+#ifdef FORK_DEBUG
+  if (exposed != exposed_lower_reference(pos)) __builtin_trap();
+#endif
+  if (!exposed) return false;
+  for (const Color perspective : {White, Black}) {
+    const Frame f = frame_of(net, perspective, pos.king_square(perspective));
+    const std::int16_t* rows[30];  // at most every piece but the kings and pawns (never exposed)
+    int n = 0;
+    for (Bitboard b = exposed; b;) {
+      const Square s = pop_lsb(b);
+      const Piece p = pos.piece_at(s);
+      const Square seen = perspective == White ? s : s ^ 56;
+      rows[n++] = column(
+          net, NetPieceSquares + 320 * (side_of(p) != perspective) + 64 * kind_of(p) + (seen ^ f.flip));
+    }
+    if constexpr (Scalar)
+      sum_rows_saturated_scalar(acc.values[perspective], rows, n, out.values[perspective]);
+    else
+      sum_rows_saturated(acc.values[perspective], rows, n, out.values[perspective]);
+  }
+  return true;
+}
+#endif
+
 #if FORK_NET_ARCH == 7
 // S512cl: the accumulator plus the contact and link rows (contacts.hpp), found
 // from the position and summed in 32 bits at every evaluation (no
@@ -385,7 +452,8 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
 #if FORK_NET_ARCH == 1
   return Scalar ? output_layer_scalar(net, acc, pos.side_to_move())
                 : output_layer(net, acc, pos.side_to_move());
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
 #if FORK_NET_ARCH == 6
   Accumulator summed;
   const Accumulator& a = add_exposure_rows(net, acc, pos, summed) ? summed : acc;
@@ -393,6 +461,9 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
   Accumulator summed;
   add_contact_rows<Scalar>(net, acc, pos, summed);
   const Accumulator& a = summed;
+#elif FORK_NET_ARCH == 10
+  Accumulator summed;
+  const Accumulator& a = add_exposure_rows<Scalar>(net, acc, pos, summed) ? summed : acc;
 #else
   const Accumulator& a = acc;
 #endif
@@ -498,20 +569,29 @@ FeatureDelta delta_for_move(const Position& before, Move m) {
     remove(before.piece_at(captured), captured);
   }
   add(m.is_promotion() ? piece_of(us, m.promo_type()) : mover, to);
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
   // Castling moves no pawn; otherwise the mover or the captured piece may be one.
   const bool captured_pawn = d.removed_count == 2 && kind_of(d.removed_piece[1]) == Pawn;
   if (kind_of(mover) == Pawn || captured_pawn) {
     d.pawn_change = true;
     for (const Color c : {White, Black}) d.pawns_before[c] = d.pawns_after[c] = before.pieces(c, Pawn);
     for (int i = 0; i < d.removed_count; ++i)
-      if (kind_of(d.removed_piece[i]) == Pawn) d.pawns_after[side_of(d.removed_piece[i])] &= ~bb(d.removed_square[i]);
+      if (kind_of(d.removed_piece[i]) == Pawn)
+        d.pawns_after[side_of(d.removed_piece[i])] &= ~bb(d.removed_square[i]);
     for (int i = 0; i < d.added_count; ++i)
-      if (kind_of(d.added_piece[i]) == Pawn) d.pawns_after[side_of(d.added_piece[i])] |= bb(d.added_square[i]);
+      if (kind_of(d.added_piece[i]) == Pawn)
+        d.pawns_after[side_of(d.added_piece[i])] |= bb(d.added_square[i]);
   }
 #endif
   return d;
 }
+
+#ifdef FORK_SEARCH_STATS
+int delta_row_count(const NetFile& net, const FeatureDelta& d, Color perspective, Frame f) {
+  const DeltaColumns c = columns_for(net, d, perspective, f);
+  return c.subs + c.adds;
+}
+#endif
 
 void accumulate_board(const NetFile& net, const Position& pos, Accumulator& out) {
   for (const Color perspective : {White, Black}) {
@@ -525,7 +605,7 @@ void accumulate_board(const NetFile& net, const Position& pos, Accumulator& out)
           }
         },
         out);
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
     const Bitboard pawns[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
     add_link_rows(net, pawns, perspective, f.flip, out.values[perspective]);
 #endif
@@ -583,6 +663,50 @@ Bitboard exposed_pieces(const Position& pos) {
     out |= pos.pieces(c, Rook) & enemy[1];
     out |= pos.pieces(c, Queen) & enemy[2];
     out |= (pos.pieces(c) & ~pos.pieces(King)) & enemy[4] & ~upto[c][4];
+  }
+  return out;
+}
+#endif
+
+#if FORK_NET_ARCH == 10
+// A piece can be exposed only by enemy attackers of a lower class: knights
+// and bishops by pawns; rooks by pawns, knights and bishops; queens by those
+// and rooks. So the enemy's attack sets are built up by class, each only when
+// a piece it could expose remains (most positions stop after the pawns' or
+// the minors'). Attacks are symmetric on one occupancy, so the sets give the
+// same answer as each piece's attackers (exposed_lower_reference).
+Bitboard exposed_lower(const Position& pos) {
+  const Bitboard occ = pos.pieces();
+  Bitboard out = 0;
+  for (const Color c : {White, Black}) {
+    const Color e = ~c;
+    const Bitboard minors = pos.pieces(c, Knight, Bishop), rooks = pos.pieces(c, Rook),
+                   queens = pos.pieces(c, Queen);
+    if (!(minors | rooks | queens)) continue;
+    const Bitboard pawns = pos.pieces(e, Pawn);
+    Bitboard hit = e == White ? ((pawns << 7) & ~FileH) | ((pawns << 9) & ~FileA)
+                              : ((pawns >> 9) & ~FileH) | ((pawns >> 7) & ~FileA);
+    out |= minors & hit;
+    if (!(rooks | queens)) continue;
+    for (Bitboard b = pos.pieces(e, Knight); b;) hit |= knight_attacks(pop_lsb(b));
+    for (Bitboard b = pos.pieces(e, Bishop); b;) hit |= bishop_attacks(pop_lsb(b), occ);
+    out |= rooks & hit;
+    if (!queens) continue;
+    for (Bitboard b = pos.pieces(e, Rook); b;) hit |= rook_attacks(pop_lsb(b), occ);
+    out |= queens & hit;
+  }
+  return out;
+}
+
+Bitboard exposed_lower_reference(const Position& pos) {
+  constexpr int Class[6] = {1, 2, 2, 3, 4, 5};  // pawn, knight, bishop, rook, queen, king
+  const Bitboard occ = pos.pieces();
+  Bitboard out = 0;
+  for (Bitboard b = occ & ~pos.pieces(King); b;) {
+    const Square s = pop_lsb(b);
+    const Piece p = pos.piece_at(s);
+    for (Bitboard a = pos.attackers_to(s, occ) & pos.pieces(~side_of(p)); a;)
+      if (Class[kind_of(pos.piece_at(pop_lsb(a)))] < Class[kind_of(p)]) out |= bb(s);
   }
   return out;
 }
@@ -671,15 +795,77 @@ int output_layer(const NetFile& net, const Accumulator& acc, Color stm) {
 #endif  // FORK_NET_ARCH == 1
 
 void FeatureStack::reset(const NetFile& net, const Position& root) {
+#ifdef FORK_SEARCH_STATS
+  ++tally_.root_refreshes;
+#endif
   Entry& e = entries_[0];
   for (const Color perspective : {White, Black}) {
     e.frame[perspective] = frame_of(net, perspective, root.king_square(perspective));
     e.computed[perspective] = true;
   }
   accumulate_board(net, root, e.acc);
+#if FORK_NET_ARCH == 9
+  // Every snapshot starts as the empty board of this net.
+  for (auto& side : snapshots_)
+    for (FrameSnapshot& s : side) {
+      std::memcpy(s.values, net.ft_bias, sizeof s.values);
+      for (auto& by_kind : s.pieces)
+        for (Bitboard& b : by_kind) b = 0;
+    }
+#endif
 }
 
+#if FORK_NET_ARCH == 9
+void FeatureStack::refresh_from_snapshot(const NetFile& net, int ply, Color perspective,
+                                         const Position& pos) {
+#ifdef FORK_SEARCH_STATS
+  ++tally_.frame_refreshes;
+#endif
+  Entry& e = entries_[ply];
+  const Frame f = e.frame[perspective];
+  FrameSnapshot& snap = snapshots_[perspective][snapshot_slot(f)];
+  // The rows of the pieces that differ (at most 32 each way), then the links
+  // of the pawns that differ (link_changes holds for any two pawn sets: the
+  // links of a pawn that left or arrived, at most 64 each way at the links'
+  // rank limit): at most 96 rows each way, within DeltaColumns' room.
+  static_assert(DeltaColumns::Room >= 32 + 64);
+  DeltaColumns c;
+  for (const Color side : {White, Black})
+    for (int k = Pawn; k <= King; ++k) {
+      const Piece p = piece_of(side, PieceType(k));
+      const Bitboard now = pos.pieces(side, PieceType(k)), then = snap.pieces[side][k];
+      for (Bitboard b = then & ~now; b;) {
+        c.sub_rows[c.subs] = feature_index(perspective, p, pop_lsb(b), f);
+        c.sub[c.subs] = column(net, c.sub_rows[c.subs]);
+        ++c.subs;
+      }
+      for (Bitboard b = now & ~then; b;) {
+        c.add_rows[c.adds] = feature_index(perspective, p, pop_lsb(b), f);
+        c.add[c.adds] = column(net, c.add_rows[c.adds]);
+        ++c.adds;
+      }
+    }
+  const Bitboard pawns_then[2] = {snap.pieces[White][Pawn], snap.pieces[Black][Pawn]};
+  const Bitboard pawns_now[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
+  if (pawns_then[White] != pawns_now[White] || pawns_then[Black] != pawns_now[Black]) {
+    std::int32_t removed[LinkMaxActive], added[LinkMaxActive];
+    int nr = 0, na = 0;
+    link_changes(pawns_then, pawns_now, perspective, f.flip, removed, nr, added, na);
+    for (int i = 0; i < nr; ++i) c.sub[c.subs++] = column(net, link_start(net) + removed[i]);
+    for (int i = 0; i < na; ++i) c.add[c.adds++] = column(net, link_start(net) + added[i]);
+  }
+  advance_values(snap.values, c, snap.values);
+  for (const Color side : {White, Black})
+    for (int k = Pawn; k <= King; ++k) snap.pieces[side][k] = pos.pieces(side, PieceType(k));
+  std::memcpy(e.acc.values[perspective], snap.values, sizeof snap.values);
+  e.computed[perspective] = true;
+}
+#endif
+
 void FeatureStack::push_move(const NetFile& net, int ply, const Position& before, Move m) {
+#ifdef FORK_SEARCH_STATS
+  ++tally_.move_pushes;
+#endif
   const Entry& parent = entries_[ply];
   Entry& e = entries_[ply + 1];
   e.delta = delta_for_move(before, m);
@@ -689,8 +875,16 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
     e.frame[Black] = parent.frame[Black];
     const Color us = before.side_to_move();
     if (kind_of(before.piece_at(m.from())) == King) {
+#ifdef FORK_SEARCH_STATS
+      ++tally_.king_pushes;
+#endif
       const Square to = m.is_castle() ? Position::castle_landing(m.from(), m.to()).king : m.to();
       const Frame f = frame_of(net, us, to);
+#if FORK_NET_ARCH == 9
+      // The mover's frame may change: then the first evaluation that needs
+      // this perspective at this ply or below takes it from the snapshot.
+      e.frame[us] = f;
+#else
       if (f != parent.frame[us]) {
         // The mover's perspective sees a new frame: its sums from the board
         // after the move (the parent's pieces with the delta applied).
@@ -710,7 +904,7 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
               for (int i = 0; i < d.added_count; ++i) visit(d.added_piece[i], d.added_square[i]);
             },
             e.acc);
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
         // A king move that changes the frame changes no pawn, except a king
         // capturing one.
         const Bitboard pawns_now[2] = {d.pawn_change ? d.pawns_after[White] : before.pieces(White, Pawn),
@@ -718,12 +912,20 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
         add_link_rows(net, pawns_now, us, f.flip, e.acc.values[us]);
 #endif
         e.computed[us] = true;
+#ifdef FORK_SEARCH_STATS
+        ++tally_.frame_refreshes;
+#endif
       }
+#endif
     }
   }
 }
 
 int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
+#ifdef FORK_SEARCH_STATS
+  ++tally_.evaluations;
+  int longest_walk = 0;
+#endif
 #if FORK_NET_ARCH == 1
   // B0 never changes a frame, so both perspectives are computed together.
   int base = ply;
@@ -731,17 +933,54 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
   for (int p = base + 1; p <= ply; ++p) {
     advance_accumulator(net, entries_[p - 1].acc, entries_[p].delta, entries_[p].acc);
     entries_[p].computed[White] = entries_[p].computed[Black] = true;
+#ifdef FORK_SEARCH_STATS
+    tally_.perspective_updates += 2;
+    for (const Color perspective : {White, Black})
+      tally_.update_rows +=
+          static_cast<std::uint64_t>(delta_row_count(net, entries_[p].delta, perspective, Frame{}));
+#endif
   }
+#ifdef FORK_SEARCH_STATS
+  longest_walk = ply - base;
+#endif
 #else
   for (const Color perspective : {White, Black}) {
     int base = ply;
+#if FORK_NET_ARCH == 9
+    // Back to the nearest computed ply (ply 0 always is), unless a ply on the
+    // way changed this perspective's frame: then the evaluated ply comes from
+    // the frame's snapshot (the plies between stay uncomputed).
+    while (!entries_[base].computed[perspective]) {
+      if (entries_[base].frame[perspective] != entries_[base - 1].frame[perspective]) {
+        refresh_from_snapshot(net, ply, perspective, pos);
+        base = ply;
+        break;
+      }
+      --base;
+    }
+#else
     while (!entries_[base].computed[perspective]) --base;  // ply 0 is always computed
+#endif
     for (int p = base + 1; p <= ply; ++p) {
       advance_perspective(net, entries_[p - 1].acc, entries_[p].delta, perspective,
                           entries_[p].frame[perspective], entries_[p].acc);
       entries_[p].computed[perspective] = true;
+#ifdef FORK_SEARCH_STATS
+      ++tally_.perspective_updates;
+      tally_.update_rows += static_cast<std::uint64_t>(
+          delta_row_count(net, entries_[p].delta, perspective, entries_[p].frame[perspective]));
+#if FORK_NET_LINKS
+      tally_.link_updates += pawns_changed(entries_[p].delta);
+#endif
+#endif
     }
+#ifdef FORK_SEARCH_STATS
+    longest_walk = std::max(longest_walk, ply - base);
+#endif
   }
+#endif
+#ifdef FORK_SEARCH_STATS
+  tally_.walked_plies += static_cast<std::uint64_t>(longest_walk);
 #endif
 #ifdef FORK_DEBUG
   Accumulator check;

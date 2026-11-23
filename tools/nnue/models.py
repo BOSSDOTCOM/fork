@@ -20,14 +20,22 @@ from the designs, not from Fork's training program or C++:
 Architecture ids: 2 S-512, 3 H-512, 4 AF-S, 5 XGR-512, 6 S512+X (S-512
 plus XGR's exposure inputs), 7 S512cl (S-512 plus Fork's contact and
 pawn-link inputs, contacts.py; ideas.md 41), 8 S512+PP (S-512 plus the
-pawn links only, of rank limit 1; ideas.md 40); 1 is B0, in reference.py. Fork's net file, version 2: the 64-byte header (magic,
+pawn links only, of rank limit 1; ideas.md 40), 9 H512+PP (S512+PP's piece
+inputs copied per own-king region with H-512's factoriser, the links shared
+after the region rows; bake-off round 3's option a, owner 2026-11-14), 10
+S512+PPXL (S512+PP plus XGR's exposure inputs with the exposure rule's
+lower-class half only: exposed_lower_squares; bake-off round 3's x_lower arm,
+owner 2026-11-14); 1 is B0, in reference.py. Fork's net file, version 2: the 64-byte header (magic,
 version 2, id, saved inputs, hidden, QA, QB, S, bucket count, checksum),
 then a 128-byte map block (32 region bytes, 25 phase-table bytes, zeros),
 then the tensors, little-endian:
-- 2, 3, 6: feature weights i16 [inputs][H], feature biases i16 [H], output
+- 2, 3, 6, 7, 8, 9, 10: feature weights i16 [inputs][H], feature biases i16 [H], output
   weights i16 [8][2H] (side to move's half first), output biases i32 [8]
   (6: the inputs are the 768 piece rows, then the 640 exposure rows; 7: the
-  768 piece rows, then the contact rows, then the link rows);
+  768 piece rows, then the contact rows, then the link rows; 8: the 768 piece
+  rows, then the 608 link rows; 9: 768 piece rows per region, then the 608
+  link rows; 10: the 768 piece rows, then the 640 exposure rows, then the 608
+  link rows);
 - 4: feature weights and biases as above, then per stack k: L1 i8 [8][16][H],
   L1 biases i32 [8][16], L2 i16 [8][32][16], L2 biases i32 [8][32], L3 i16
   [8][32], L3 biases i32 [8], and the output multiplier M (i64);
@@ -52,7 +60,13 @@ EXPOSURE_ROWS = 640
 XGR_REGIONS = [0, 1, 1, 1, 2, 2, 2, 2] + [3] * 24  # e1; f1-h1; rank 2; ranks 3-8 (design-novelty.md §2.1)
 PHASE_WEIGHT = {chess.KNIGHT: 1, chess.BISHOP: 1, chess.ROOK: 2, chess.QUEEN: 4}
 CLASS = {chess.PAWN: 1, chess.KNIGHT: 2, chess.BISHOP: 2, chess.ROOK: 3, chess.QUEEN: 4, chess.KING: 5}
-ARCH = {'s512': 2, 'h512': 3, 'afs': 4, 'xgr512': 5, 's512x': 6, 's512cl': 7, 's512pp': 8}
+ARCH = {'s512': 2, 'h512': 3, 'afs': 4, 'xgr512': 5, 's512x': 6, 's512cl': 7, 's512pp': 8, 'h512pp': 9,
+        's512ppxl': 10}
+# The squared-output family: one first layer, 8 phase-picked outputs.
+SQUARED = ('s512', 'h512', 's512x', 's512cl', 's512pp', 'h512pp', 's512ppxl')
+# Their members with rows after the piece rows (exposure, contacts, links): summed after the piece rows, held to
+# int16.
+ADDED_ROWS = ('s512x', 's512cl', 's512pp', 'h512pp', 's512ppxl')
 MAP_BLOCK = 128
 
 # AF-S's integer scales (design-accuracy.md §5.3-5.4), as exact rationals.
@@ -68,20 +82,23 @@ class Arch:
     def __init__(self, name, regions=None, table=None):
         self.name, self.id = name, ARCH[name]
         self.hidden = 512
-        if name == 'xgr512':
-            regions = XGR_REGIONS
+        if name == 'xgr512' or (name == 'h512pp' and regions is None):
+            regions = XGR_REGIONS  # H512+PP's default map is M4, XGR's fixed regions
         self.regions = list(regions) if regions is not None else [0] * 32
         self.region_count = max(self.regions) + 1
-        self.factoriser = name in ('h512', 'afs', 'xgr512')
-        self.exposure = name in ('xgr512', 's512x')
+        self.factoriser = name in ('h512', 'afs', 'xgr512', 'h512pp')
+        self.exposure = name in ('xgr512', 's512x', 's512ppxl')
+        # S512+PPXL's exposure rule is the lower-class half only (exposed_lower_squares).
+        self.exposure_rule = 'lower' if name == 's512ppxl' else 'full'
         self.contacts = name == 's512cl'
-        self.links = name in ('s512cl', 's512pp')  # S512+PP: the pawn links only
-        self.link_ranks = contact_inputs.S512PP_RANKS if name == 's512pp' else contact_inputs.NO_RANK_LIMIT
+        self.links = name in ('s512cl', 's512pp', 'h512pp', 's512ppxl')  # all but S512cl: the pawn links only
+        self.link_ranks = (contact_inputs.S512PP_RANKS if name in ('s512pp', 'h512pp', 's512ppxl')
+                           else contact_inputs.NO_RANK_LIMIT)
         self.picker = 'phase' if name != 'xgr512' else None
         self.table = list(table) if table is not None else []
         if self.picker:
             assert len(self.table) == 25 and max(self.table) <= 7
-        if name in ('h512', 'afs'):
+        if name in ('h512', 'afs', 'h512pp'):
             assert len(self.regions) == 32
 
     @property
@@ -94,7 +111,10 @@ class Arch:
 
     @property
     def contact_start(self):
-        return self.factor_start
+        """After the piece, factoriser and exposure blocks (the exposure
+        plane's 640 rows and 10 factorisers); before 2026-11-14 it was
+        factor_start, on top of a factoriser or exposure block."""
+        return self.exposure_start + (EXPOSURE_ROWS + 10 if self.exposure else 0)
 
     @property
     def link_start(self):
@@ -122,6 +142,27 @@ def exposed_squares(board):
         if lowest < CLASS[piece.piece_type] or not board.attackers(piece.color, sq):
             out.add(sq)
     return out
+
+
+def exposed_lower_squares(board):
+    """S512+PPXL's exposure rule, the lower-class half of XGR's: a non-king
+    piece attacked by an enemy piece of a lower class (python-chess's
+    pseudo-attacks, as exposed_squares'); a pawn never is."""
+    out = set()
+    for sq, piece in board.piece_map().items():
+        if piece.piece_type == chess.KING:
+            continue
+        enemy = board.attackers(not piece.color, sq)
+        if enemy and min(CLASS[board.piece_at(a).piece_type] for a in enemy) < CLASS[piece.piece_type]:
+            out.add(sq)
+    return out
+
+
+def exposed_set(arch, board):
+    """The exposed squares under the architecture's rule (None without the exposure plane)."""
+    if not arch.exposure:
+        return None
+    return exposed_lower_squares(board) if arch.exposure_rule == 'lower' else exposed_squares(board)
 
 
 def features(arch, board, persp, exposed=None):
@@ -159,16 +200,19 @@ def bucket(arch, board):
 
 
 def both_perspectives(arch, board):
-    exposed = exposed_squares(board) if arch.exposure else None
+    exposed = exposed_set(arch, board)
     return (features(arch, board, board.turn, exposed), features(arch, board, not board.turn, exposed),
             bucket(arch, board))
 
 
 def merged_index(arch, f):
     """The saved row an active training input lands on after the merge, or
-    None for a factoriser input."""
-    if f < arch.factor_start or arch.contacts or arch.links:
+    None for a factoriser input. Contacts and links keep their order, after
+    the merged piece and exposure rows."""
+    if f < arch.factor_start:
         return f
+    if f >= arch.contact_start:
+        return arch.factor_start + (EXPOSURE_ROWS if arch.exposure else 0) + (f - arch.contact_start)
     if arch.exposure and arch.exposure_start <= f < arch.exposure_start + EXPOSURE_ROWS:
         return arch.factor_start + (f - arch.exposure_start)
     return None
@@ -205,7 +249,7 @@ def r_float(arch, w, board):
     stm, ntm, k = both_perspectives(arch, board)
     h = arch.hidden
     a_s, a_n = (column_sum(w['l0w'], h, f, w['l0b']) for f in (stm, ntm))
-    if arch.name in ('s512', 'h512', 's512x', 's512cl', 's512pp'):
+    if arch.name in SQUARED:
         x = [clip(v) ** 2 for v in a_s + a_n]
         return dense(w['l1w'], w['l1b'], x, 1, k)[0]
     if arch.name == 'afs':
@@ -258,7 +302,8 @@ def quantise(values, factor, kind):
 
 def merge(arch, w, rows):
     """A first-layer weight with each factoriser column added to the
-    columns it serves (f32 sums), the factoriser columns dropped."""
+    columns it serves (f32 sums), the factoriser columns dropped; the
+    contact and link columns follow unchanged."""
     def col(c):
         return w[c * rows:(c + 1) * rows]
     out = []
@@ -272,6 +317,7 @@ def merge(arch, w, rows):
             own, kind = e // 320, (e % 320) // 64
             a, b = col(x0 + e), col(x0 + EXPOSURE_ROWS + 5 * own + kind)
             out.extend(to_f32(x + y) for x, y in zip(a, b))
+    out.extend(w[arch.contact_start * rows:])
     return out
 
 
@@ -288,7 +334,7 @@ def saved_tensors(arch, w):
     l0 = merge(arch, w['l0w'], h) if arch.factoriser or arch.exposure else w['l0w']
     t['l0w'] = ('i16', quantise(l0, 255, 'i16'))
     t['l0b'] = ('i16', quantise(w['l0b'], 255, 'i16'))
-    if arch.name in ('s512', 'h512', 's512x', 's512cl', 's512pp'):
+    if arch.name in SQUARED:
         t['l1w'] = ('i16', quantise(transpose(w['l1w'], nb, 2 * h), 64, 'i16'))
         t['l1b'] = ('i32', quantise(w['l1b'], 255 * 64, 'i32'))
     elif arch.name == 'afs':
@@ -316,7 +362,7 @@ def fork_tensors(arch, t, scale):
     """Fork's payload tensors (after the map block) from the saved tensors,
     in file order: [(kind, values)]."""
     h = arch.hidden
-    if arch.name in ('s512', 'h512', 's512x', 's512cl', 's512pp'):
+    if arch.name in SQUARED:
         return [t['l0w'], t['l0b'], t['l1w'], t['l1b']]
     if arch.name == 'afs':
         return [t['l0w'], t['l0b'], t['l1w'], ('i32', quantise(t['l1b'][1], AF_S1, 'i32')),
@@ -341,7 +387,7 @@ def map_block(arch):
 def arch_from_net(name, payload):
     """The architecture with the maps a net file's map block stores (an
     evaluation must use the net's own maps, not a description's)."""
-    regions = list(payload[:32]) if name in ('h512', 'afs') else None
+    regions = list(payload[:32]) if name in ('h512', 'afs', 'h512pp') else None
     table = list(payload[32:57]) if name != 'xgr512' else None
     return Arch(name, regions, table)
 
@@ -356,7 +402,8 @@ def unpack(arch, payload):
                       ('mult', 'i64', 1)],
               'xgr512': [('ftw', 'i16', n * h), ('ftb', 'i16', h), ('sidew', 'i16', n * 3), ('sideb', 'i16', 3),
                          ('aw', 'i16', 2 * h), ('ab', 'i32', 1), ('bw', 'i16', 2 * h), ('bb', 'i32', 1)]}
-    shapes['h512'] = shapes['s512x'] = shapes['s512cl'] = shapes['s512pp'] = shapes['s512']
+    for name in SQUARED:
+        shapes[name] = shapes['s512']
     out = {'regions': list(payload[:32]), 'table': list(payload[32:65])}
     for name, kind, count in shapes[arch.name]:
         size = struct.calcsize('<' + CODES[kind])
@@ -399,10 +446,11 @@ def limit_eval(cp):
 
 
 def exposure_sum(net, arch, active, acc):
-    """S512+X, S512cl and S512+PP: the piece accumulator plus the add-on rows
-    (the exposed pieces', or the contacts' and links', or the links'), summed without a range
-    limit and then held to the int16 range (Fork sums them in 32 bits; the
-    output clips to [0, QA] anyway)."""
+    """S512+X, S512cl, S512+PP, H512+PP and S512+PPXL: the piece accumulator plus the add-on rows
+    (the exposed pieces', or the contacts' and links', or the links', or the links' and the exposed pieces'),
+    summed without a range limit and then held to the int16 range (Fork sums the exposure and contact rows in
+    32 bits and keeps the links in the int16 sums within the reader's bound; the output clips to [0, QA]
+    anyway)."""
     out = list(acc)
     for f in saved_features(arch, active):
         if f >= arch.factor_start:
@@ -414,14 +462,14 @@ def exposure_sum(net, arch, active, acc):
 def r_int(arch, net, scale, board):
     stm, ntm, k = both_perspectives(arch, board)
     h = arch.hidden
-    if arch.name in ('s512x', 's512cl', 's512pp'):
+    if arch.name in ADDED_ROWS:
         pieces = [f for f in stm if f < arch.factor_start], [f for f in ntm if f < arch.factor_start]
         a_s, a_n = (exposure_sum(net, arch, f, accumulate(net, arch, p))
                     for f, p in zip((stm, ntm), pieces))
     else:
         a_s, a_n = accumulate(net, arch, stm), accumulate(net, arch, ntm)
     v = [min(max(x, 0), QA) for x in a_s + a_n]
-    if arch.name in ('s512', 'h512', 's512x', 's512cl', 's512pp'):
+    if arch.name in SQUARED:
         w = net['outw'][k * 2 * h:(k + 1) * 2 * h]
         total = sum(vi * (vi * wi) for vi, wi in zip(v, w))
         y = trunc_div(total, QA) + net['outb'][k]
@@ -454,3 +502,21 @@ def r_int(arch, net, scale, board):
     g = min(max(s_s[0] + s_n[0], 0), QA)
     out = trunc_div(out_b * QA + g * (out_a - out_b), QA)
     return limit_eval(trunc_div(out * scale, QA * QB))
+
+
+def evaluator(path, layout_path):
+    """(R-int of a python-chess board, the net's S) for a Fork net file of any architecture: B0 (id 1, a
+    version-1 file) through reference.py, every other id through this module (match_scale.py's rule, shared
+    by the endgame checks so a B0 candidate can be checked too)."""
+    from pathlib import Path
+    import netformat
+    import reference
+    desc = netformat.layout(layout_path)
+    data = Path(path).read_bytes()
+    scale = netformat.header_fields(data)['scale']
+    if desc['architecture'] == 1:
+        net = netformat.read_net(data, desc)
+        return (lambda board: reference.r_int(net, board)), scale
+    arch = arch_from_net(desc['name'], data[netformat.HEADER_BYTES:])
+    net = unpack(arch, data[netformat.HEADER_BYTES:])
+    return (lambda board: r_int(arch, net, scale, board)), scale

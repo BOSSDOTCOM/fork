@@ -212,6 +212,23 @@ TEST_CASE("datagen", "openings beyond the decided bound and over-long games are 
   CHECK(too_long.end == GameEnd::TooLong);
 }
 
+// Bug review 2026-11-11, E5: the table ages once per move. The search
+// advances the age itself (deliberate()); self-play advanced it again before
+// each search, so a 4-ply game aged it 8 steps (fault-checked). The game
+// stops at its ply cap, after exactly 4 searches (3,000 nodes always finish
+// depth 1 from the start position, so no depth-1 fallback runs).
+TEST_CASE("datagen", "the table ages one step per move") {
+  auto p = player(3000, 4);
+  if (!p) return;
+  for (int game = 0; game < 2; ++game) {
+    const int before = p->table_age();
+    GameWriter w;
+    const SelfPlayOutcome o = p->play(Position(), w);
+    CHECK(o.end == GameEnd::TooLong);
+    CHECK_EQ((p->table_age() - before + 256) % 256, 4);
+  }
+}
+
 TEST_CASE("datagen", "a node limit too small for depth 1 falls back to a depth-1 search") {
   // One node never finishes depth 1: every move takes the fallback, and the
   // game runs into the ply cap instead of stopping the program.

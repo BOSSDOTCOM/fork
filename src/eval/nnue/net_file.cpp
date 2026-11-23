@@ -64,13 +64,15 @@ int largest(const std::int16_t* table, int width, int j, int from, int to) {
   return out;
 }
 
+// The piece rows are [0, piece_rows); the bounded rows after them (XGR's
+// exposure rows, the links) are [added_from, added_to).
 bool first_layer_in_range(const std::int16_t* weights, const std::int16_t* bias, int width, int piece_rows,
-                          int rows, std::string& error) {
+                          int added_from, int added_to, std::string& error) {
   for (int j = 0; j < width; ++j) {
     constexpr int MaxAdded = NetLinks ? MaxActiveLinks : MaxExposed;  // the rows after the piece rows
     const std::int64_t worst = std::abs(int{bias[j]}) +
                                MaxActivePieces * largest(weights, width, j, 0, piece_rows) +
-                               MaxAdded * largest(weights, width, j, piece_rows, rows);
+                               MaxAdded * largest(weights, width, j, added_from, added_to);
     if (worst > std::numeric_limits<std::int16_t>::max()) {
       error = "first-layer unit " + std::to_string(j) + " can leave the int16 range";
       return false;
@@ -83,10 +85,15 @@ bool first_layer_in_range(const std::int16_t* weights, const std::int16_t* bias,
 bool sums_in_range(const NetFile& net, std::string& error) {
   const int piece_rows = NetPieceSquares * net.region_count;
   // S512+X and S512cl sum their added rows in 32 bits: only the piece rows are
-  // bounded. S512+PP keeps its link rows in the int16 accumulator, so they are
-  // bounded too (MaxActiveLinks of them).
-  const int bounded_rows = NetArchitecture == 6 || NetArchitecture == 7 ? piece_rows : net.inputs;
-  if (!first_layer_in_range(net.ft_weights, net.ft_bias, NetHidden, piece_rows, bounded_rows, error))
+  // bounded. S512+PP and H512+PP keep their link rows in the int16 accumulator,
+  // so they are bounded too (MaxActiveLinks of them). A regioned net's piece
+  // bound takes the largest weight over every region's rows (a perspective
+  // uses one region's at a time, so this is safe, if loose). S512+PPXL sums
+  // its exposure rows in 32 bits too: of its rows after the piece rows, only
+  // the links (after the exposure rows) are bounded.
+  const int added_from = piece_rows + (NetArchitecture == 10 ? NetExposureRows : 0);
+  const int added_to = NetArchitecture == 6 || NetArchitecture == 7 ? piece_rows : net.inputs;
+  if (!first_layer_in_range(net.ft_weights, net.ft_bias, NetHidden, piece_rows, added_from, added_to, error))
     return false;
 #if FORK_NET_ARCH == 1
   std::int64_t total = 0;
@@ -94,9 +101,13 @@ bool sums_in_range(const NetFile& net, std::string& error) {
   if (NetQa * total + std::abs(std::int64_t{net.out_bias}) > std::numeric_limits<std::int32_t>::max())
     return error = "the output layer can leave the int32 range", false;
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
-    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
   // Squared outputs: each product v * (v * w) needs |w| <= 128 so that v * w
-  // stays in int16; the sums run in int64.
+  // stays in int16. The scalar sum runs in int64, but the AVX2 path adds its
+  // lanes in int32 (accumulator.cpp, squared_sum; bug review 2026-11-11, E3):
+  // every partial sum there is a sum of some of the products, each at most
+  // QA^2 |w| in size, so QA^2 times a bucket's sum of |w| within int32 keeps
+  // every one of them in range.
 #if FORK_NET_ARCH == 5
   const auto& outs = net.expert_weights;
   constexpr int Count = 2;
@@ -104,15 +115,21 @@ bool sums_in_range(const NetFile& net, std::string& error) {
   const auto& outs = net.out_weights;
   constexpr int Count = NetBuckets;
 #endif
-  for (int b = 0; b < Count; ++b)
-    for (int i = 0; i < 2 * NetHidden; ++i)
+  for (int b = 0; b < Count; ++b) {
+    std::int64_t total = 0;
+    for (int i = 0; i < 2 * NetHidden; ++i) {
       if (std::abs(int{outs[b][i]}) > std::numeric_limits<std::int16_t>::max() / NetQa)
         return error = "an output weight is too large for the squared output", false;
+      total += std::abs(int{outs[b][i]});
+    }
+    if (std::int64_t{NetQa} * NetQa * total > std::numeric_limits<std::int32_t>::max())
+      return error = "output bucket " + std::to_string(b) + "'s squared sum can leave the int32 range", false;
+  }
 #if FORK_NET_ARCH == 5
   std::int16_t side[NetInputs * 4];
   for (int f = 0; f < net.inputs; ++f)
     for (int k = 0; k < 4; ++k) side[f * 4 + k] = net.side_weights[f][k];
-  if (!first_layer_in_range(side, net.side_bias, 4, piece_rows, net.inputs, error)) return false;
+  if (!first_layer_in_range(side, net.side_bias, 4, piece_rows, piece_rows, net.inputs, error)) return false;
 #endif
 #elif FORK_NET_ARCH == 4
   // L1 sums at most H products of 127 x 127, L2 16 of 2016 x |w|, L3 32 of
@@ -201,7 +218,8 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
 #if FORK_NET_ARCH == 1
   for (int i = 0; i < 2 * NetHidden; ++i) out.out_weights[i] = c.i16();
   out.out_bias = c.i32();
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
   for (auto& row : out.out_weights)
     for (auto& w : row) w = c.i16();
   for (auto& b : out.out_bias) b = c.i32();
@@ -254,7 +272,8 @@ std::vector<std::uint8_t> write_net_file(const NetFile& net) {
 #if FORK_NET_ARCH == 1
   for (int i = 0; i < 2 * NetHidden; ++i) put_i16(net.out_weights[i]);
   put_i32(net.out_bias);
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
   for (const auto& row : net.out_weights)
     for (const auto w : row) put_i16(w);
   for (const auto b : net.out_bias) put_i32(b);

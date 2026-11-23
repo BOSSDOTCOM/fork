@@ -104,7 +104,9 @@ def calibrate(names, table, bench, target):
 
 
 def run_bench(engine, settings):
-    lines = [f'setoption name {k} value {v}' for k, v in settings.items()] + ['bench', 'quit']
+    # CalibratedScore off first (owner, 2026-11-13: every harness that searches with Fork).
+    lines = (['setoption name CalibratedScore value false'] +
+             [f'setoption name {k} value {v}' for k, v in settings.items()] + ['bench', 'quit'])
     r = subprocess.run([engine], input='\n'.join(lines) + '\n', capture_output=True, text=True)
     if r.returncode:
         raise RuntimeError(f'{engine} exited {r.returncode}: {r.stderr[-500:]}')

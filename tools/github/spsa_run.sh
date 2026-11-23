@@ -25,10 +25,16 @@
 # commit again.
 #
 # Rules, as tools/github/sprt_run.sh's (2026-11-02 and 2026-11-05):
-# - it runs only under the job supervisor (tools/jobs/jobctl.py start github NAME -- ...), type github, so
-#   never beside an SPRT driver; started any other way it refuses;
+# - it runs only under the job supervisor (tools/jobs/jobctl.py start github NAME -- ...); started any
+#   other way it refuses;
 # - the commit must be on GitHub before the first dispatch;
-# - one run at a time: a run is dispatched only when no run of any workflow is queued or in progress;
+# - each iteration's run within the runner capacity, as sprt_run.sh's (owner, 2026-11-15, replacing "no run
+#   of any workflow queued or in progress", which held every iteration back behind the SPRT lanes' runs and
+#   held them back in turn): a run is dispatched or pushed only when the jobs every other run still holds
+#   (its jobs not completed) leave room for the iteration's shard jobs plus its build job within
+#   FORK_GH_JOBS concurrent jobs (default 40). A run that lists no jobs yet counts as holding all of them,
+#   unless it was created more than GHOST_SECS (900) ago: then it is a ghost and is ignored. Any gh failure
+#   means "not now". FORK_SPSA_SERIAL=1 restores the old rule (no run of any workflow queued or in progress);
 # - it finds its run by the title spsa.yml builds from the inputs ("spsa NAME COMMIT stage D"), among runs
 #   newer than the dispatch and not in the ledger, never as "the newest run"; D (the dispatch index) is
 #   never reused, so the title is unique;
@@ -44,7 +50,9 @@
 # repository's .venv, else python3), POLL (seconds between status checks, default 120), FORK_JOBS (the
 # supervisor's and the ledger's folder, default ~/fork-jobs), SPSA_TRIGGER (push or dispatch, default push),
 # SPSA_PUSH_REMOTE (the remote spsa-run is pushed to, default origin; REF is the tooling whose tree a request
-# commit carries), SPSA_UNSUPERVISED=1 (tests only; it then refuses to push to origin).
+# commit carries), FORK_GH_JOBS (the concurrent jobs the runners allow, default 40), GHOST_SECS (default 900),
+# FORK_SPSA_SERIAL=1 (the serial rule above), SPSA_UNSUPERVISED=1 (tests only; it then refuses to push to
+# origin).
 #
 # Exit status: 0 finished (or stopped after SPSA_STOP_AFTER), 1 stopped by a rule above or an error.
 set -uo pipefail
@@ -72,11 +80,15 @@ if [ -z "$py" ]; then
   done
 fi
 [ -n "$py" ] || stop "no Python"
+# $data in the form $py takes (DESIGN.md section 1, one path helper; as sprt_run.sh): on Windows C:/..., which
+# bash takes too.
+. tools/jobs/paths.sh || stop "no tools/jobs/paths.sh"
+data=$(fork_path_for "$py" "$data") || stop "cannot convert $data for $py"
 [ -n "${FORK_JOB:-}" ] || [ "${SPSA_UNSUPERVISED:-}" = 1 ] ||
   stop "not started by the job supervisor (tools/jobs/jobctl.py start github $name -- $0 $name)"
 [ -f "$data/spec.json" ] || stop "no spec: run tools/github/spsa.py init $name first"
 ledger() { "$py" -I tools/jobs/ledger.py "$@"; }
-spsa() { SPSA_DATA=$(dirname "$data") "$py" -I tools/github/spsa.py "$@"; }
+spsa() { SPSA_DATA=${data%/*} "$py" -I tools/github/spsa.py "$@"; }
 field() { "$py" -I -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$1" "$2" | tr -d '\r'; }
 command -v "$GH" >/dev/null 2>&1 || stop "no gh command '$GH' (set GH to its path)"
 commit=$(field "$data/spec.json" commit)
@@ -90,8 +102,38 @@ case $trigger in push | dispatch) ;; *) stop "SPSA_TRIGGER must be push or dispa
 [ "$trigger" != push ] || [ "${SPSA_UNSUPERVISED:-}" != 1 ] || [ "$remote" != origin ] ||
   stop "test mode (SPSA_UNSUPERVISED=1) never pushes to origin: set SPSA_PUSH_REMOTE"
 
-# Prints the number of runs not completed; anything but "0" (gh failing included) counts as busy.
-busy() { "$GH" run list -R "$REPO" -L 50 --json status --jq '[.[] | select(.status != "completed")] | length' 2>/dev/null; }
+GH_JOBS=${FORK_GH_JOBS:-40}
+# The runs not completed, "ID WORKFLOW CREATED" per line.
+pending() { "$GH" run list -R "$REPO" -L 50 --json databaseId,status,workflowName,createdAt \
+  --jq '.[] | select(.status != "completed") | "\(.databaseId) \(.workflowName) \(.createdAt)"' 2>/dev/null | tr -d '\r'; }
+# Exit 0 when an iteration of $1 shards can go now (the capacity rule in the header, sprt_run.sh's room()):
+# room for $1 + 1 jobs beside what the other runs still hold. With FORK_SPSA_SERIAL=1, only when no run is
+# pending at all. Any gh failure means "not now".
+room() {  # shards
+  local list rid wf created n age held=0
+  list=$(pending) || return 1
+  if [ "${FORK_SPSA_SERIAL:-0}" = 1 ]; then
+    [ -z "$list" ]
+    return
+  fi
+  while read -r rid wf created; do
+    [ -n "$rid" ] || continue
+    n=$("$GH" api "repos/$REPO/actions/runs/$rid/jobs?per_page=100" \
+      --jq '[.jobs[] | select(.status != "completed")] | length' 2>/dev/null | tr -d '\r') || return 1
+    case $n in '' | *[!0-9]*) return 1 ;; esac
+    if [ "$n" -eq 0 ]; then
+      age=0
+      [ -n "${created:-}" ] && age=$(( $(date +%s) - $(date -d "$created" +%s 2>/dev/null || date +%s) ))
+      if [ "$age" -gt "${GHOST_SECS:-900}" ]; then
+        echo "capacity: run $rid ($wf) lists no jobs ${age} s after its creation: ignored as a ghost" >&2
+        continue
+      fi
+      n=$GH_JOBS
+    fi
+    held=$((held + n))
+  done <<<"$list"
+  [ $((GH_JOBS - held)) -ge $(($1 + 1)) ]
+}
 # The newest spsa runs, "ID HEAD_SHA TITLE" per line.
 runs() { "$GH" run list -R "$REPO" -w spsa.yml -L 30 --json databaseId,headSha,displayTitle \
   --jq '.[] | "\(.databaseId) \(.headSha) \(.displayTitle)"' 2>/dev/null | tr -d '\r'; }
@@ -136,6 +178,8 @@ while :; do
   plan=$(spsa dispatch "$name" 2>&1) || stop "the next run could not be planned: $plan"
   get() { sed -n "s/^$1=//p" <<<"$plan" | tr -d '\r'; }
   stage=$(get stage) iteration=$(get iteration) sum=$(get params_sha256)
+  shards=$(get shards)
+  case $shards in '' | *[!0-9]*) stop "stage $stage: the plan gives no shard count ('$shards')" ;; esac
   folder=$data/i$stage
   title="spsa $name $commit stage $stage"
   if [ -f "$folder/run_id" ]; then
@@ -155,7 +199,7 @@ while :; do
         stop "stage $stage: run $id: ledger refused it"
       say "iteration $iteration, stage $stage: run $id of push $sha adopted (ledger, import)"
     else
-      while [ "$(busy)" != 0 ]; do sleep "$POLL"; done
+      until room "$shards"; do sleep "$POLL"; done
       if [ -z "$sha" ]; then
         sha=$(push_request "$folder" "$title") || stop "stage $stage: the request commit could not be built"
       fi
@@ -186,7 +230,7 @@ while :; do
         stop "stage $stage: run $id: ledger refused it"
       say "iteration $iteration, stage $stage: run $id adopted by its title (ledger, import)"
     else
-      while [ "$(busy)" != 0 ]; do sleep "$POLL"; done
+      until room "$shards"; do sleep "$POLL"; done
       before=$(runs | awk 'NR == 1 {print $1}')
       before=${before:-0}
       "$GH" workflow run spsa.yml -R "$REPO" --ref "$REF" -f commit="$commit" -f label="$name" -f stage="$stage" \

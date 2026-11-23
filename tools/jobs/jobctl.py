@@ -15,13 +15,21 @@ generation, measurements) start and stop only through it.
   session of their own.
 - A job started from inside another job is not part of it (2026-11-06: stopping a chain job killed the SPRT
   job it had started): the keeper does not carry the caller's FORK_JOB_ID, and a job's processes exclude
-  every other running job's keeper and processes. On Windows those are also in the outer Job Object (a job
+  the keeper and processes of every running job started inside it (recorded as its child through 'parent',
+  the caller's FORK_JOB_ID, or started after it). On Windows those are also in the outer Job Object (a job
   started inside one nests in it), so a stop then ends the outer job's own processes one by one instead of
-  terminating the whole object.
+  terminating the whole object. The job it was started from is never excluded: its Job Object holds every
+  process of the inner one (2026-11-10: excluding it left a nested upload job with no process of its own,
+  so its stop ended nothing, and once its bash was killed by hand it reported none left while the upload
+  lived on).
+- A Windows job's processes in WSL (wsl.exe starts them outside every Job Object; 2026-11-10: a stop ended
+  wsl.exe and the Linux side ran on) carry FORK_JOB_ID through WSLENV; `stop` finds them in every running
+  distribution, as root, sends SIGTERM, SIGKILL after the grace period, and counts them in its check.
 - `stop NAME` stops the whole tree, gently first (SIGTERM on POSIX: fork_datagen ends at a game boundary;
   on Windows the job is terminated), then verifies that no process of the job remains before it releases
   the lock; it exits 1, keeping the lock, if any process survived.
-- Each job's record ($FORK_JOBS/jobs/NAME.json) and events (start, end, stop, reclaim) in
+- Each job's record ($FORK_JOBS/jobs/NAME.json, written whole by a rename; on Windows a read, a rename and a
+  lock's removal each wait while another process's access blocks them) and events (start, end, stop, reclaim) in
   $FORK_JOBS/events.jsonl; the command's output goes to $FORK_JOBS/jobs/NAME.log unless --log names a file.
 
     jobctl.py start TYPE NAME [--log FILE] [--cwd DIR] -- COMMAND [ARG...]
@@ -34,6 +42,7 @@ at a time), datagen, measure, test. $FORK_JOBS defaults to ~/fork-jobs.
 """
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -68,18 +77,44 @@ def lock_path(kind):
     return root() / 'locks' / f'{kind}.json'
 
 
+FILE_PATIENCE = 10.0  # seconds: how long a read, a rename over or a removal of a record or lock waits for access
+
+
+def when_unblocked(action):
+    """Runs action() (a file's read, a rename over it, or its removal), retrying for up to FILE_PATIENCE seconds
+    while it fails for want of access. On Windows a rename over a file or its removal fails while any process has
+    it open, as every read does for a moment (2026-11-12: a keeper's first record write met start's polling read,
+    the keeper died, and its job ran with no keeper recorded), and a read fails while a rename over the file is
+    under way (the same day: a record read as missing, which would let a live job's lock be reclaimed or a
+    nested job's processes be counted as the outer job's)."""
+    deadline = time.monotonic() + FILE_PATIENCE
+    while True:
+        try:
+            return action()
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
+
+
 def read_json(path):
+    """The file's JSON, or None if it is missing, unreadable or not JSON."""
     try:
-        return json.loads(Path(path).read_text(encoding='utf-8'))
+        return json.loads(when_unblocked(lambda: Path(path).read_text(encoding='utf-8')))
     except (OSError, ValueError):
         return None
 
 
 def write_json(path, data):
+    """Writes the file whole: a temporary file of this process's own, then a rename over the old one."""
     path = Path(path)
-    tmp = path.with_suffix('.tmp')
+    tmp = path.with_name(f'{path.name}.{os.getpid()}.tmp')
     tmp.write_text(json.dumps(data, indent=1, sort_keys=True), encoding='utf-8')
-    os.replace(tmp, path)
+    try:
+        when_unblocked(lambda: os.replace(tmp, path))
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 # ---------------------------------------------------------------- the platform's process control
@@ -147,13 +182,29 @@ if WINDOWS:
         finally:
             k32.CloseHandle(h)
 
+    k32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+
+    def pid_started(pid):
+        """The process's creation time as epoch seconds, or None if it cannot be read."""
+        h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return None
+        try:
+            times = [wintypes.FILETIME() for _ in range(4)]
+            if not k32.GetProcessTimes(h, *(ctypes.byref(t) for t in times)):
+                return None
+            ticks = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime  # 100 ns since 1601-01-01 UTC
+            return ticks / 1e7 - 11644473600
+        finally:
+            k32.CloseHandle(h)
+
     def launch(record, cmd, log, cwd):
         """Starts cmd suspended, puts it in a new Job Object, gives it an inheritable handle to the object, then
         lets it run. Returns (Popen, job handle)."""
         job = k32.CreateJobObjectW(None, job_object_name(record['id']))
         if not job:
             raise OSError(ctypes.get_last_error(), 'CreateJobObject')
-        env = dict(os.environ, FORK_JOB_ID=record['id'], FORK_JOB=record['name'])
+        env = dict(os.environ, FORK_JOB_ID=record['id'], FORK_JOB=record['name'], WSLENV=wslenv())
         p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, cwd=cwd, env=env,
                              creationflags=CREATE_SUSPENDED | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)
         if not k32.AssignProcessToJobObject(job, int(p._handle)):
@@ -179,9 +230,67 @@ if WINDOWS:
                 given.add(pid)
             k32.CloseHandle(h)
 
+    def wslenv():
+        """The caller's WSLENV plus FORK_JOB_ID and FORK_JOB, so every Linux process wsl.exe starts for the job
+        carries the job's marker (WSL shares only the variables WSLENV names)."""
+        keep = [v for v in os.environ.get('WSLENV', '').split(':')
+                if v and v.split('/')[0] not in ('FORK_JOB_ID', 'FORK_JOB')]
+        return ':'.join(keep + ['FORK_JOB_ID', 'FORK_JOB'])
+
+    # Run as root in a distro: lists (and signals, unless $2 is 0) every live process whose environment holds
+    # FORK_JOB_ID=$1. The sweep's own processes do not carry it (wsl.exe runs with the keeper's environment).
+    WSL_SWEEP = ('for f in $(grep -lzxF "FORK_JOB_ID=$1" /proc/[0-9]*/environ 2>/dev/null); do p=${f#/proc/}; '
+                 'p=${p%/environ}; st=$(sed "s/.*) //" "/proc/$p/stat" 2>/dev/null | cut -d" " -f1); '
+                 '[ -n "$st" ] && [ "$st" != Z ] || continue; [ "$2" = 0 ] || kill -s "$2" "$p" 2>/dev/null; '
+                 'echo "$p"; done; echo sweep-done')
+
+    def wsl_running():
+        """The running WSL distributions (none without WSL). A distribution that is not running has no process."""
+        if not shutil.which('wsl.exe'):
+            return []
+        try:
+            out = subprocess.run(['wsl.exe', '-l', '--running', '-q'], capture_output=True, timeout=60,
+                                 env=keeper_env(), creationflags=CREATE_NO_WINDOW).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        return [d.strip() for d in out.decode('utf-16-le', 'replace').replace('\0', '').splitlines() if d.strip()]
+
+    def wsl_pids(record, sig='0'):
+        """The job's Linux processes in every running distribution, as 'DISTRO:PID', each sent `sig` first
+        unless it is 0. Only jobs started since 2026-11-10 ('wslenv' in the record) carry the marker. A sweep
+        that does not finish counts as 'DISTRO:unknown': a stop never reports none left without seeing."""
+        if not record.get('wslenv'):
+            return []
+        out = []
+        for distro in wsl_running():
+            try:
+                r = subprocess.run(['wsl.exe', '-d', distro, '-u', 'root', '-e', 'sh', '-c', WSL_SWEEP, 'sh',
+                                    record['id'], sig], capture_output=True, text=True, timeout=60,
+                                   env=keeper_env(), creationflags=CREATE_NO_WINDOW)
+                lines = r.stdout.split()
+            except (OSError, subprocess.TimeoutExpired):
+                lines = []
+            if 'sweep-done' not in lines:
+                out.append(f'{distro}:unknown')
+                continue
+            out += [f'{distro}:{x}' for x in lines if x.isdigit()]
+        return out
+
     def terminate(record, grace):
         """Terminates the Job Object, or, when other jobs' processes are in it (jobs started from inside this
-        one), this job's own processes one by one until none is left."""
+        one), this job's own processes one by one until none is left. Then the job's Linux processes: SIGTERM,
+        SIGKILL after the grace period (wsl.exe's end leaves a process that ignores SIGHUP running). Returns
+        the Linux processes signalled."""
+        terminate_windows(record, grace)
+        linux = wsl_pids(record, 'TERM')
+        if linux:
+            deadline = time.time() + grace
+            while time.time() < deadline and wsl_pids(record):
+                time.sleep(0.5)
+            wsl_pids(record, 'KILL')
+        return linux
+
+    def terminate_windows(record, grace):
         h = k32.OpenJobObjectW(JOB_ALL_ACCESS, False, job_object_name(record['id']))
         if not h:
             return
@@ -243,6 +352,16 @@ else:
             return False
         return stat[stat.rindex(')') + 2:].split()[0] != 'Z'
 
+    def pid_started(pid):
+        """The process's start as epoch seconds (/proc/PID/stat field 22, clock ticks after boot), or None."""
+        try:
+            stat = Path(f'/proc/{pid}/stat').read_text()
+            ticks = int(stat[stat.rindex(')') + 2:].split()[19])
+        except (OSError, ValueError, IndexError):
+            return None
+        boot = last_boot()
+        return None if boot is None else boot + ticks / os.sysconf('SC_CLK_TCK')
+
     def launch(record, cmd, log, cwd):
         env = dict(os.environ, FORK_JOB_ID=record['id'], FORK_JOB=record['name'])
         p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, cwd=cwd, env=env,
@@ -261,6 +380,10 @@ else:
         while time.time() < deadline and own_pids(record):
             time.sleep(0.2)
         send(signal.SIGKILL)
+        return []
+
+    def wsl_pids(record, sig='0'):
+        return []
 
     def spawn_keeper(args):
         return subprocess.Popen([sys.executable, '-I', os.path.abspath(__file__), '_keep', *args],
@@ -273,15 +396,66 @@ def keeper_env():
     return {k: v for k, v in os.environ.items() if k not in ('FORK_JOB_ID', 'FORK_JOB')}
 
 
+def started_at(record):
+    """The record's start as epoch seconds, or None."""
+    from datetime import datetime
+    try:
+        return datetime.strptime(record.get('started', ''), '%Y-%m-%dT%H:%M:%S%z').timestamp()
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+START_SLACK = 2.0   # seconds: a recorded process start against the live one's (Linux reads btime in whole seconds)
+START_WINDOW = 120  # seconds: a record without process starts; its keeper and command start this soon after it
+
+
+def recorded_alive(record, key):
+    """Whether the record's process `key` ('keeper' or 'pid') is alive and is the one the record names, not a
+    process that reused its id (bug review 2026-11-11, T8: a record left "running" counted as live by a reused
+    id). The process must have started when the keeper recorded (KEY_started, kept since 2026-11-11), or, for
+    an older record, within START_WINDOW seconds after the record's start; a start that cannot be read counts
+    as the recorded process, as before."""
+    pid = record.get(key)
+    if not pid or not pid_alive(pid):
+        return False
+    actual = pid_started(pid)
+    if actual is None:
+        return True
+    want = record.get(f'{key}_started')
+    if want is not None:
+        return abs(actual - float(want)) <= START_SLACK
+    started = started_at(record)
+    return started is None or started - START_SLACK <= actual <= started + START_WINDOW
+
+
+def started_inside(other, record, by_id):
+    """Whether `other` was started from inside `record`'s job: its recorded parent chain (the FORK_JOB_ID it was
+    started under, kept since 2026-11-10) reaches `record`, or it started later. A job started inside another
+    always starts after it, so a job that started earlier is never inside this one: it may be the job this one
+    was started from, whose Job Object holds every process of this one (2026-11-10: subtracting it left a nested
+    upload job with no process of its own, and its stop ended nothing)."""
+    parent, seen = other.get('parent'), set()
+    while parent and parent not in seen:
+        if parent == record.get('id'):
+            return True
+        seen.add(parent)
+        parent = (by_id.get(parent) or {}).get('parent')
+    mine, theirs = started_at(record), started_at(other)
+    return mine is not None and theirs is not None and theirs > mine
+
+
 def other_jobs_pids(record):
-    """The keepers and processes of every other job that has not ended or stopped."""
+    """The keepers and processes of every job started inside this one that has not ended or stopped."""
+    records = [r for r in (read_json(path) for path in (root() / 'jobs').glob('*.json')) if r]
+    by_id = {r.get('id'): r for r in records}
     out = set()
-    for path in (root() / 'jobs').glob('*.json'):
-        other = read_json(path)
-        if not other or other.get('id') == record.get('id') or other.get('state') in ('ended', 'stopped', 'failed'):
+    for other in records:
+        if other.get('id') == record.get('id') or other.get('state') in ('ended', 'stopped', 'failed'):
+            continue
+        if not started_inside(other, record, by_id):
             continue
         out.update(job_pids(other))
-        out.update(other[k] for k in ('keeper', 'pid') if other.get(k) and pid_alive(other[k]))
+        out.update(other[k] for k in ('keeper', 'pid') if recorded_alive(other, k))
     return out
 
 
@@ -313,19 +487,16 @@ def live(record):
     that none was left), its recorded keeper and command ids are not counted: a live process with one of them
     is another process that reused the id (2026-11-06, in WSL). A job that started before the machine's last
     boot has no process left whatever its record says: a crash leaves it "running", and its ids are reused
-    (2026-11-07, g3h in WSL)."""
-    try:
-        from datetime import datetime
-        started = datetime.strptime(record.get('started', ''), '%Y-%m-%dT%H:%M:%S%z').timestamp()
-    except (TypeError, ValueError, OverflowError, OSError):
-        started = None
+    (2026-11-07, g3h in WSL). A recorded id counts only while its process is the one recorded (recorded_alive:
+    its start time; bug review 2026-11-11, T8)."""
+    started = started_at(record)
     boot = last_boot()
     if started is not None and boot is not None and started < boot - 60:
         return []
     pids = set(own_pids(record))
     if record.get('state') not in ('ended', 'stopped', 'failed'):
         for k in ('keeper', 'pid'):
-            if record.get(k) and pid_alive(record[k]):
+            if recorded_alive(record, k):
                 pids.add(record[k])
     return sorted(pids)
 
@@ -347,7 +518,7 @@ def take_lock(kind, record):
                 raise RuntimeError(f"type {kind} is held by job {held['name']} (started {held.get('started')}, "
                                    f"processes {live(holder)})")
             event('reclaim', type=kind, lock=held)
-            os.remove(path)
+            when_unblocked(lambda: os.remove(path))
             continue
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             json.dump({'name': record['name'], 'id': record['id'], 'started': record['started']}, f)
@@ -360,7 +531,7 @@ def release_lock(kind, job_id):
     path = lock_path(kind)
     held = read_json(path)
     if held and held.get('id') == job_id:
-        os.remove(path)
+        when_unblocked(lambda: os.remove(path))
 
 
 # ---------------------------------------------------------------- commands
@@ -390,7 +561,7 @@ def cmd_start(argv):
     (root() / 'jobs').mkdir(parents=True, exist_ok=True)
     record = {'name': name, 'type': kind, 'id': uuid.uuid4().hex[:16], 'started': now(), 'command': cmd,
               'cwd': os.path.abspath(cwd or os.getcwd()), 'log': os.path.abspath(log or root() / 'jobs' / f'{name}.log'),
-              'state': 'starting'}
+              'state': 'starting', 'parent': os.environ.get('FORK_JOB_ID')}
     try:
         take_lock(kind, record)
     except RuntimeError as e:
@@ -415,6 +586,7 @@ def cmd_keep(argv):
     name = argv[0]
     record = read_json(job_path(name))
     record['keeper'] = os.getpid()
+    record['keeper_started'] = pid_started(record['keeper'])
     try:
         log = open(record['log'], 'ab')
         p, handle = launch(record, record['command'], log, record['cwd'])
@@ -422,7 +594,9 @@ def cmd_keep(argv):
         record.update(state='failed', error=f'{type(e).__name__}: {e}')
         write_json(job_path(name), record)
         return
-    record.update(state='running', pid=p.pid)
+    record.update(state='running', pid=p.pid, pid_started=pid_started(p.pid))
+    if WINDOWS:
+        record['wslenv'] = True  # its Linux processes carry FORK_JOB_ID (wsl_pids)
     if not WINDOWS:
         record['session'] = p.pid  # the command leads its own session
     write_json(job_path(name), record)
@@ -457,12 +631,12 @@ def cmd_stop(argv):
     if record.get('state') == 'running':
         record.update(state='stopping')
         write_json(job_path(name), record)
-    terminate(record, grace)
+    before += terminate(record, grace) or []
     deadline = time.time() + max(5.0, grace)
-    left = live(record)
+    left = live(record) or wsl_pids(record)
     while left and time.time() < deadline:
         time.sleep(0.2)
-        left = live(record)
+        left = live(record) or wsl_pids(record)
     if left:
         event('stop-failed', name=name, id=record['id'], left=left)
         print(f'jobctl: job {name}: processes still alive after the stop: {left}; the lock is kept')
@@ -472,6 +646,10 @@ def cmd_stop(argv):
     release_lock(record['type'], record['id'])
     event('stop', name=name, id=record['id'], stopped=before)
     print(f'stopped {name}: {len(before)} process(es) ended, none left; lock {record["type"]} released')
+    if WINDOWS and not record.get('wslenv') and any(Path(a).name.lower() in ('wsl', 'wsl.exe')
+                                                     for a in record.get('command', [])):
+        print(f'jobctl: job {name} started before its Linux processes were tracked (2026-11-10): any it left '
+              f'in WSL were not checked')
 
 
 def cmd_status(argv):

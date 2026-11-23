@@ -36,7 +36,9 @@ case "$rel" in
   *.cpp|*.hpp) clang-format -i "$rel" ;;
 esac
 
-out=$(timeout "$limit" scripts/check.sh quick 2>&1)
+# Without the search suites (FORK_QUICK_SEARCH=0, about 1.5 min): the pre-commit hook runs them
+# (owner, 2026-11-12), and here they would push a rebuild past the time limit on every edit.
+out=$(FORK_QUICK_SEARCH=0 timeout "$limit" scripts/check.sh quick 2>&1)
 status=$?
 if [ $status = 124 ]; then
   echo "$out" | tail -n 20 >&2

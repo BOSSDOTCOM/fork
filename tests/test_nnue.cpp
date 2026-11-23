@@ -19,6 +19,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/material.hpp"
@@ -36,6 +37,7 @@
 
 #include "eval/eval.hpp"
 #include "search/hash_memory.hpp"
+#include "search/search_bench.hpp"
 #include "search/searcher.hpp"
 #endif
 
@@ -50,7 +52,10 @@ int uniform(std::uint64_t& rng, int lo, int hi) {
 // Feature weights within +-400 and biases within +-2000 keep every
 // first-layer sum inside int16 (2000 + 62 x 400 < 32767); B0's output
 // weights within +-2000 keep its sum inside int32 (255 x 512 x 2000 < 2^31);
-// squared outputs need |w| <= 128.
+// squared outputs need |w| <= 128 and QA^2 times a bucket's sum of |w|
+// within int32, so their weights stay within +-30 but for one +128 and one
+// -128 per bucket (the edge values): at most 1,022 x 30 + 256 = 30,916, below
+// 2^31 / 255^2 = 33,025.
 std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   auto net = std::make_unique<NetFile>();
   std::uint64_t rng = seed;
@@ -65,18 +70,27 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   net->inputs = NetPieceSquares * net->region_count + (NetExposure ? NetExposureRows : 0) +
                 (NetContacts ? NetContactInputs + NetLinkInputs : 0) + (NetLinks ? NetLinkInputs : 0);
   for (auto& w : net->ft_weights) w = static_cast<std::int16_t>(uniform(rng, -400, 400));
-  // S512+PP's link rows sit in the same int16 sums, up to 64 at once: within
-  // +-150 (2000 + 32 x 400 + 64 x 150 < 32767).
-  if constexpr (NetLinks)
-    for (int i = NetPieceSquares * NetHidden; i < (NetPieceSquares + NetLinkInputs) * NetHidden; ++i)
+  // S512+PP's link rows sit in the same int16 sums, up to 64 at once, after
+  // the piece rows (H512+PP: after every region's; S512+PPXL: after the
+  // exposure rows, which stay within +-400, summed in 32 bits): within +-150
+  // (2000 + 32 x 400 + 64 x 150 < 32767). Each region's piece rows are drawn
+  // on their own, so every region differs.
+  if constexpr (NetLinks) {
+    const int first = NetPieceSquares * net->region_count + (NetExposure ? NetExposureRows : 0);
+    for (int i = first * NetHidden; i < (first + NetLinkInputs) * NetHidden; ++i)
       net->ft_weights[i] = static_cast<std::int16_t>(uniform(rng, -150, 150));
+  }
   for (auto& b : net->ft_bias) b = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
 #if FORK_NET_ARCH == 1
   for (auto& w : net->out_weights) w = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
   net->out_bias = uniform(rng, -100000, 100000);
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
-  for (auto& row : net->out_weights)
-    for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -128, 128));
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
+  for (auto& row : net->out_weights) {
+    for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -30, 30));
+    row[uniform(rng, 0, NetHidden - 1)] = 128;
+    row[NetHidden + uniform(rng, 0, NetHidden - 1)] = -128;
+  }
   for (auto& b : net->out_bias) b = uniform(rng, -100000, 100000);
 #elif FORK_NET_ARCH == 4
   for (auto& stack : net->af1_weights)
@@ -97,8 +111,11 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   for (int f = 0; f < NetInputs; ++f)
     for (int k = 0; k < 3; ++k) net->side_weights[f][k] = static_cast<std::int16_t>(uniform(rng, -300, 300));
   for (int k = 0; k < 3; ++k) net->side_bias[k] = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
-  for (auto& row : net->expert_weights)
-    for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -128, 128));
+  for (auto& row : net->expert_weights) {
+    for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -30, 30));
+    row[uniform(rng, 0, NetHidden - 1)] = 128;
+    row[NetHidden + uniform(rng, 0, NetHidden - 1)] = -128;
+  }
   for (auto& b : net->expert_bias) b = uniform(rng, -100000, 100000);
 #endif
   net->scale = 400;
@@ -197,14 +214,39 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   auto loud = random_net(2);
   loud->ft_bias[7] = 32000;
   rejects(write_net_file(*loud), "a first-layer unit beyond int16");
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
   // One link weight that the most links at once (64 at S512+PP's rank limit)
   // would take past int16 whatever unit 3's bias: its largest piece weight
   // is near the test bound 400, and 32 x 300 + 64 x 400 = 35,200 already
   // exceeds 32,767.
   auto linked = random_net(4);
-  linked->ft_weights[(NetPieceSquares + 500) * NetHidden + 3] = 400;
+  const int first_link = NetPieceSquares * linked->region_count + (NetExposure ? NetExposureRows : 0);
+  linked->ft_weights[(first_link + 500) * NetHidden + 3] = 400;
   rejects(write_net_file(*linked), "a link weight that 64 links would take beyond int16");
+#endif
+#if FORK_NET_ARCH == 10
+  // S512+PPXL's exposure rows are summed in 32 bits, so the reader bounds
+  // only the piece and link rows: an exposure weight of 20,000 (the last
+  // exposure row) is accepted, the same weight in the first link row refused.
+  auto exposed_big = random_net(4);
+  exposed_big->ft_weights[(first_link - 1) * NetHidden + 3] = 20000;
+  CHECK_MSG(read_net_file(write_net_file(*exposed_big), *back, error), "a large exposure weight: " << error);
+  auto link_big = random_net(4);
+  link_big->ft_weights[first_link * NetHidden + 3] = 20000;
+  rejects(write_net_file(*link_big), "a large weight in the first link row");
+#endif
+#if FORK_NET_ARCH == 9
+  // The piece bound ranges over every region's rows: one weight of the last
+  // region at 1,000 takes unit 5 past int16 (2000 + 32 x 1000 > 32,767) though
+  // the first region's rows are all within 400.
+  auto regional = random_net(4);
+  regional->ft_weights[(NetPieceSquares * 3 + 100) * NetHidden + 5] = 1000;
+  rejects(write_net_file(*regional), "a last-region piece weight beyond the int16 bound");
+  // The map must fit the build: a fifth region is refused.
+  auto five = random_net(4);
+  five->regions[31] = 4;
+  five->region_count = 5;
+  rejects(write_net_file(*five), "a fifth king region");
 #endif
 #if FORK_NET_ARCH == 1
   auto wide = random_net(3);
@@ -214,6 +256,33 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   auto wide = random_net(3);
   wide->out_weights[2][5] = 129;
   rejects(write_net_file(*wide), "an output weight beyond the squared output's bound");
+#endif
+#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
+  // Bug review 2026-11-11, E3: every output weight within the |w| <= 128
+  // bound, but one bucket's QA^2 sum of |w| beyond int32, where the AVX2
+  // path's 32-bit lane sums could overflow (all 2H weights at 128: 255^2 x
+  // 1,024 x 128 = 8.5e9). The reader refuses it; one weight less than the
+  // bound's limit is accepted. 2^31 / 255^2 = 33,025.5, so a bucket summing
+  // to 33,025 fits (2,147,450,625) and 33,026 does not (2,147,515,650).
+#if FORK_NET_ARCH == 5
+  auto bucket = [](NetFile& n) -> auto& { return n.expert_weights[1]; };
+#else
+  auto bucket = [](NetFile& n) -> auto& { return n.out_weights[NetBuckets - 1]; };
+#endif
+  auto set_sum = [&](NetFile& n, int sum) {
+    auto& row = bucket(n);
+    for (auto& w : row) w = 0;
+    for (int i = 0; sum > 0; ++i, sum -= 128) row[i] = static_cast<std::int16_t>(std::min(sum, 128));
+  };
+  auto loud_out = random_net(3);
+  for (auto& w : bucket(*loud_out)) w = 128;
+  rejects(write_net_file(*loud_out), "a bucket whose squared sum can leave int32 (every weight 128)");
+  auto edge = random_net(3);
+  set_sum(*edge, 33026);
+  rejects(write_net_file(*edge), "a bucket at 255^2 x 33,026, one past int32");
+  set_sum(*edge, 33025);
+  CHECK_MSG(read_net_file(write_net_file(*edge), *back, error), "a bucket at 255^2 x 33,025: " << error);
 #endif
   if constexpr (NetPhasePicked) {
     auto unsorted = random_net(4);
@@ -290,6 +359,358 @@ TEST_CASE("nnue", "every move kind's delta matches a refresh") {
     }
   }
   CHECK(stepped > 100);
+}
+
+#if FORK_NET_ARCH == 9
+// H512+PP's evaluation the obvious way, an oracle independent of
+// accumulate_board, feature_index and frame_of: per perspective, the bias,
+// each piece's row in the block of its own king's region (the mirrored cell
+// read in the net's map) and each pawn link's row after all the region
+// blocks, summed in 64 bits, clipped to [0, QA], then the squared output of
+// the phase's bucket.
+int h512pp_reference(const NetFile& net, const Position& pos) {
+  const Color stm = pos.side_to_move();
+  const int bucket = net.phase_table[game_phase(pos)];
+  std::int64_t total = 0;
+  for (int half = 0; half < 2; ++half) {
+    const Color persp = half == 0 ? stm : ~stm;
+    const int vertical = persp == White ? 0 : 56;  // Black sees the board upside down
+    const int king = pos.king_square(persp) ^ vertical;
+    const int files = king % 8 < 4 ? 7 : 0;  // mirrored when the own king is on files a-d
+    const int cell = (king ^ files) / 8 * 4 + (king ^ files) % 8 - 4;
+    const int block = NetPieceSquares * net.regions[cell];
+    std::vector<int> rows;
+    for (Bitboard b = pos.pieces(); b;) {
+      const Square s = pop_lsb(b);
+      const Piece p = pos.piece_at(s);
+      rows.push_back(block + 384 * (side_of(p) != persp) + 64 * kind_of(p) + ((s ^ vertical) ^ files));
+    }
+    std::int32_t links[LinkMaxActive];
+    const int n = link_inputs(pos.pieces(White, Pawn), pos.pieces(Black, Pawn), persp, files, links);
+    for (int k = 0; k < n; ++k) rows.push_back(NetPieceSquares * net.region_count + links[k]);
+    for (int i = 0; i < NetHidden; ++i) {
+      std::int64_t v = net.ft_bias[i];
+      for (const int r : rows) v += net.ft_weights[r * NetHidden + i];
+      const std::int64_t x = std::clamp<std::int64_t>(v, 0, NetQa);
+      total += x * x * net.out_weights[bucket][half * NetHidden + i];
+    }
+  }
+  const std::int64_t y = total / NetQa + net.out_bias[bucket];
+  return static_cast<int>(
+      std::clamp<std::int64_t>(y * net.scale / (NetQa * NetQb), -(EvalLimit - 1), EvalLimit - 1));
+}
+
+TEST_CASE("nnue", "H512+PP's regions follow the M4 map of the mirrored own-king cell") {
+  // Worked by hand from the map (e1 | f1-h1 | rank 2 | ranks 3-8, in the
+  // perspective's view, files a-d mirrored onto e-h); squares a1 = 0 ... h8 = 63.
+  auto net = random_net(9);
+  const struct {
+    Color perspective;
+    Square king;
+    int region, flip;
+  } cases[] = {
+      {White, 4, 0, 0},   // e1
+      {White, 3, 0, 7},   // d1: e1 mirrored
+      {White, 6, 1, 0},   // g1
+      {White, 1, 1, 7},   // b1: g1 mirrored
+      {White, 7, 1, 0},   // h1
+      {White, 12, 2, 0},  // e2
+      {White, 8, 2, 7},   // a2: h2 mirrored
+      {White, 20, 3, 0},  // e3
+      {White, 63, 3, 0},  // h8
+      {Black, 60, 0, 0},  // e8, Black's e1
+      {Black, 62, 1, 0},  // g8, Black's g1
+      {Black, 50, 2, 7},  // c7, Black's c2: f2 mirrored
+      {Black, 4, 3, 0},   // e1, Black's e8
+  };
+  for (const auto& c : cases) {
+    const Frame f = frame_of(*net, c.perspective, c.king);
+    CHECK_MSG(f.offset == NetPieceSquares * c.region && f.flip == c.flip,
+              "king on " << int{c.king} << ": region " << f.offset / NetPieceSquares << ", flip " << f.flip);
+  }
+}
+
+TEST_CASE("nnue", "H512+PP's evaluation equals the obvious reference along random games") {
+  // Every region of both perspectives is reached (the games walk the kings
+  // about), and the stack's incremental evaluations equal the reference too.
+  auto net = random_net(14);
+  auto stack = std::make_unique<FeatureStack>();
+  int checked = 0;
+  bool seen[2][4] = {};
+  for (const auto& sp : perft_suite()) {
+    for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+      Position pos;
+      pos.set_fen(sp.fen);
+      stack->reset(*net, pos);
+      std::uint64_t rng = seed * 6007 + checked;
+      for (int ply = 0; ply < 100 && ply < MaxPly - 1; ++ply) {
+        const int want = h512pp_reference(*net, pos);
+        CHECK_MSG(full_eval(*net, pos) == want, pos.fen());
+        CHECK_MSG(stack->evaluate(*net, ply, pos) == want, pos.fen());
+        for (const Color c : {White, Black})
+          seen[c][frame_of(*net, c, pos.king_square(c)).offset / NetPieceSquares] = true;
+        ++checked;
+        MoveList legal;
+        generate<GenMode::Legal>(pos, legal);
+        if (legal.size() == 0) break;
+        Move m = legal[splitmix_next(rng) % legal.size()];
+        for (Move k : legal)  // king moves favoured, so regions change often
+          if (kind_of(pos.piece_at(k.from())) == King && splitmix_next(rng) % 3 == 0) {
+            m = k;
+            break;
+          }
+        stack->push_move(*net, ply, pos, m);
+        pos.make(m);
+      }
+    }
+  }
+  CHECK(checked > 1000);
+  for (const auto& side : seen)
+    for (const bool region : side) CHECK(region);
+}
+#endif
+
+#if FORK_NET_ARCH == 10
+// S512+PPXL's evaluation the obvious way, an oracle independent of
+// accumulate_board, feature_index, frame_of and exposed_lower: per
+// perspective, the bias, each piece's row, each pawn link's row (after the
+// 768 piece rows and the 640 exposure rows) and each exposed piece's
+// exposure row (exposed_lower_reference's set, square by square; 768 + 320 x
+// [enemy] + 64 x type + the perspective's square), summed in 64 bits,
+// clipped to [0, QA], then the squared output of the phase's bucket. `beyond`
+// counts the units whose sum leaves int16.
+namespace {
+
+int s512ppxl_reference(const NetFile& net, const Position& pos, int* beyond = nullptr) {
+  const Bitboard exposed = exposed_lower_reference(pos);
+  const Color stm = pos.side_to_move();
+  const int bucket = net.phase_table[game_phase(pos)];
+  std::int64_t total = 0;
+  for (int half = 0; half < 2; ++half) {
+    const Color persp = half == 0 ? stm : ~stm;
+    const int vertical = persp == White ? 0 : 56;  // Black sees the board upside down
+    const int files = (pos.king_square(persp) ^ vertical) % 8 < 4 ? 7 : 0;  // own king on files a-d: mirrored
+    std::vector<int> rows;
+    for (Bitboard b = pos.pieces(); b;) {
+      const Square s = pop_lsb(b);
+      const Piece p = pos.piece_at(s);
+      const int seen = (s ^ vertical) ^ files;
+      rows.push_back(384 * (side_of(p) != persp) + 64 * kind_of(p) + seen);
+      if (exposed & (Bitboard{1} << s))
+        rows.push_back(768 + 320 * (side_of(p) != persp) + 64 * kind_of(p) + seen);
+    }
+    std::int32_t links[LinkMaxActive];
+    const int n = link_inputs(pos.pieces(White, Pawn), pos.pieces(Black, Pawn), persp, files, links);
+    for (int k = 0; k < n; ++k) rows.push_back(768 + 640 + links[k]);
+    int out_of_range = 0;
+    for (int i = 0; i < NetHidden; ++i) {
+      std::int64_t v = net.ft_bias[i];
+      for (const int r : rows) v += net.ft_weights[r * NetHidden + i];
+      out_of_range += v < -32768 || v > 32767;
+      const std::int64_t x = std::clamp<std::int64_t>(v, 0, NetQa);
+      total += x * x * net.out_weights[bucket][half * NetHidden + i];
+    }
+    if (beyond) *beyond += out_of_range;
+  }
+  const std::int64_t y = total / NetQa + net.out_bias[bucket];
+  return static_cast<int>(std::clamp<std::int64_t>(y * net.scale / (std::int64_t{NetQa} * NetQb),
+                                                   -(EvalLimit - 1), EvalLimit - 1));
+}
+
+}  // namespace
+
+TEST_CASE("nnue", "S512+PPXL's exposure rule is the lower-class half") {
+  // Worked by hand (a1 = 0 ... h8 = 63). 4k3/8/3p4/4N3/8/1q6/2B5/4K2R: the
+  // knight on e5 is attacked by the pawn on d6 (exposed though a pawn is the
+  // only attacker class below it); the queen on b3 by the bishop on c2
+  // (exposed); the bishop on c2 only by the queen, a higher class (not
+  // exposed, though undefended: the dropped half of XGR's rule); the rook on
+  // h1 by nothing; the pawn never.
+  // 6k1/8/5b2/8/3R4/8/8/3qQ1K1: the rook on d4 is attacked by the bishop on
+  // f6 (exposed); the black queen on d1 by the rook on d4 (exposed); the
+  // white queen on e1 only by the queen on d1, the same class (not exposed);
+  // the bishop on f6 by nothing.
+  const struct {
+    const char* fen;
+    Bitboard want;
+  } cases[] = {
+      {"4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1", (Bitboard{1} << 36) | (Bitboard{1} << 17)},
+      {"6k1/8/5b2/8/3R4/8/8/3qQ1K1 w - - 0 1", (Bitboard{1} << 27) | (Bitboard{1} << 3)},
+      {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0},
+  };
+  for (const auto& c : cases) {
+    Position pos;
+    CHECK(pos.set_fen(c.fen));
+    CHECK_MSG(exposed_lower_reference(pos) == c.want, c.fen);
+    CHECK_MSG(exposed_lower(pos) == c.want, c.fen);
+  }
+}
+
+TEST_CASE("nnue", "S512+PPXL's exposed set matches the square-by-square reference along random games") {
+  int checked = 0, nonempty = 0;
+  for (const auto& sp : perft_suite()) {
+    for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+      Position pos;
+      pos.set_fen(sp.fen);
+      std::uint64_t rng = seed * 4099 + checked;
+      for (int ply = 0; ply < 100; ++ply) {
+        const Bitboard want = exposed_lower_reference(pos);
+        CHECK_MSG(exposed_lower(pos) == want, pos.fen());
+        CHECK_MSG(!(want & (pos.pieces(Pawn) | pos.pieces(King))), pos.fen());
+        nonempty += want != 0;
+        ++checked;
+        MoveList legal;
+        generate<GenMode::Legal>(pos, legal);
+        if (legal.size() == 0) break;
+        pos.make(legal[splitmix_next(rng) % legal.size()]);
+      }
+    }
+  }
+  CHECK(checked > 1000);
+  CHECK(nonempty > 200);
+}
+
+// The exposed sets of the 446 parity positions (tests/nnue/parity.epd) equal
+// the Python reference's, computed on python-chess's attack sets
+// (tests/nnue/s512ppxl-exposed.txt, written by `tools/nnue/reference.py
+// exposed --epd tests/nnue/parity.epd --layout tools/nnue/s512ppxl.json`):
+// the engine's half of the feature parity with the trainer, whose half is
+// the feature leg against the same reference.
+TEST_CASE("nnue", "S512+PPXL's exposed sets equal the Python reference's") {
+  std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/s512ppxl-exposed.txt");
+  CHECK_MSG(in.good(), "tests/nnue/s512ppxl-exposed.txt is missing");
+  int compared = 0, nonempty = 0;
+  for (std::string line; std::getline(in, line);) {
+    const std::size_t a = line.find('|');
+    if (a == std::string::npos) continue;
+    Position pos;
+    CHECK_MSG(pos.set_fen(line.substr(0, a)), line.substr(0, a));
+    Bitboard want = 0;
+    std::istringstream is(line.substr(a + 1));
+    for (int s; is >> s;) want |= Bitboard{1} << s;
+    CHECK_MSG(exposed_lower(pos) == want, line.substr(0, a));
+    CHECK_MSG(exposed_lower_reference(pos) == want, line.substr(0, a));
+    nonempty += want != 0;
+    ++compared;
+  }
+  CHECK_EQ(compared, 446);
+  CHECK(nonempty > 50);
+}
+
+TEST_CASE("nnue", "S512+PPXL's evaluation equals the obvious reference along random games") {
+  // Ordinary weights (exposure rows within +-400), then exposure rows of up to
+  // +-20,000 per unit, so a few exposed pieces take a unit's sum past int16:
+  // the reader accepts them (the exposure rows are not bounded) and the 32-bit
+  // sums give the 64-bit reference's values. The stack's incremental
+  // evaluations equal the reference too.
+  for (const bool large : {false, true}) {
+    auto net = random_net(16);
+    std::uint64_t rng = 2026111402;
+    if (large)
+      for (int f = NetPieceSquares; f < NetPieceSquares + NetExposureRows; ++f)
+        for (int i = 0; i < NetHidden; ++i)
+          net->ft_weights[f * NetHidden + i] = static_cast<std::int16_t>(uniform(rng, -20000, 20000));
+    auto back = std::make_unique<NetFile>();
+    std::string error;
+    CHECK_MSG(read_net_file(write_net_file(*net), *back, error), error);
+    auto stack = std::make_unique<FeatureStack>();
+    int checked = 0, exposed = 0, beyond = 0;
+    for (const auto& sp : perft_suite()) {
+      for (std::uint64_t seed = 1; seed <= 3; ++seed) {
+        Position pos;
+        pos.set_fen(sp.fen);
+        stack->reset(*back, pos);
+        std::uint64_t game = seed * 7907 + checked;
+        for (int ply = 0; ply < std::min(80, MaxPly - 1); ++ply) {
+          int units = 0;
+          const int want = s512ppxl_reference(*back, pos, &units);
+          CHECK_MSG(full_eval(*back, pos) == want, pos.fen());
+          CHECK_MSG(evaluate_position_scalar(
+                        *back,
+                        [&] {
+                          Accumulator acc;
+                          accumulate_board(*back, pos, acc);
+                          return acc;
+                        }(),
+                        pos) == want,
+                    pos.fen());
+          CHECK_MSG(stack->evaluate(*back, ply, pos) == want, pos.fen());
+          exposed += exposed_lower_reference(pos) != 0;
+          beyond += units > 0;
+          ++checked;
+          MoveList legal;
+          generate<GenMode::Legal>(pos, legal);
+          if (legal.size() == 0) break;
+          const Move m = legal[splitmix_next(game) % legal.size()];
+          stack->push_move(*back, ply, pos, m);
+          pos.make(m);
+        }
+      }
+    }
+    CHECK(checked > 1000);
+    CHECK(exposed > 200);
+    if (large) CHECK(beyond > 20);  // positions where some unit's sum left int16
+  }
+}
+#endif
+
+// FeatureStack along a search tree: a random walk with backtracking, king
+// moves favoured so frames change often (in H512+PP a frame's snapshot is
+// then several pieces and pawn links away from the board it is brought to),
+// null moves among the moves, every evaluation of a random half of the nodes
+// against a refresh (H512+PP: against the reference too).
+TEST_CASE("nnue", "frame changes keep evaluations exact along a search tree") {
+  auto net = random_net(15);
+  auto stack = std::make_unique<FeatureStack>();
+  int checked = 0, frame_changes = 0;
+  std::uint64_t rng = 2026111401;
+  for (const auto& sp : perft_suite()) {
+    Position pos;
+    pos.set_fen(sp.fen);
+    stack->reset(*net, pos);
+    const auto walk = [&](auto&& self, int ply, int depth) -> void {
+      if (splitmix_next(rng) % 2 == 0) {
+        const int got = stack->evaluate(*net, ply, pos);
+        CHECK_MSG(got == full_eval(*net, pos), pos.fen());
+#if FORK_NET_ARCH == 9
+        CHECK_MSG(got == h512pp_reference(*net, pos), pos.fen());
+#elif FORK_NET_ARCH == 10
+        CHECK_MSG(got == s512ppxl_reference(*net, pos), pos.fen());
+#endif
+        ++checked;
+      }
+      if (depth == 0) return;
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      if (legal.size() == 0) return;
+      for (int child = 0; child < 3; ++child) {
+        if (!pos.in_check() && splitmix_next(rng) % 8 == 0) {
+          stack->push_null(ply);
+          pos.make_null();
+          self(self, ply + 1, depth - 1);
+          pos.unmake_null();
+          continue;
+        }
+        Move m = legal[splitmix_next(rng) % legal.size()];
+        if (splitmix_next(rng) % 2 == 0)
+          for (Move k : legal)
+            if (kind_of(pos.piece_at(k.from())) == King && splitmix_next(rng) % 2 == 0) {
+              m = k;
+              break;
+            }
+        const Color us = pos.side_to_move();
+        const Frame before = frame_of(*net, us, pos.king_square(us));
+        stack->push_move(*net, ply, pos, m);
+        pos.make(m);
+        frame_changes += frame_of(*net, us, pos.king_square(us)) != before;
+        self(self, ply + 1, depth - 1);
+        pos.unmake(m);
+      }
+    };
+    walk(walk, 0, 6);
+  }
+  CHECK(checked > 1000);
+  if constexpr (NetMirrored) CHECK(frame_changes > 100);
 }
 
 TEST_CASE("nnue", "the SIMD kernels equal their scalar references") {
@@ -574,6 +995,140 @@ TEST_CASE("nnue", "searches through the evaluator hooks keep every accumulator e
   Position start;
   CHECK_EQ(static_eval(start), full_eval(embedded_net(), start));
 }
+
+// The embedded network through the stack's incremental and snapshot paths in
+// every build (audit 2026-11-16, area 2, finding A1: FeatureStack::evaluate
+// checks its sums only in FORK_DEBUG builds, and the netcheck refreshes every
+// position). A walk like a search's, with backtracking, from the CPW perft
+// suite's positions (tests/suite.hpp) and the bench's (search_bench.hpp):
+// king moves favoured, so frames change and snapshots are reused in both
+// directions, and castling, en passant, promotions and null moves among the
+// moves. At a random two thirds of the nodes (every leaf) the stack's sums
+// are compared byte for byte with a refresh, and its evaluation with the
+// refresh's. The case follows when H512+PP's stack must take a perspective
+// from its frame's snapshot (a frame change since the nearest ply computed
+// for that perspective) and counts those refreshes, those whose walk crossed
+// a region, and those whose snapshot an earlier refresh had filled; each must
+// be above zero, or the walk proved nothing (stats builds also check the
+// stack's own count of refreshes).
+TEST_CASE("nnue", "the embedded network's stack equals a refresh along a search tree") {
+  const NetFile& net = embedded_net();
+  auto stack = std::make_unique<FeatureStack>();
+  std::vector<std::string_view> fens;
+  for (const auto& sp : perft_suite()) fens.push_back(sp.fen);
+  for (const std::string_view f : search_bench_fens()) fens.push_back(f);
+  constexpr int MaxDepth = 6;
+  const int depth = Optimized ? MaxDepth : MaxDepth - 1;  // debug: 16,829 evaluations, 11 en passant
+  struct Node {
+    Frame frame[2];
+    bool computed[2];
+  };
+  Node line[MaxDepth + 1];
+  bool filled[2][2 * NetMaxRegions];
+  int evaluations = 0, refreshes = 0, crossings = 0, hits = 0;
+  int nulls = 0, castles = 0, en_passants = 0, promotions = 0, captures = 0, king_moves = 0;
+  std::uint64_t rng = 2026111601;
+  Accumulator fresh;
+  const auto enter = [&](const Position& pos, int ply) {
+    for (const Color c : {White, Black}) {
+      line[ply].frame[c] = frame_of(net, c, pos.king_square(c));
+      line[ply].computed[c] = ply == 0;
+    }
+  };
+  // The evaluation at `ply` against a refresh, then the stack's step for each
+  // perspective: back to the nearest ply computed for it; a frame change on
+  // the way refreshes the evaluated ply alone, otherwise every ply walked is
+  // computed.
+  const auto check = [&](const Position& pos, int ply) {
+    const int got = stack->evaluate(net, ply, pos);
+    accumulate_board(net, pos, fresh);
+    const bool same_sums = std::memcmp(&stack->accumulator_at(ply), &fresh, sizeof fresh) == 0;
+    CHECK_MSG(same_sums, pos.fen() << " at ply " << ply);
+    CHECK_MSG(got == evaluate_position(net, fresh, pos), pos.fen() << " at ply " << ply);
+    ++evaluations;
+    for (const Color c : {White, Black}) {
+      int base = ply;
+      bool changed = false, crossed = false;
+      for (; !line[base].computed[c]; --base) {
+        changed |= line[base].frame[c] != line[base - 1].frame[c];
+        crossed |= line[base].frame[c].offset != line[base - 1].frame[c].offset;
+      }
+      if (changed) {
+        const Frame f = line[ply].frame[c];
+        bool& slot = filled[c][(f.flip != 0) + 2 * (f.offset / NetPieceSquares)];
+        ++refreshes;
+        crossings += crossed;
+        hits += slot;
+        slot = true;
+        line[ply].computed[c] = true;
+      } else {
+        for (int p = base + 1; p <= ply; ++p) line[p].computed[c] = true;
+      }
+    }
+  };
+  const auto walk = [&](auto&& self, Position& pos, int ply, int left, bool after_null) -> void {
+    if (left == 0 || splitmix_next(rng) % 3 != 0) check(pos, ply);
+    if (left == 0) return;
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    if (legal.size() == 0) return;
+    const auto pick = [&](auto&& wanted) -> Move {
+      int n = 0;
+      for (Move k : legal) n += wanted(k);
+      if (n == 0) return NoMove;
+      int i = static_cast<int>(splitmix_next(rng) % static_cast<std::uint64_t>(n));
+      for (Move k : legal)
+        if (wanted(k) && i-- == 0) return k;
+      return NoMove;
+    };
+    const auto special = [](Move k) { return k.is_castle() || k.is_en_passant() || k.is_promotion(); };
+    const auto king = [&](Move k) { return kind_of(pos.piece_at(k.from())) == King; };
+    for (int child = 0; child < 3; ++child) {
+      if (!after_null && !pos.in_check() && splitmix_next(rng) % 8 == 0) {
+        stack->push_null(ply);
+        pos.make_null();
+        ++nulls;
+        enter(pos, ply + 1);
+        self(self, pos, ply + 1, left - 1, true);
+        pos.unmake_null();
+        continue;
+      }
+      const std::uint64_t kind = splitmix_next(rng) % 4;
+      Move m = kind == 0 ? pick(special) : kind <= 2 ? pick(king) : NoMove;
+      if (m == NoMove) m = legal[splitmix_next(rng) % legal.size()];
+      castles += m.is_castle();
+      en_passants += m.is_en_passant();
+      promotions += m.is_promotion();
+      captures += m.is_capture();
+      king_moves += king(m);
+      stack->push_move(net, ply, pos, m);
+      pos.make(m);
+      enter(pos, ply + 1);
+      self(self, pos, ply + 1, left - 1, false);
+      pos.unmake(m);
+    }
+  };
+  for (const std::string_view fen : fens) {
+    Position pos;
+    CHECK_MSG(pos.set_fen(fen), fen);
+    stack->reset(net, pos);
+    enter(pos, 0);
+    for (auto& side : filled)
+      for (bool& s : side) s = false;
+    walk(walk, pos, 0, depth, false);
+  }
+  NOTE(fens.size() << " roots, " << evaluations << " evaluations; moves: " << king_moves << " king, "
+                   << castles << " castling, " << en_passants << " en passant, " << promotions
+                   << " promotions, " << captures << " captures, " << nulls << " null; snapshot refreshes "
+                   << refreshes << ", across a region " << crossings << ", from a filled snapshot " << hits);
+  CHECK(evaluations > 1000);
+  CHECK(castles > 0 && en_passants > 0 && promotions > 0 && captures > 0 && nulls > 0);
+  if constexpr (NetArchitecture == 9) CHECK(refreshes > 0 && crossings > 0 && hits > 0);
+#ifdef FORK_SEARCH_STATS
+  if constexpr (NetArchitecture == 9)
+    CHECK_EQ(stack->tally().frame_refreshes, static_cast<std::uint64_t>(refreshes));
+#endif
+}
 #endif
 
 // S512cl's contact and link inputs (ideas.md 41; contacts.hpp): the index
@@ -582,9 +1137,9 @@ TEST_CASE("nnue", "searches through the evaluator hooks keep every accumulator e
 // the Python reference's (tests/nnue/s512cl-contacts.txt, written by
 // `tools/nnue/contacts.py lists tests/nnue/parity.epd --count 200` from
 // python-chess's attack sets; compared as sorted lists). Any build but
-// S512+PP's, whose links have a rank limit (the frame's file flip is computed
-// here, not taken from the network).
-#if FORK_NET_ARCH != 8
+// S512+PP's and H512+PP's, whose links have a rank limit (the frame's file
+// flip is computed here, not taken from the network).
+#if !FORK_NET_LINKS
 TEST_CASE("nnue", "S512cl's contact and link inputs equal the Python reference's") {
   CHECK_EQ(contact_table_size(), NetContactInputs);
   CHECK_EQ(link_table_size(), NetLinkInputs);

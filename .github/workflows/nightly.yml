@@ -1,6 +1,8 @@
-# Fork nightly: perft_epd_full (perft-random.epd to depth 6, about 2 hours)
-# on main, whatever changed (owner, 2026-10-28). ci.yml runs it on a push
-# or pull request only when move generation's files change. Scheduled runs
+# Fork nightly, on main whatever changed: perft_epd_full (perft-random.epd
+# to depth 6, about 2 hours; owner, 2026-10-28) and the full TSan suites
+# (tsan.yml; owner, 2026-11-07). ci.yml runs them on a push or pull request
+# only when move generation's files, or threads, the TT or the UCI layer,
+# change (.github/ci/changed-areas.sh). Scheduled runs
 # use the default branch's copy of this file, so the schedule takes effect
 # once this file is on main; a manual run can target any branch.
 name: nightly
@@ -35,3 +37,7 @@ jobs:
           key: epd-${{ hashFiles('CMakeLists.txt') }}
       - name: perft_epd_full and bench parity (clang-release)
         run: bash .github/ci/slow-suite.sh perft_epd_full
+
+  tsan:
+    name: Nightly TSan
+    uses: ./.github/workflows/tsan.yml

@@ -38,21 +38,42 @@ paths:
   are normalized Elo, so the non-regression early-acceptance rule reads
   the "nElo: x +/- e" interval, never the logistic "Elo" one (DESIGN.md
   §5.2, Testing setup).
+- **Offline re-measurement rules set retune ranges only** (owner,
+  2026-11-12): a declared measurement rule (a label-and-sweep grid, a
+  cutoff-rate or accuracy proxy) re-run on a new net or search only
+  widens or sets the final retune's range for its constant. It never
+  gates a test and never picks a value by itself; games (SPRT, SPSA,
+  head-to-head) decide. Evidence: SingularMarginPerPly 22, T27's rule
+  re-run on r8brft1, lost to 6 by −26.76 ± 9.93 Elo (design R STC,
+  2026-11-12), and the staleness audit
+  (docs/research/staleness-audit-2026-11-12.md) found that in every case
+  where games or SPSA checked a rule's pick, the pick lost or the tuner
+  moved away (DESIGN.md §5.2, Testing setup).
 - **Run before claiming done:**
   - the full check: the CI matrix (`.github/workflows/ci.yml`) green on
     the pushed commit, or `scripts/check.sh full` on demand (pre-commit
     runs `check.sh quick` on the staged tree; the Stop hook runs
     `check.sh stop`);
   - `scripts/build.sh` (all presets) before a phase sign-off;
-  - slow suites (`ctest -L slow`) at sign-off. CI runs perft_epd_full
-    only when move generation's files change, plus nightly on main, so a
-    sign-off cannot rely on a push having run it.
+  - slow suites (`ctest -L slow`) and the full TSan suites at sign-off.
+    CI runs perft_epd_full only when move generation's files change, and
+    the full TSan suites (`.github/workflows/tsan.yml`) only when threads,
+    the TT or the UCI layer change (`.github/ci/changed-areas.sh`), plus
+    both nightly on main, so a sign-off cannot rely on a push having run
+    them.
 - **Sanitizers:** clang-debug runs ASan+UBSan on Windows. GCC sanitizers,
   TSan, MSan and valgrind run on Linux. TSan has its own presets,
   `clang-tsan` and `gcc-tsan` (Linux only; `FORK_TSAN=ON`, no
   `fork_alloc_test`), and must be clean on the UCI suites, which drive a
   TSan-built engine: run them with `TSAN_OPTIONS=halt_on_error=1` so a
-  report kills the engine and fails the test.
+  report kills the engine and fails the test. CI runs TSan in two sizes
+  (owner, 2026-11-07): the job "TSan, threaded suites" (uci_protocol,
+  uci_options, uci_timing, tt, datagen, web; both TSan presets, no bench
+  parity) on every code change, and the full fast suite with bench parity
+  (tsan.yml) when threads, the TT or the UCI layer change, nightly on
+  main, and on demand (dispatch tsan.yml, or ci.yml with `force-tsan`). A
+  new suite that starts threads joins the threaded list in ci.yml's
+  tsan-threaded job (it checks that all of them exist).
 - **no_alloc runs everywhere except TSan, MSan and valgrind.** The
   counting-allocator test (`fork_alloc_test`) replaces global operator
   new/delete. That collides with those tools' own replacements: a link
@@ -61,9 +82,10 @@ paths:
   report. Those runs exclude it (`-E no_alloc`, built without the
   `fork_alloc_test` target, or not run under valgrind), and those are its
   only sanctioned exclusions. The same applies to `uci_oom`
-  (`fork_uci_oom_test`, which fails each allocation of a `go` in turn) and
+  (`fork_uci_oom_test`, which fails each allocation of a `go` in turn),
   `uci_hash_oom` (`fork_uci_hash_oom_test`, which fails each allocation of a
-  Hash resize in turn). Every other build runs it, the ASan/UBSan
+  Hash resize in turn) and `uci_threads_oom` (`fork_uci_threads_oom_test`,
+  which fails each allocation of a Threads resize in turn). Every other build runs it, the ASan/UBSan
   presets included, and
   `scripts/check.sh` fails if its Passed line is missing. (The PGO builds run
   bench parity only, no ctest.)

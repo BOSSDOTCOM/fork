@@ -131,6 +131,7 @@ def main():
     eng = Uci(a.engine)
     eng.send('uci')
     eng.until('uciok')
+    eng.send('setoption name CalibratedScore value false')  # raw scores (the display calibration off)
     for opt in [f'Hash={a.hash}'] + a.option:
         name, value = opt.split('=', 1)
         eng.send(f'setoption name {name} value {value}')

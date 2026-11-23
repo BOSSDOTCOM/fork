@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <limits>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "harness.hpp"
@@ -132,12 +131,18 @@ TEST_CASE("uci_options", "parse_int64 and the go parser") {
   CHECK(!gap.depth && gap.movetime == std::optional<std::int64_t>(5));
 }
 
+// The Threads option sets the clear's workers, at most one per 2 MiB (bug
+// review 2026-11-11, E4: it was max(Threads, hardware threads), so Threads 1
+// did not bound it; the last two cases failed then on any machine with more
+// than one hardware thread).
 TEST_CASE("uci_options", "clear_workers") {
-  const std::int64_t hw = std::max<std::int64_t>(1, std::thread::hardware_concurrency());
   CHECK_EQ(clear_workers(BytesPerMB, 1), 1u);  // below 2 MiB per thread
-  CHECK_EQ(clear_workers(16 * BytesPerMB, 1), static_cast<unsigned>(std::min<std::int64_t>(hw, 8)));
+  CHECK_EQ(clear_workers(BytesPerMB, 64), 1u);
+  CHECK_EQ(clear_workers(16 * BytesPerMB, 64), 8u);
+  CHECK_EQ(clear_workers(16 * BytesPerMB, 4), 4u);
   CHECK_EQ(clear_workers(std::size_t{1} << 40, 1024), 1024u);  // Threads above the hardware count
-  CHECK_EQ(clear_workers(std::size_t{1} << 40, 1), static_cast<unsigned>(hw));
+  CHECK_EQ(clear_workers(std::size_t{1} << 40, 1), 1u);        // Threads 1: one thread
+  CHECK_EQ(clear_workers(16 * BytesPerMB, 1), 1u);
 }
 
 TEST_CASE("uci_options", "HashMemory: resize, clear, refused sizes keep a table") {

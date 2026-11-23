@@ -178,6 +178,39 @@ class Parsing(unittest.TestCase):
         self.assertEqual((t['stage'], t['stage_state'], t['merged_stage'], t['games'], t['elo'], t['llr']),
                          (3, 'dispatched', 2, 4800, -5.57, -1.28))
         self.assertEqual((t['elo0'], t['elo1'], t['last_stage'], t['finished']), (0.0, 3.0, 12, None))
+        # Design R (owner, DESIGN.md §6 2026-11-07 decision 2): the header names the kind and the cap; a
+        # futility stop and a fixed head-to-head pairing's end are finished SPRTs. Lines as sprt_run.sh writes
+        # them (its test, tools/github/test_sprt_run.sh, checks the same wording).
+        a, b = '1' * 40, '2' * 40
+        r = P.driver_log('\n'.join([
+            f'2026-11-08 10:00 UTC raz: base {a}, test {b}, bounds [0, 6], stages 0 to 7, ref phase-4, kind search, '
+            'stc, alpha 0.05, beta 0.20, cap 8, futility after 2 stages, idea razoring (try 1 of 2)',
+            '2026-11-08 10:01 UTC raz: stage 0: run 42400000001 dispatched (ledger)',
+            '2026-11-08 10:20 UTC raz: stage 0: run 42400000001 merged',
+            '    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)',
+            '    Elo: -1.00 +/- 13.00, nElo: -1.20 +/- 17.02',
+            '    LLR: -0.10 (-1.56, 2.77) [0.00, 6.00] nElo: continue',
+            '    Verdict: continue',
+            '2026-11-08 10:21 UTC raz: stage 1: run 42400000002 dispatched (ledger)',
+            '2026-11-08 10:40 UTC raz: stage 1: run 42400000002 merged',
+            '    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)',
+            '    Elo: -1.00 +/- 9.20, nElo: -1.20 +/- 12.04',
+            '    LLR: -0.20 (-1.56, 2.77) [0.00, 6.00] nElo: continue',
+            '    Verdict: futility stop (nElo -1.20 < 0 after 2 stages)',
+            '2026-11-08 10:40 UTC raz: decided after stage 1: futility stop (nElo -1.20 < 0 after 2 stages), rejected',
+            f'2026-11-08 11:00 UTC h.40-60: base {a}, test {b}, bounds [0, 6], stages 0 to 0, ref phase-4, kind fixed, '
+            'stc, alpha 0.05, beta 0.20, cap 1, fixed length, idea rfp (head-to-head pairing, not a try)',
+            '2026-11-08 11:20 UTC h.40-60: complete after stage 0: complete (1 of 1 stages, fixed length)',
+        ]))
+        raz = P.sprt_state(r['raz'])
+        self.assertEqual((raz['kind'], raz['cap'], raz['games'], raz['decision']),
+                         ('search', 8, 3200, 'futility stop (nElo -1.20 < 0 after 2 stages)'))
+        self.assertTrue(raz['finished'].startswith('decided after stage 1: futility stop'))
+        h = P.sprt_state(r['h.40-60'])
+        self.assertEqual((h['kind'], h['cap']), ('fixed', 1))
+        self.assertEqual(h['finished'], 'complete after stage 0: complete (1 of 1 stages, fixed length)')
+        old = P.sprt_state(d['rising-rfp-25-vs-base'])  # a positional (custom) SPRT: no kind, no cap
+        self.assertEqual((old['kind'], old['cap'], old['decision']), (None, None, None))
 
     def test_sprt_log(self):
         e = {x['name']: x for x in P.sprt_log((REPO / 'docs/history/phase-4/sprt-log.md').read_text('utf-8'))}
@@ -389,6 +422,40 @@ class Controls(unittest.TestCase):
         self.assertEqual((plan['mode'], plan['engine_commit']), ('build', self.world.commit))
         self.assertEqual(self.controls(), [])
 
+    def test_plan_new_generation(self):
+        self.copy_g3e(positions=477173594)  # g3e reached generation 3's target
+        with self.assertRaises(generation_control.Refused) as e:
+            self.ctl.plan()
+        self.assertIn('a new generation is the owner', str(e.exception))
+        with self.assertRaises(generation_control.Refused) as e:
+            self.ctl.plan(new_generation=64000000)  # only a copy: not sealed yet
+        self.assertIn('not sealed', str(e.exception))
+        self.ctl.sealed = lambda: {'g3e': {'run': 'g3e', 'positions': 477173594, 'settings': {
+            'positions_target': 477173594, 'seed': 20261110, 'threads': 10, 'openings': 'lichess-2016-09.epd'},
+            'generator': {'version': '0.3.0-dev+684bac6', 'evaluator': 'nnue (s512r2)'}, 'openings': {}}}
+        self.world.folders['~/fork-data/gen3e'] = {'exists': True, 'files': [{'name': 'fork'}, {'name': 'fork_datagen'}]}
+        plan, _ = self.ctl.plan(threads=6, new_generation=64000000)
+        self.assertEqual((plan['name'], plan['previous'], plan['generation']), ('g4', 'g3e', 4))
+        self.assertEqual(plan['dir'], '~/fork-data/gen4')
+        self.assertEqual((plan['settings']['positions_target'], plan['settings']['threads'],
+                          plan['settings']['seed']), (64000000, 6, 20261111))
+        self.assertEqual((plan['mode'], plan['engine_commit']), ('build', self.world.commit))  # never reused
+        self.assertEqual(plan['settings']['tables'], 'syzygy 5-piece')  # nothing earlier in generation 4 says it
+        with self.assertRaises(generation_control.Refused):
+            self.ctl.plan(new_generation=0)
+        plan, _ = self.ctl.plan(threads=6, extend=276000000)  # the same generation continues
+        self.assertEqual((plan['name'], plan['previous'], plan['generation']), ('g3f', 'g3e', 3))
+        self.assertEqual(plan['settings']['positions_target'], 276000000)
+        with self.assertRaises(generation_control.Refused):
+            self.ctl.plan(new_generation=1, extend=1)
+        self.assertEqual(self.controls(), [])
+
+    def test_plan_new_generation_refused_before_the_target(self):
+        self.copy_g3e()
+        with self.assertRaises(generation_control.Refused) as e:
+            self.ctl.plan(new_generation=64000000)
+        self.assertIn('positions to go', str(e.exception))
+
     def test_plan_refuses_after_a_failed_seal(self):
         self.copy_g3e()
         self.ctl.write_state('g3e', 'seal-result.json', {'state': 'verify-failed', 'message': 'FAIL game 12'})
@@ -450,7 +517,7 @@ class Controls(unittest.TestCase):
         for line in ('NAME=g3f', 'SEED=20261111', 'THREADS=6', f'POSITIONS={477173594 - 30000000}', 'MODE=reuse',
                      'REUSE_DIR=/home/user/fork-data/gen3e', 'DIR=/home/user/fork-data/gen3f', 'NODES=20000',
                      'SAVE_PERCENT=50', 'UNSAVED_NODES=4000', 'CHECK_NODES=2000', 'ADJ_CP=700', 'ADJ_PLIES=8',
-                     'WANT_NODES=14180299', 'WANT_SIGNATURE=4cf778ff753861f7', 'NET=s512r2'):
+                     'WANT_NODES=14180299', 'WANT_SIGNATURE=4cf778ff753861f7', 'NET=s512r2', 'ARCH=x86-64-v3'):
             self.assertIn(line + '\n', params)
         self.assertTrue((self.state / 'parts' / 'g3f' / 'start_part.sh').is_file())
         auto = self.ctl.read_state('g3f', 'autostop.json')
@@ -730,6 +797,17 @@ class Seal(unittest.TestCase):
         self.assertEqual((rc, uploads), (1, []))
         self.assertEqual(json.loads((self.here / 'seal-result.json').read_text())['state'], 'failed')
 
+    def test_a_part_with_segments_is_refused(self):
+        (self.src / 'segments.json').write_text('{"segments": []}')
+        uploads = []
+        rc = seal_part.seal(self.req, self.here, wsl_version=fixture('fork-version.txt'), verify=lambda a: 0,
+                            upload=uploads.append)
+        self.assertEqual((rc, uploads), (1, []))
+        res = json.loads((self.here / 'seal-result.json').read_text())
+        self.assertEqual(res['state'], 'failed')
+        self.assertIn('segments.json', res['message'])
+        self.assertFalse((Path(self.req['copies']) / 'g9b').exists())  # nothing copied
+
     def test_real_steps_run(self):
         """The default verify and seal steps start their scripts (fakes here that record their arguments)."""
         tools = self.repo / 'tools' / 'datagen'
@@ -776,6 +854,41 @@ class Seal(unittest.TestCase):
         self.assertTrue(part_end.startswith('test reason; '))
         self.assertIn('every game verified', part_end)
         self.assertEqual(json.loads((self.here / 'seal-result.json').read_text())['state'], 'sealed')
+
+    def test_first_part_of_a_generation_verifies_with_its_tables(self):
+        """g4 (2026-11-09): the first part of a generation has no earlier manifest of its generation, so its
+        tables come from the plan's settings or fork_datagen's --tables, never "none" (verify_games.py
+        --table-pieces 0 refused g4 at its first table end)."""
+        seen = {}
+
+        def verify(argv):
+            seen['verify'] = [str(a) for a in argv]
+            return 0
+        self.req['cmdline'] = None
+        self.req['settings'] = {'openings': 'lichess-2016-09.epd', 'threads': 2, 'seed': 7, 'positions_target': 1000,
+                                'tables': 'syzygy 5-piece'}
+        rc = seal_part.seal(self.req, self.here, wsl_version=fixture('fork-version.txt'), verify=verify,
+                            upload=lambda a: 0)
+        self.assertEqual(rc, 0, (self.here / 'seal-result.json').read_text())
+        v = seen['verify']
+        self.assertEqual(v[v.index('--table-pieces') + 1], '5')
+        run = json.loads((Path(self.req['copies']) / 'g9b' / 'g9b.json').read_text())
+        self.assertEqual(run['settings']['tables'], 'syzygy 5-piece')
+
+    def test_first_part_takes_the_tables_from_the_command_line(self):
+        seen = {}
+        self.req['cmdline'] = G3E_CMDLINE[:5] + ['--threads', '2', '--seed', '7', '--positions', '1000',
+                                                 '--tables', '/home/user/fork-tools/syzygy/3-4-5']
+        rc = seal_part.seal(self.req, self.here, wsl_version=fixture('fork-version.txt'),
+                            verify=lambda a: seen.update(verify=[str(x) for x in a]) or 0, upload=lambda a: 0)
+        self.assertEqual(rc, 0, (self.here / 'seal-result.json').read_text())
+        v = seen['verify']
+        self.assertEqual(v[v.index('--table-pieces') + 1], '5')
+
+    def test_tables_label(self):
+        self.assertEqual(P.tables_label('~/fork-tools/syzygy/3-4-5'), 'syzygy 5-piece')
+        self.assertEqual(P.tables_label('/home/user/fork-tools/syzygy/3-4-5/'), 'syzygy 5-piece')
+        self.assertIsNone(P.tables_label('/home/user/tables'))
 
     def test_sealed_records_the_planned_openings_without_a_command_line(self):
         """After a sealed g9 on the Lichess 2016-09 openings, g9b planned on 2026-09 (13,943,421 positions,
@@ -904,6 +1017,11 @@ class ReadOnlyTabs(unittest.TestCase):
         gaunt = t / 'gauntlet' / 'run-41465146207'
         gaunt.mkdir(parents=True)
         shutil.copy(FIX / 'ordo.txt', gaunt / 'ordo.txt')
+        # An archived run (tools/gauntlet/archive.sh) the decisions log does not name: dated by its meta.txt.
+        archived = t / 'gauntlet' / 'run-41238458381'
+        archived.mkdir()
+        shutil.copy(FIX / 'ordo.txt', archived / 'ordo.txt')
+        (archived / 'meta.txt').write_text('run\t41238458381\ncreated_at\t2026-10-31T20:20:38Z\n', encoding='utf-8')
         train = t / 'train' / 'pp-out' / 'result' / 's512pp-s1'
         train.mkdir(parents=True)
         shutil.copy(FIX / 'run.json', train / 'run.json')
@@ -956,6 +1074,7 @@ class ReadOnlyTabs(unittest.TestCase):
             self.assertEqual(snap['kaggle'], {k['ref']: 'complete' for k in P.kaggle_list(fixture('kaggle-list.csv'))})
             self.assertEqual(snap['training_runs'][0]['arch'], 's512pp')
             self.assertIn(3445.8, [x['rating'] for x in snap['networks']['gauntlets']])
+            self.assertEqual([x['date'] for x in snap['networks']['gauntlets'] if x['run'] == 41238458381], ['2026-10-31'])
             data = {d['run']: d for d in snap['data']}
             self.assertEqual(data['g3d']['saved'], 18242788 - 8314854)
             self.assertIn('WSL ~/fork-data/gen3d', data['g3d']['where'])

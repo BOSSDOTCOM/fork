@@ -104,6 +104,19 @@ bool Position::attacked_by(Color by, Square s, Bitboard occ) const {
          (rook_attacks(s, occ) & pieces(by, Rook, Queen));
 }
 
+Bitboard Position::attacked_squares(Color by) const {
+  const Bitboard occ = pieces();
+  const Bitboard pawns = pieces(by, Pawn);
+  // A pawn attacks one rank ahead on both neighbouring files; the masks drop
+  // the shifts that would wrap from one edge file to the other.
+  Bitboard covered = by == White ? ((pawns << 7) & ~FileH) | ((pawns << 9) & ~FileA)
+                                 : ((pawns >> 9) & ~FileH) | ((pawns >> 7) & ~FileA);
+  for (Bitboard b = pieces(by, Knight); b;) covered |= knight_attacks(pop_lsb(b));
+  for (Bitboard b = pieces(by, Bishop, Queen); b;) covered |= bishop_attacks(pop_lsb(b), occ);
+  for (Bitboard b = pieces(by, Rook, Queen); b;) covered |= rook_attacks(pop_lsb(b), occ);
+  return covered | king_attacks(king_square(by));
+}
+
 // The pieces in `shields` that are the only piece between `king` and a slider
 // of `rook_sliders` (on a rank or file) or `bishop_sliders` (on a diagonal),
 // so that lifting one opens that slider's line to the king. Found with x-ray

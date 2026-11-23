@@ -1,0 +1,18 @@
+2026-11-13 14:18 UTC b16-qs-move-cap-stc: base af8f35c4b41443632d03573fc70bb54fc99d77d7, test a03b0db88d23bf5ee60e5985dc7e5018bca5ea81, bounds [0, 6], stages 0 to 7, ref phase-4, kind search, stc, alpha 0.05, beta 0.20, cap 8, futility after 2 stages, idea b16-qs-move-cap (try 1 of 2)
+2026-11-13 14:20 UTC b16-qs-move-cap-stc: stage 0: run 43441749955 dispatched (ledger)
+2026-11-13 14:38 UTC b16-qs-move-cap-stc: stage 0: run 43441749955 merged
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -0.00 +/- 9.86, nElo: 0.00 +/- 17.02
+    Ptnml(0-2): [21, 182, 396, 178, 23]
+    LLR: -0.24 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-13 14:39 UTC b16-qs-move-cap-stc: stage 1: run 43444719077 dispatched (ledger)
+2026-11-13 14:57 UTC b16-qs-move-cap-stc: stage 1: run 43444719077 merged
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -0.22 +/- 6.92, nElo: -0.38 +/- 12.04
+    Ptnml(0-2): [38, 376, 775, 372, 39]
+    LLR: -0.54 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: futility stop (nElo -0.38 < 0 after 2 stages)
+2026-11-13 14:57 UTC b16-qs-move-cap-stc: decided after stage 1: futility stop (nElo -0.38 < 0 after 2 stages), rejected

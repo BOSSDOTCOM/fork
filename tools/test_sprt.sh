@@ -54,6 +54,8 @@ chmod +x "$home/fork-tools/bin/fastchess"
 repo=$tmp/repo
 mkdir -p "$repo/tools" "$repo/docs/history/phase-3" "$repo/tests" "$repo/config"
 sed "s/^book_sha=.*/book_sha=$book_sha/" "$here/sprt.sh" >"$repo/tools/sprt.sh"
+mkdir -p "$repo/tools/jobs"
+cp "$here/jobs/score_display_guard.py" "$repo/tools/jobs/"  # the CalibratedScore guard sprt.sh calls
 # The tables: the real config's layout, and 145 + 145 empty files.
 cp "$here/../config/local-test.json" "$repo/config/"
 mkdir -p "$home/fork-tools/syzygy/3-4-5" "$tmp/tb-short"
@@ -187,6 +189,17 @@ check "SRAND reaches fastchess" bash -c "grep -qx -- -srand '$tmp/args' && grep 
 check "seed logged" logged 'Openings in random order, -srand 12345\.'
 run stamped
 check "default seed is the stamp" bash -c "grep -A1 -x -- -srand '$tmp/args' | tail -n 1 | grep -qE '^20[0-9]{12}\$'"
+
+# CalibratedScore (owner, 2026-11-13): a test commit whose engine has the option, played from a checkout without
+# tools/check_score_display_off.py (this toy one), stops before any build or game, and nothing is logged.
+mkdir -p "$repo/src"
+echo 'options_.add_check("CalibratedScore", true);' >"$repo/src/session.cpp"
+git -C "$repo" add src/session.cpp && git -C "$repo" commit -qm "the option"
+: >"$tmp/args"
+run calibrated
+check "an engine with CalibratedScore and a harness that does not force it off: exit 1" test "$status" = 1
+check "the refusal names the guard" grep -q "score_display_guard: refused" "$tmp/out"
+check "refused: no game played, nothing logged" eval 'test ! -s "$tmp/args" && test ! -s "$log_md"'
 
 echo "${failures} failure(s)"
 exit $((failures > 0))

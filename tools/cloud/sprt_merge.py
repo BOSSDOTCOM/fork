@@ -26,14 +26,53 @@ more games before it is trusted.
 Looking at the sum only at stage boundaries, not after every pair, makes the
 test slightly conservative, never anti-conservative.
 
+A staged design (stage_decision, the merge's --played/--cap/--futility-after/
+--fixed): at each stage boundary, on the cumulative counts of the stages
+played so far, in this order: H1 or H0 by the LLR; then, only when exactly
+--futility-after stages have been played, a futility stop if the nElo
+estimate (nelo() of the summed counts, the "nElo:" figure) is below 0; then
+"capped" once --cap stages are played; else continue. --fixed plays exactly
+--cap stages and never decides on the LLR (head-to-head pairings). Design R
+for search features (owner, DESIGN.md §6 2026-11-07 decision 2): [0, 6],
+alpha 0.05, beta 0.20, cap 8, futility after 2 stages; the estimate's error
+after 2 stages of 1,600 games is 800 / (ln 10 sqrt 2) / sqrt(1600) = 6.14
+nElo.
+
     python3 tools/cloud/sprt_merge.py snapshot LOG OUT.json [--meta KEY=VALUE ...] [--status S]
-    python3 tools/cloud/sprt_merge.py merge SHARD.json ... --elo0 -3 --elo1 0 [--json OUT]
+    python3 tools/cloud/sprt_merge.py merge SHARD.json ... --elo0 -3 --elo1 0 [--alpha A --beta B] [--json OUT]
+        [--played N --cap N [--futility-after N] [--fixed]] [--allow-partial]
+
+The merge takes only complete shards (bug review 2026-11-11, T3; owner, the
+same day): status "done" and every planned pair finished (pairs equal to
+meta.rounds). A shard still "running" (its final snapshot never written),
+"short", "failed" or "interrupted", or one without its planned rounds, makes
+the merge refuse with exit status 1, naming the shard, so a stage with a
+partial shard fails loudly instead of being counted. --allow-partial merges
+the finished pairs of such shards (an AWS spot shard stopped by an
+interruption keeps its finished pairs, tools/cloud/aws_spot_sprt.sh); the
+SPRT drivers never pass it.
+
+Per-shard rows (the factorial removal round, DESIGN.md §5.6 step 18; design
+docs/research/phase4-designs/factorial-removal-round.md §3.1 and §3.3): each
+shard of a stage plays its own row of switch settings as its test options,
+so the same-options check gets a design-mode exemption. With --design FILE
+--name NAME (the driver) the row each shard must have played is recomputed
+from the design and the permutation of NAME and the shard's stage
+(tools/github/factorial_fit.py); with --stage-rows FILE (sprt.yml's merge
+job) it is read from the stage's rows input. Either way every shard must
+record that row (meta.row), its options (meta.test_opts) and the design's
+digest (meta.design), or the merge refuses; test_opts is then no longer
+compared across shards, while the design digest is. Without these options
+nothing changes.
+
+    python3 tools/cloud/sprt_merge.py merge ... [--design FILE --name NAME | --stage-rows FILE]
 """
 import argparse
 import json
 import math
 import re
 import sys
+from pathlib import Path
 
 PAIR_SCORES = (0.0, 0.25, 0.5, 0.75, 1.0)
 NELO_SCALE = 800 / (math.log(10) * math.sqrt(2))
@@ -81,6 +120,24 @@ def verdict(ptnml, nelo0, nelo1, alpha=0.05, beta=0.05):
     lower, upper = bounds(alpha, beta)
     value = llr(ptnml, nelo0, nelo1)
     return value, ('H1 accepted' if value >= upper else 'H0 accepted' if value <= lower else 'continue')
+
+
+def stage_decision(ptnml, nelo0, nelo1, alpha, beta, played, cap, futility_after=0, fixed=False):
+    """A staged design's decision after `played` stages: (decision, detail), the decision one of
+    'continue', 'H1 accepted', 'H0 accepted', 'futility stop', 'capped', 'complete' (module docstring)."""
+    if fixed:
+        if played >= cap:
+            return 'complete', f'complete ({played} of {cap} stages, fixed length)'
+        return 'continue', 'continue'
+    _, decision = verdict(ptnml, nelo0, nelo1, alpha, beta)
+    if decision != 'continue':
+        return decision, decision
+    estimate = nelo(ptnml)
+    if futility_after > 0 and played == futility_after and estimate < 0:
+        return 'futility stop', f'futility stop (nElo {estimate:.2f} < 0 after {played} stages)'
+    if played >= cap:
+        return 'capped', f'capped ({played} of {cap} stages, undecided)'
+    return 'continue', 'continue'
 
 
 _GAME = re.compile(r'^Finished game (\d+) \((\S+) vs (\S+)\): (1-0|0-1|1/2-1/2) \{(.*)\}')
@@ -144,15 +201,59 @@ def final_status(status, pairs, meta):
     return status
 
 
-def merge(shards):
+def incomplete(shard):
+    """Why a shard is not complete (status "done" with every planned pair finished), or None if it is."""
+    meta = shard.get('meta', {})
+    where = f'stage {meta.get("stage", "?")} shard {meta.get("shard", "?")}'
+    status = shard.get('status', '?')
+    pairs = sum(shard['ptnml'])
+    if status != 'done':
+        return f"{where} has status {status!r}, not 'done' ({pairs} pairs)"
+    try:
+        planned = int(meta['rounds'])
+    except (KeyError, TypeError, ValueError):
+        return f'{where} records no planned rounds (meta.rounds {meta.get("rounds")!r})'
+    if pairs != planned:
+        return f'{where} has {pairs} pairs of {planned} planned'
+    return None
+
+
+def check_rows(shards, rows, by_shard_only=False):
+    """Every shard played the row the design says (the factorial round's per-shard rows): rows maps
+    (stage, shard), or the shard alone with by_shard_only, to (row, opts, design digest), as strings."""
+    for s in shards:
+        meta = s.get('meta', {})
+        where = f'stage {meta.get("stage", "?")} shard {meta.get("shard", "?")}'
+        key = str(meta.get('shard')) if by_shard_only else (str(meta.get('stage')), str(meta.get('shard')))
+        if key not in rows:
+            raise ValueError(f'{where} has no row in the design for its stage')
+        row, opts, digest = rows[key]
+        got = (str(meta.get('row')), meta.get('test_opts'), meta.get('design'))
+        if got != (row, opts, digest):
+            raise ValueError(f'{where} played row {got[0]!r} with options {got[1]!r} (design {got[2]!r}), '
+                             f"not the permutation's row {row!r} with {opts!r} (design {digest!r})")
+
+
+def merge(shards, require_complete=False, rows=None, by_shard_only=False):
     """The summed counts; refuses shards of different tests (commits,
     conditions, tables on or off, opening book), or two shards whose opening
     ranges intersect (stages run with different games or shards values, or
     AWS shards beside GitHub ones, would otherwise replay openings). The
     test is identified by its commits and conditions, not by binary hashes:
     machines that build for themselves produce different bytes (debug info,
-    build paths)."""
+    build paths). With require_complete (the CLI's default), every shard must
+    be complete: incomplete() names the first reason it is not. With rows
+    (a design's per-shard rows, check_rows), each shard's row is checked
+    instead of comparing test_opts across shards, and the design digest is
+    compared."""
+    if require_complete:
+        reasons = [r for r in (incomplete(s) for s in shards) if r]
+        if reasons:
+            raise ValueError(f'{len(reasons)} of {len(shards)} shards incomplete: ' + '; '.join(reasons))
     keys = ('base', 'test', 'tc', 'hash', 'base_opts', 'test_opts', 'tables', 'book_sha')
+    if rows is not None:
+        check_rows(shards, rows, by_shard_only)
+        keys = tuple(k for k in keys if k != 'test_opts') + ('design',)
     first = shards[0].get('meta', {})
     for s in shards[1:]:
         for k in keys:
@@ -197,6 +298,38 @@ def report(merged, nelo0, nelo1, alpha=0.05, beta=0.05):
     ])
 
 
+def design_rows(a, shards):
+    """(rows, by_shard_only, report line) for merge() from the CLI's --design/--name or --stage-rows, or
+    (None, False, None) without them; ValueError for a design or table that cannot be used."""
+    if a.design is None and a.name is None and a.stage_rows is None:
+        return None, False, None
+    if a.stage_rows is not None:
+        if a.design is not None or a.name is not None:
+            raise ValueError('--stage-rows goes without --design and --name')
+        try:
+            with open(a.stage_rows, encoding='utf-8') as f:
+                table = json.load(f)
+            rows = {str(i): (str(e['row']), e['opts'], table['design']) for i, e in enumerate(table['shard_rows'])}
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            raise ValueError(f'--stage-rows {a.stage_rows}: {e!r}') from e
+        if len({str(s.get('meta', {}).get('stage')) for s in shards}) != 1:
+            raise ValueError("--stage-rows checks one stage's shards")
+        return rows, True, f"Rows: every shard played its row of the stage's table (design {table['design'][:12]})"
+    if a.design is None or a.name is None:
+        raise ValueError('--design and --name go together')
+    import importlib
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'github'))
+    factorial_fit = importlib.import_module('factorial_fit')
+    try:
+        design = factorial_fit.load_design(a.design)
+    except (OSError, ValueError, factorial_fit.Refused) as e:
+        raise ValueError(f'--design {a.design}: {e}') from e
+    stages = sorted({int(s.get('meta', {}).get('stage', -1)) for s in shards})
+    return (factorial_fit.expected_rows(design, a.name, stages), False,
+            f'Rows: every shard played its permuted row (design {factorial_fit.design_digest(design)[:12]}, '
+            f'{len(design["rows"])} rows, name {a.name})')
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -212,6 +345,15 @@ def main(argv=None):
     m.add_argument('--alpha', type=float, default=0.05)
     m.add_argument('--beta', type=float, default=0.05)
     m.add_argument('--json')
+    m.add_argument('--played', type=int, help='stages played so far: adds the staged design\'s Verdict line')
+    m.add_argument('--cap', type=int, help='with --played: the design\'s cap in stages')
+    m.add_argument('--futility-after', type=int, default=0, help='with --played: the futility look (0: none)')
+    m.add_argument('--fixed', action='store_true', help='with --played: a fixed-length run, never decided')
+    m.add_argument('--allow-partial', action='store_true',
+                   help='also merge the finished pairs of shards not done or short of their rounds (AWS spot)')
+    m.add_argument('--design', help="a factorial design file: each shard's row checked (with --name)")
+    m.add_argument('--name', help='with --design: the run name the row permutation derives from')
+    m.add_argument('--stage-rows', help="one stage's rows input (sprt.yml's rows, JSON): each shard's row checked")
     a = ap.parse_args(argv)
     if a.cmd == 'snapshot':
         with open(a.log, encoding='utf-8', errors='replace') as f:
@@ -225,15 +367,33 @@ def main(argv=None):
     for path in a.files:
         with open(path, encoding='utf-8') as f:
             shards.append(json.load(f))
-    merged = merge(shards)
+    try:
+        rows, by_shard_only, rows_line = design_rows(a, shards)
+        merged = merge(shards, require_complete=not a.allow_partial, rows=rows, by_shard_only=by_shard_only)
+    except ValueError as e:
+        print(f'sprt_merge.py: merge refused: {e}', file=sys.stderr)
+        return 1
     if merged['pairs'] == 0:
         print(f'no finished pairs in {len(shards)} shards: nothing to merge', file=sys.stderr)
         return 1
     print(report(merged, a.elo0, a.elo1, a.alpha, a.beta))
+    if rows_line:  # after the report, before any Verdict line (the driver keeps the last lines)
+        print(rows_line)
+    staged = None
+    if a.played is not None:
+        if a.cap is None:
+            print('--played needs --cap', file=sys.stderr)
+            return 1
+        staged = stage_decision(merged['ptnml'], a.elo0, a.elo1, a.alpha, a.beta, a.played, a.cap,
+                                a.futility_after, a.fixed)
+        print(f'Verdict: {staged[1]}')
     if a.json:
         value, decision = verdict(merged['ptnml'], a.elo0, a.elo1, a.alpha, a.beta)
         merged.update(elo0=a.elo0, elo1=a.elo1, llr=value, verdict=decision, nelo=nelo(merged['ptnml']),
                       elo=elo(moments(merged['ptnml'])[1]))
+        if staged is not None:
+            merged.update(decision=staged[0], decision_detail=staged[1], played=a.played, alpha=a.alpha,
+                          beta=a.beta)
         with open(a.json, 'w', encoding='utf-8') as f:
             json.dump(merged, f, indent=1)
     return 0

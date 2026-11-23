@@ -12,6 +12,7 @@
 
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
+#include "search/helper_pool.hpp"
 #include "search/search_bench.hpp"
 #include "search/searcher.hpp"
 
@@ -170,6 +171,46 @@ int main() {
     }
     std::printf("search depth 4 on the %zu bench positions: %llu nodes, %ld heap allocations\n",
                 forkeng::search_bench_fens().size(), static_cast<unsigned long long>(nodes), during);
+    if (during != 0) ++failures;
+  }
+  {
+    // Lazy SMP (the correctness audit of 2026-11-16, area 1, A2): once the
+    // pool and its helper threads exist, a pooled go allocates nothing, the
+    // root copies included, while the game grows two plies a go (the
+    // concurrency review's "copy-assign it each go, so no go allocates").
+    std::vector<forkeng::TtBucket> buckets(16384);
+    forkeng::TransTable table;
+    table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()),
+                      buckets.size() * sizeof(forkeng::TtBucket));
+    auto main = std::make_unique<forkeng::Searcher>(table);
+    forkeng::HelperPool pool(table, 16384);
+    if (pool.resize(1) != 1) ++failures;
+    forkeng::Position root;
+    root.reserve_plies(16384);
+    forkeng::SearchQuota limits;
+    limits.depth = 3;
+    const std::atomic<bool> stop{false};
+    long during = 0;
+    for (int go = 0; go < 6; ++go) {
+      const long before = allocations.load();
+      forkeng::SearchStart plan;
+      forkeng::prepare_start(table, main->switches, root, plan);
+      if (pool.begin_search(root, main->switches, plan, limits, *main)) {
+        plan.helpers = pool.searchers();
+        plan.helper_count = pool.helper_count();
+      }
+      main->deliberate(root, limits, stop, nullptr, nullptr, &plan);
+      pool.end_search();
+      pool.wait_idle();
+      during += allocations.load() - before;
+      for (int ply = 0; ply < 2; ++ply) {  // the game goes on (outside the count)
+        forkeng::MoveList moves;
+        forkeng::generate<forkeng::GenMode::Legal>(root, moves);
+        if (moves.size() == 0) break;
+        root.make(moves[0]);
+      }
+    }
+    std::printf("6 pooled gos (1 helper) of a growing game: %ld heap allocations\n", during);
     if (during != 0) ++failures;
   }
   std::printf("%s\n", failures ? "FAIL: hot path allocated" : "ok: no heap allocation in the hot path");

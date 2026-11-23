@@ -305,9 +305,12 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** none.
 - **earliest phase:** Phase 4.
 - **sources:** David J. Wu, "Accelerating Self-Play Learning in Go"
-  (KataGo), arXiv:1902.10565 (title, author and abstract checked on
-  2026-10-24; that its full text describes playout cap randomization is
-  UNVERIFIED: the PDF could not be read here and ar5iv did not respond).
+  (KataGo), arXiv:1902.10565. Title, author and abstract checked on
+  2026-10-24; full text read on 2026-11-09 (v5 §3.1 "Playout Cap
+  Randomization"; v1 §6.1 "Playout Cap Oscillation"): on a random fraction
+  of turns a full search, capped at a large node count, is recorded for
+  training; the other turns use a much smaller cap and are not recorded
+  (KB research-idea13-prior-art.md §3.1).
 - **status:** experiment done, H1 accepted (2026-10-31); approved (owner, 2026-10-30;
   DESIGN.md decisions log): fork_datagen's split search (`--save-percent`,
   `--unsaved-nodes`, `--check-nodes`, off by default); arm A is generation
@@ -354,6 +357,18 @@ added on 2026-10-24; ideas 1-12 predate them.
   implemented, game endings included. Round 2's snapshot includes g2b,
   since the SPRT passed before it. Whether generation 2's next parts
   switch to the split settings is the owner's call.
+  **Publication plan (owner, 2026-11-07):** once a prior-art search is done (is the split search, cheap
+  unsaved moves interleaved with expensive saved ones in self-play, already published under another name;
+  KataGo's playout-cap randomisation is the nearest known relative), write a reproduction guide in
+  docs/research/ (mechanism, evidence, implementation, settings, costs and failures), then a TalkChess
+  summary post and possibly an arXiv note, stating clearly that the idea came from an AI-assisted project.
+  Anything published outside the repository needs the owner's go-ahead at the time.
+  **Prior-art search done (2026-11-09, KB docs/kb/research-idea13-prior-art.md):** the mechanism is KataGo's
+  playout cap randomization, already applied in AlphaZero-style chess (PeaZero PR 12, 2026-10-20, a gain of
+  +67.36 ± 18.53 at 8+0.08 on its OpenBench; Braun 2026, arXiv:2609.37447, not retained). No application to
+  alpha-beta NNUE data generation was found in the sources searched, so a write-up would present it as an
+  application with a measured result, not a new mechanism (the owner decides the publication plan).
+- **settings re-check (owner, 2026-11-12, about 1:30 PM EST: the split search's settings (the save share and the saved and unsaved node budgets) are re-checked whenever the data volume grows substantially, like other tuned values; the label-depth experiment's result (idea 62) and idea 80's 8c arm together decide the next settings (for example deeper saved labels and/or a higher save share if deeper labels win at equal CPU)).**
 
 ## 14. Auxiliary training targets
 
@@ -372,8 +387,10 @@ added on 2026-10-24; ideas 1-12 predate them.
   size and speed).
 - **earliest phase:** Phase 4.
 - **sources:** KataGo (arXiv:1902.10565, as idea 13) is the motivating
-  example; which auxiliary targets it uses is UNVERIFIED for the same
-  reason.
+  example; its full text (read 2026-11-09 for idea 13's prior-art search)
+  adds an auxiliary target predicting the opponent's reply (§3.4), and its
+  §5.2 ablation (NoVAux) removes the ownership and score targets (KB
+  research-idea13-prior-art.md).
 - **status:** untested
 
 ## 15. Adversarial robustness testing
@@ -474,7 +491,10 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** none in the search (allocation only); possible risk in
   allocation failure paths, which must keep the fallback.
 - **earliest phase:** Phase 3 (the TT exists).
-- **status:** untested
+- **status:** untested (explicit pages). Speed sprint 4 (2026-11-13) measured the transparent-huge-page side
+  for the network and the Searcher (think tank R19): no difference at 16 MB Hash; the 4 GB regime unmeasured
+  (idea 174; archive/speed4-r19-hugepages). The 4 GB+ and TCEC-size (262144 MB) regimes are on the TCEC hardware
+  test plan (owner, 2026-11-13; docs/research/tcec-hardware-test-plan.md entry 1).
 
 ## 20. AVX-512 VNNI for Phase 4 inference
 
@@ -638,6 +658,20 @@ tuned by SPSA.
   long run (40 generations) stays in **late Phase 4** (owner, 2026-10-28),
   after the first strong network and the search re-validation. Pilot scheduled
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 19):** the long run on the label-and-sweep proxy is replaced by a capped pilot with a game-based fitness (R38), after the LMR terms (§5.6 order step 20).
+  **Restart plan (owner, 2026-11-09; plan only, still parked):** the first target is **the quiet move-ordering
+  score** (how the history tables combine: the butterfly, reply, follow and take terms and their weights), with
+  fitness = **nodes to a fixed depth on a large position set** (deterministic), a **held-out set** for confirmation,
+  and a **guard that search results stay equivalent** (on a check set: the same best move, and the score within a
+  declared tolerance); the winner then plays a **design R SPRT**. **Runner-up target:** the time-management
+  formula, with a game-based fitness (time-management parameters stay out of SPSA, think tank decision 4).
+  **Ordering pilot, 2026-11-09/10: NULL RESULT (owner, 2026-11-10; DESIGN.md decisions log).** 5 generations x 8
+  candidates on the quiet ordering score (docs/research/idea23-pilot/, evolve/ordering-pilot 52a0fd6; 543,832 tokens
+  of the 10 M cap; 0 gate failures, 0 guard refusals): the ordering formula is near-optimal for this fitness; the best
+  candidate by the declared rule (#35: +0.39% nodes saved [-0.39, +1.19], held-out +1.43% [-0.33, +3.18], 85.6%
+  equivalent) is within noise on both sets, so nothing goes to an SPRT. **The full replay was stopped before it
+  finished by the owner's decision** (2026-11-10, about 9:00 AM EST, to free its CPU for the label-depth arms and the
+  fix 1+2 pilot); **the pre-pilot tiny live run's full replay had reproduced every candidate exactly** (2026-11-09). **Idea 23 is parked again**; the time-management formula stays noted as the next possible target, **no
+  run planned**.
 - **Candidate region for the long run (owner, 2026-10-31):** a correction
   to the singular test's margin and depth (tier 2, T27), for example a
   dependence on the TT entry's depth deficit. The measured form (DESIGN.md
@@ -645,6 +679,9 @@ tuned by SPSA.
   shallower, test at d / 2) closely matches Stockfish 11's test as a whole
   (ORIGINALITY.md); an evolved correction is one route to a form of Fork's
   own.
+
+- **2026-11-14 (owner): the revamp** (docs/research/idea23-revamp-2026-11-14.md) is recorded and placed as a **final pre-TCEC polish step**, after Lazy SMP, the removal round, the final retune and the TCEC fixes; traces from the final engine under TCEC-like conditions (many threads, long TC; ideally during the rented-hardware dry run); no engineering until then. Decisions: target order time management, then row-choice states, then the calibration layer only if idea 180 gains; simulator coefficient fitting approved for the time-management target only (candidates; games decide); the 12-arm one-stage screen batch with three predicted-loser arms approved; E2's clamp fix included in the simulator once its LTC decides; the stage-0 simulator validation reported before tokens or GitHub time are spent.
+- **2026-11-14 (owner, about 12:20 PM EST): E2 adopted** (`UseDeepTimeDepth` on, the time scale's depth clamped at 60, not 19; idea 185) under the non-regression standard, its LTC capped undecided at +2.16 ± 3.47 Elo; "Include it in idea 23's simulator when that work starts": the simulator's time-management model uses the clamp at 60 (the engine's rule since the adoption).
 
 ## 24. TT victim policy under real table pressure
 
@@ -693,7 +730,13 @@ tuned by SPSA.
 - **metric:** SPRT [0, 3].
 - **runtime cost:** possible (a lookup per node).
 - **earliest phase:** Phase 3.
-- **status:** untested
+- **status:** **H0 at design R, 2026-11-12; the non-regression fallback queued** (sprt-log). Built as think
+  tank R12 / the engine survey's F7 behind `use_revisit_draw`, off, on phase-4 26323e1's engine (tier2/f7-revisit
+  718ad42; Fork's repetition rule as it stands, idea 31), test sprt/f7-revisit 778cbf5 (on; bench 9,524,186 /
+  b47d75ab53d667ce). f7-revisit-stc (design R [0, 6] at STC against off, lane B item 81a): H0 after stage 7,
+  −0.03 ± 3.48 Elo, nElo −0.05 ± 6.02, 12,800 games. Its estimate is not clearly negative, so item 81b
+  (the bug-fix fallback as used for E1: a non-regression SPRT, nElo [−3, 0], alpha = beta = 0.05, same commits,
+  fresh openings) runs next in lane B; not started at 2:15 PM EST. Nothing is adopted before the owner sees it.
 
 ## 27. Fifty-move-rule scaling of the evaluation in long endgames
 
@@ -853,6 +896,7 @@ tuned by SPSA.
   when the eval-dependent margins are retuned after Phase 4** (Quality
   control 6), with an SPRT.
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** retired as a standalone test: RfpMargin is one point on the early SPSA's axis (R14, §5.6 order step 11).
+  **2026-11-09: tuned by the R14 SPSA and adopted (owner):** RfpMargin 55 within the set (STC design R +37.93 ± 10.03, H1; DESIGN.md decisions log); the final retune widens its lower bound to about 30.
 
 ## 35. The bootstrap eval calls insufficient_material twice
 
@@ -1020,6 +1064,14 @@ tuned by SPSA.
     not help (archive/s512pp-speed-switches); perf stat put the extra cost
     in instructions (the pair search about 200 per node), with branch
     misses about 20% of the extra cycles.
+  - **Independent of Incipit** (owner, 2026-11-14): Fork's 608-link
+    window came from this entry's own steps (the Structure System planned
+    2026-11-02, its pawn-pair first step chosen 2026-11-05, the links built
+    and the R = 1 window measured 2026-11-05/06) before any survey opened an
+    Incipit page (first on 2026-11-10), while Incipit merged its pawn pairs
+    on 2026-10-20/21 with a window of the same 608 inputs (the network
+    survey agent's inference from its net's file size), and both trace to
+    pawnocchio's pawn-pair idea, credited in ORIGINALITY.md.
   - **not trained** (below the gate).
 
 ## 41. S-512 with Fork's own threat and pawn-pair inputs
@@ -1073,6 +1125,7 @@ tuned by SPSA.
 - **earliest phase:** Phase 4.
 - **status:** untested (planned 2026-11-05).
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 11):** folded into the round-once LMR step (R20) as its variant, run only if the centred history term passes; no longer §5.6's item 8.
+  **2026-11-13:** the centred term passed (R20 adopted at STC and LTC; idea 43), so this variant's condition is met; not built or queued (the owner's call). R20's term already reads the reply and follow entries (the one-ply and two-ply continuations).
 
 ## 43. Fractional depth
 
@@ -1092,6 +1145,7 @@ tuned by SPSA.
 - **status:** untested (planned 2026-11-05); design below (owner, 2026-11-05:
   plan only, no code yet).
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** shrunk to round-once LMR arithmetic (R20); the full refactor (level 2) is out of Phase 4 and no longer precedes the SPSA retune.
+  **2026-11-13: R20 adopted** (level 1: round-once LMR in 64ths of a ply with the centred history term, `use_centred_lmr_history` on, `LmrHistoryPerPly` 10,000): design R against off passed at STC (+8.04 ± 4.04 Elo, nElo +13.84 ± 6.95, H1 after 9,600 games) and at LTC 40+0.4 (+6.21 ± 4.35 Elo, nElo +11.94 ± 8.35, H1 after 6,656 games; sprt-log), pre-approved by the owner; ported onto phase-4 1449010 with B9's not-improving ply as a whole multiple of 64 in the sum; bench 6,426,679 / 4c4375887f835cc7 (DESIGN.md decisions log, 2026-11-13). Speed (bench/ab_search.py, A = 1449010): median nps +0.9%, best +0.5%, under the 3.0% noise threshold, so no significant difference (identity checked on all 24 runs). `LmrHistoryPerPly` is a class (a) dimension of the final retune.
 - **Design** (Fork's own, from the KB entry's concepts):
   - **Unit:** depth is held in units of 1/64 ply (`OnePly = 64`): a power
     of two, fine enough for SPSA to move a reduction in small steps
@@ -1115,7 +1169,9 @@ tuned by SPSA.
     base LMR reduction in units (the table's value without its final
     rounding; the KB's strongest evidence is fractional LMR); (2) the LMR
     adjustments as fractional amounts (the check relief, the cut-node and
-    PV-trace steps, idea 42's continuation terms); (3) the null move's depth;
+    PV-trace steps, idea 42's continuation terms; the cut-node step is
+    live at one whole ply since 2026-11-11, STC +6.02 ± 3.67 and LTC
+    +9.75 ± 5.14, so its fractional form is measured against that); (3) the null move's depth;
     (4) extensions (the singular extension's +1 as a measured fraction).
 - **Conversion plan, behaviour identical until each use is measured:**
   1. One refactor: negamax's depth and every child depth in units
@@ -1226,6 +1282,8 @@ tuned by SPSA.
   set), the conversion rate, then the net's promotion test.
 - **status:** in the next snapshot (owner, 2026-11-06: lifted from its hold): the slice goes into g3s2, and the check becomes the standing acceptance test for the retrained default (DESIGN.md §5.6, order item 7).
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 10):** the acceptance target is at most 15 of 900 misjudged; part 3 (conversion without tables) dropped; part 2 extended to 4-5-man classes (X19).
+  **2026-11-11 (bug review T1; owner):** the check measures **recall**, not understanding: 898 of its 900 positions (509 in the single file slice1-01) are in the slice's files verbatim, because the slice draws half its positions from the same three endings by the same placement rule. The held-out check (tools/nnue/endgame_heldout.py, X19's 4-5-man classes) has 3,800 positions in 16 four-piece and 3 five-piece classes the slice cannot generate, with zero overlap with all 26 M slice positions; misjudged: S512r2 658, S512+PP 945, S512ppr2 454, S512ppr3 514, r8btd90 526, r8brft1 612 (docs/research/bug-review-followup-2026-11-11.md).
+  **2026-11-12 (owner, about 4:40 PM and 5:00 PM EST; DESIGN.md decisions log):** the 900-position check **stays a gate**, named the **integrity/recall gate** (at most 15 of 900 misjudged; it catches missing or corrupted slice data; about 5:50 PM EST: enforced by gates.sh's exit status for nets trained with the endgame slice, `SLICE_TRAINED=1`, reported only otherwise, and 8c's fresh slice keeps the 900 positions). The held-out checks (4-5, 6-7 and 8-12 pieces) are reported for every candidate and flagged for the owner's review when more than 15% worse than the **current default net** (what a promotion would replace), with each count's change against the run's warm start reported for diagnosis (tools/nnue/gates.sh); they are never a gate on screening or promotion.
 
 ## 46. Threat knowledge at a low speed cost: the design brainstorm
 
@@ -1440,6 +1498,7 @@ the screens before use.
   then the fixed-node screen and the STC SPRT. **status:** untested (plan
   only, owner, 2026-11-07). **runtime cost:** none. **earliest phase:**
   Phase 4.
+- **follow-up (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):** closeness-weighted training is one of the 8c retrain arms (idea 59's follow-up plan, item 3), beside near-window oversampling; two seeds each if the quota allows.
 
 ## 49. Pairwise ranking loss on sibling positions
 
@@ -1536,7 +1595,11 @@ the screens before use.
   Differences" (Machine Learning, 1988); Baxter, Tridgell and Weaver,
   TDLeaf(lambda) in KnightCap (1998/2000); the KataGo paper's remark that
   the outcome target is data-limited (Wu, 2019) (UNVERIFIED as exact
-  citations).
+  citations). **Credit (owner, 2026-11-09):** KataGo's short-term value
+  targets (Wu, 2019: value targets built from the game's own later
+  evaluations over short horizons, beside the final outcome) are the
+  nearest relative of these TD(lambda) labels and are credited at concept
+  level (UNVERIFIED as an exact description of the paper).
 - **first experiment:** the offline variance study (lambda against gold-set
   error, CPU minutes once X7 exists); then a small net on the same
   positions, the current blend against the TD(lambda) target, two seeds,
@@ -1549,6 +1612,24 @@ the screens before use.
   gold-set loss, the fixed-node screen, then the STC SPRT. **status:**
   untested (plan only, owner, 2026-11-07); overlaps the think tank's R37
   (n-step and lambda-return targets), which this entry supersedes.
+  **2026-11-10: retrain 8b's TD(0.9) arm, r8btd90, is promoted to the
+  default network** (owner; its fixed-node screen against S512ppr3
+  +17.39 ± 9.71, the highest of 8b's four candidates; STC [0, 5]
+  +12.17 ± 5.71, H1 after 4,800 games; sprt-log, DESIGN.md §6). The
+  TD(0.8) arm screened −1.09 ± 9.30 against S512ppr3. The idea's own keep
+  rule (retrain 8b's plan §3 item 7: the TD arm's head-to-head against
+  the control above +4 Elo, its endgame check not worse than the
+  control's; both 7 of 900) is still pending: the td80 and td90
+  head-to-heads against c are queued.
+  **2026-11-11: kept (owner): TD(0.9) labels stay in the standard retrain
+  recipe.** Head-to-heads against the control r8bc (800,000 nodes per
+  move, 1,600 games each): td90 +4.13 ± 9.47 (run 42935666743), above the
+  plan's +4 keep line, its endgame check 7 of 900 as the control's; td80
+  −0.87 ± 9.13 (42930415181), not kept. The measured seed noise (c2
+  against r8bc, −6.08 ± 9.42; idea 69) is as large as that margin, so
+  every future retrain arm runs 2 seeds (owner, 2026-11-11). r8btd90's
+  result fine-tune, r8brft1, was the default from 2026-11-11 to 2026-11-14
+  (idea 70; r8ceplo2 since).
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 52. Ensemble-disagreement active learning
@@ -1591,6 +1672,13 @@ the screens before use.
   the standard arm by a meaningful margin (a fixed-node screen of +5 Elo or more, or a passing SPRT
   if it is screened), idea 52 is retired and the scratch-run rule dropped (saving its 2-4 hours per
   retrain); the result stays in the record either way.
+  **2026-11-10, retrain 8b:** the i52 arm's fixed-node screen against S512ppr3 was +5.86 ± 9.13 (the
+  control's +13.03 ± 9.37; the TD(0.9) arm, +17.39, was promoted); the keep rule's head-to-head against
+  the control (r8b-h2h-i52) is running, so the idea is undecided.
+  **2026-11-11:** the head-to-head against the control r8bc was **−4.13 ± 9.60** (run 42925024784, 1,600
+  games at 800,000 nodes); **the i52 arm is not kept** (owner). It misses the keep-or-drop rule's +5 line,
+  so by that rule idea 52 is retired and the scratch-run rule dropped. **Retired (owner, 2026-11-11, about
+  3:30 PM EST):** the owner confirmed the keep rule's consequence; the scratch-run rule is dropped.
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 53. Pawn-structure-class output experts
@@ -1849,9 +1937,24 @@ until measured; new names and constants go through the screens before use.
   measures q at each margin.
 - **literature:** cascades of classifiers (Viola and Jones, 2001) and
   conditional computation (Bengio, Leonard and Courville, 2013), where an
-  expensive model runs only on hard inputs; lazy evaluation in chess
-  engines (Chess Programming Wiki), here in the opposite direction
-  (UNVERIFIED as exact citations). Related Fork entries: idea 46's gated
+  expensive model runs only on hard inputs (both verified 2026-11-08:
+  Viola and Jones, CVPR 2001; Bengio, Léonard and Courville,
+  arXiv:1308.3432). **The window gate itself is classic lazy evaluation**
+  (Chess Programming Wiki, "Lazy Evaluation": the costly terms are
+  computed only when the cheap score lies near the window, and added to
+  it), the same rule, not its opposite (corrected 2026-11-08). The prior-art
+  search (2026-11-08; KB branch kb, docs/kb/research-boundary-refiner-prior-art.md)
+  also found the near-bound rationale argued on TalkChess (2017), a 2020
+  Stockfish proposal to choose its evaluation by the window (closed
+  untested), Stockfish's conditional second networks under other gates,
+  and decision-relevance arguments in the literature. What it did not find,
+  within the sources searched: a separately trained residual refiner on a
+  full NNUE base, consulted only within a small budget margin, trained on
+  the engine's own near-window positions with deep labels, sharing the
+  base accumulator; and a controlled test of where it is consulted (window
+  gate against a random gate at equal call rate, plus a bias-only
+  control). Any public text places idea 59 in the lazy and two-tier
+  evaluation family and claims only what the search did not find. Related Fork entries: idea 46's gated
   evaluation's oracle (the same family), idea 48 (the decision-focused
   view at training time), idea 50 (near-boundary margins).
 - **step 1 (measurement):** with the stats build (the step 1 tooling),
@@ -1892,8 +1995,90 @@ until measured; new names and constants go through the screens before use.
   used, or always store the base evaluation.
 - **phase:** Phase 4, after item 8a. **metric:** call rates (step 1), the
   fixed-node screen and nps (step 2), then the STC SPRT. **status:**
-  untested (plan only, owner, 2026-11-07). **runtime cost:** possible.
+  untested (plan only, owner, 2026-11-07); step 1 measured (call rates; measure/step1). **Step 2
+  passed, and the control split confirms the mechanism (owner, 2026-11-08).** Fixed-node screens of
+  1,600 games, 800,000 nodes per move, against S512r2 alone (base 56dacaf; oracle and controls on
+  exp/oracle, d5bb138 and 92aa87c):
+
+  | setting | Elo | nElo | run |
+  |---|---|---|---|
+  | (a) window gate, main 25 / quiescence 10 cp, S512+X refines (3.81% of nodes consulted) | +29.82 +/- 9.78 | +52.21 | 42436884886 |
+  | (b) window gate, main 25 / quiescence 25 cp | +41.01 +/- 9.97 | +70.68 | 42439918061 |
+  | random gate at (a)'s call rate (key-hashed, 3.82% of nodes) | +7.60 +/- 9.93 | +13.04 | 42451958660 |
+  | bias only: (a)'s gate adding its mean refinement, +10.776 cp, S512+X never consulted | −14.56 +/- 9.96 | −24.92 | 42448595388 |
+
+  Both settings clear the kill line (+8.6) at a call rate far under 10%. At equal call rate the window
+  gate beats the random gate by about 22 Elo (about 3 standard errors), and the random gate's own gain
+  is inconclusive against zero: the gain comes from where the refiner is consulted. The bias-only
+  control loses, so the gain is not a calibration shift: it lives in the refiner's position-specific
+  corrections. The random sites' corrections are larger (mean |refinement| 36.9 cp against 25.6), so
+  the size of the disagreement is not what pays; its position relative to the window is. Fixed-node
+  results do not charge the second network's cost: the nps A/B awaits a quiet machine, and step 3's
+  design (a shared accumulator) is what the cost claim rests on. **Next: step 3's design, for the
+  owner's review before building** (with the owner's 2026-11-08 additions: a head-to-head of a wider
+  quiescence margin and both margins SPSA-tunable; TT-reused evaluations considered in the gate; a
+  confidence output; training weighted by closeness to the window, idea 48 applied here; a cap on the
+  correction's size; features in the order exposure, a cheap bitboard danger summary, then threats only
+  if they fit the speed budget), and a prior-art search for gated, boundary-specific evaluation
+  refiners before any public claim. **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
+  SPRTs, write a reproduction guide in docs/research/boundary-refiner/ (the mechanism; the evidence,
+  including the control split of window-gated refiner, bias-only and random gate; implementation details;
+  the refiner's training; failures and costs; settings), then a TalkChess summary post and possibly an
+  arXiv note, stating clearly that the idea came from an AI-assisted project. Anything published outside
+  the repository needs the owner's go-ahead at the time. **runtime cost:** possible.
   **earliest phase:** Phase 4.
+- **step 3 outcome (owner, 2026-11-09): the shared-accumulator refiner hurt; step 3 closes, step 3b
+  parked.** Kernel v2 (idea59/step3 a9bbd88; the declared pick w2, cap 198, weighted arm, seed 2) cut
+  validation loss from 0.0426 to 0.0227 but failed the offline acceptance (gated net flips −0.007 on test;
+  a constant +122 cp shift scored +0.143, above the oracle's +0.079). By the owner's decision (2026-11-08)
+  the net-flip yardstick is not a kill gate, and fixed-node screens decided instead (1,600 games,
+  800,000 nodes per move, against S512ppr3 alone; gate main 25 / quiescence 10 cp):
+
+  | setting | Elo | nElo | run |
+  |---|---|---|---|
+  | f1a: refiner (shared accumulator), both gates (idea59/step3 05061ce) | −19.78 +/- 9.67 | −34.91 | 42574807031 |
+  | f1b: refiner, quiescence only (077d1c8) | −11.73 +/- 9.63 | −20.76 | 42589690181 |
+  | f1c: second opinion, blend (base + second) / 2 with the independent net s512pp-scratch-s1 (exp/oracle dcbe8fb) | +9.56 +/- 9.45 | +17.24 | 42594402144 |
+  | f1d: second opinion, replace by s512pp-scratch-s1 (ab1abce) | +3.47 +/- 9.34 | +6.33 | 42600420297 |
+
+  Both refiner screens are at or below 0, so the refiner line ends (no SPRT ran; the pre-approved STC
+  SPRTs needed a point estimate above 0). The independent-net screens match the pattern the
+  independence hypothesis (owner, 2026-11-08) predicted, with the blend ahead of the replacement, but f1c is
+  below the bar declared before the result (+10), so no step 3b plan is written. **Step 3b, parked as a
+  hypothesis to revisit when compute allows:** a small independent near-window net (widths 64 / 128),
+  blended with the base at gate fire with a tuned blend weight. The second network's nps cost (f1c and
+  f1d about 25-30% slower on bench, indicative) is not charged by fixed-node screens, which is part of
+  why the bar is set where it is. **status:** step 3 closed; step 3b parked.
+- **linked follow-ups** (owner, 2026-11-08; plan only, after step 3's first
+  results; each its own experiment, shared with idea 61's family):
+  1. **Boundary controller:** the refiner's confidence output routes each
+     near-window site to "use the correction" or "extend" (idea 60), from
+     the confidence and simple tactical signals.
+  2. **Boundary distillation:** label the refiner's training sites with
+     the big teacher (idea 58) instead of, or alongside, deep search.
+  3. **Conformal calibration** (idea 50) of the gate's and the prunes'
+     margins from the crucial-point error distribution (measure/step1,
+     daca926).
+  4. **Closeness-weighted training of the base net** (idea 48's
+     decision-focused loss), as step 3 does for the refiner.
+  5. **Site selection by nearness to the window plus seed disagreement**
+     (idea 52) for the refiner's labels. Evidence to weigh first: as a
+     crucial-point gate on its own, the seeds' disagreement was near random
+     (AUC 0.52-0.54, measure/step1), and idea 52 itself stands or falls by
+     item 8b's keep-or-drop rule.
+  6. **The gate policy as an idea 23 evolution target**, with a game-based
+     fitness (decision 19: never the label-and-sweep proxy).
+- **follow-up plan (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):**
+  1. **Correction tables, window-gated variant** (idea 78; since 2026-11-12 2:05 PM EST, of minor@32 + pieces@32, the shares summing to 64): apply the correction fully when the corrected
+     eval is near alpha or beta (a gate margin like this idea's 25 cp), fading to zero far from the window;
+     tested alongside the depth-scaled share (tier2/corr-depth-scale), against the adopted minor@32 head,
+     with the same offline gate first.
+  2. **Idea 79's fixed-node screen** as queued (lane B item 92).
+  3. **Retrain 8c candidate arms** with near-window oversampling in data generation (within the 5%
+     targeted-data cap) and closeness-weighted training (idea 48); two seeds each if the GPU quota allows.
+  4. **Step 3b re-opened** (a small independent near-window net, built lazily when the gate fires) for
+     evaluation after bake-off round 3.
+  5. **Idea 84** stays after Lazy SMP.
 
 ## 60. Near-window extension
 
@@ -1944,6 +2129,2019 @@ until measured; new names and constants go through the screens before use.
   or the SPRT fails (H0 or the futility stop).
 - **phase:** Phase 4, after item 8a, before idea 59's step 3. **metric:**
   the measured node cost, the head-to-head pick, the design R SPRT (and LTC:
-  an extension, on the LTC-sensitive list). **status:** untested (plan only,
-  owner, 2026-11-07). **runtime cost:** possible (more nodes per move at
+  an extension, on the LTC-sensitive list). **status:** **rejected
+  (2026-11-08): the design R SPRT of 10 cp against off failed (H0, −5.43 ±
+  7.25 Elo, 3,200 games, try 1 of 2), so by the kill criterion idea 60 is
+  retired**, with no second try (owner, 2026-11-08); before it, the node cost passed (10 cp +6.2% / +5.6%) and the
+  head-to-head kept 10 cp (25 − 10 −3.24 ± 12.04 nElo); docs/history/phase-4/sprt-log.md.
+  (Plan: owner, 2026-11-07.) **runtime cost:** possible (more nodes per move at
   equal depth; nps unchanged). **earliest phase:** Phase 4.
+
+## 61. Boundary-gated decisions
+
+- **type:** ELO (search; runtime cost possible).
+- **idea** (owner, 2026-11-08; plan only, after idea 59's refiner exists):
+  apply idea 59's window principle to the search's own decisions, spending
+  the refiner where a decision can flip. In order, each measured and
+  SPRT-tested on its own:
+  1. **Refiner-checked pruning:** when a prune's evaluation (reverse
+     futility, futility, razoring and the like) lies within a narrow band
+     of its threshold, consult the refiner before pruning, and prune only
+     if the refined evaluation still clears the threshold.
+  2. **Quiescence checks only near the window:** generate quiet checking
+     moves in quiescence only at nodes whose evaluation lies near the
+     window.
+  3. **Near-window deep labelling for training data:** spend the deep
+     labeller's budget on positions near the window (the refiner's own
+     training data, and possibly the base net's).
+  4. **Later, a gated move scorer** (idea 54's policy head), consulted only
+     at nodes near the window.
+
+  **Further applications** (owner, 2026-11-08), each its own experiment,
+  after the refiner exists or sooner where none is needed:
+  5. **Window-aware LMR** (no refiner needed): reduce less when the move's
+     evaluation is near alpha; its constant by head-to-head selection.
+  6. **Root-gap time management:** extra time when the top two root moves
+     are near-tied; it complements the stability time management (R8).
+  7. **Window-gated tablebase probing** for TCEC's 7-man tables: probe
+     only near the window; measure the probe cost first.
+  8. **TT replacement favouring near-bound entries:** tested at a
+     TCEC-scaled hash (decision 23).
+  9. **Near-window oversampling in data generation's save decision.**
+
+  **Priority** (owner, 2026-11-08): borderline pruning (part 1) first, then
+  window-aware LMR (5), then root-gap time management (6), then the rest.
+  Linked follow-ups (the boundary controller, boundary distillation,
+  conformal margins, closeness-weighted base training, site selection and
+  the gate policy as an evolution target) are listed under idea 59.
+
+  **Independence from idea 59's cost gate** (owner, 2026-11-08): the
+  refiner-independent applications proceed whatever step 3's cost gate
+  decides: idea 60 (the near-window extension), window-aware LMR (part 5),
+  root-gap time management (part 6), window-gated tablebase probing (part
+  7), near-bound TT replacement (part 8), near-window data saving (part 9),
+  conformal margins (follow-up 3) and closeness-weighted base training
+  (follow-up 4). **If step 3 pauses**, part 1 (refiner-checked borderline
+  pruning) switches to a short verification-search variant: a near-threshold
+  prune is confirmed by a short search instead of a refiner call.
+- **basis:** idea 59's control split (2026-11-08, ideas.md idea 59): at
+  equal call rate the window-gated refiner beat a random gate by about 22
+  Elo at fixed nodes, and a constant shift lost, so a better evaluation
+  pays where a comparison with a bound can flip. A prune is such a
+  comparison (an evaluation plus a margin against alpha or beta), so the
+  same gate should find the prunes most likely to go wrong. The DESIGN
+  Focus note (2026-11-07) asks for exactly this kind of selectivity, and
+  the crucial-point ground truth (measure/step1, daca926: 18.6% of sampled
+  evaluation sites have the static evaluation and the deep value on
+  opposite sides of the nearest bound) is the measurement to reuse.
+- **first experiment (part 1):** with the stats build, count each prune
+  kind's firings whose evaluation lies within a band of its threshold, and
+  how often a deep search disagrees with the prune there (the crucial-site
+  method applied to prunes); then build refiner-checked pruning for the
+  kind with the most wrong prunes per refiner call, behind a switch, with
+  the band chosen by head-to-head selection.
+- **kill criterion:** per part: the part's design R SPRT fails (H0 or the
+  futility stop), or its node or nps cost eats the gain (the speed gate,
+  1.5 Elo per 1% nps). Part 1 is dropped before building if the
+  measurement finds wrong prunes near the threshold no more often than
+  elsewhere.
+- **phase:** Phase 4 or later, after idea 59's step 3 passes. **metric:**
+  wrong-prune rates near the threshold, then each part's SPRT. **status:**
+  untested (plan only, owner, 2026-11-08); **part 5 (window-aware LMR)
+  rejected (2026-11-08): the head-to-head kept the 10 cp band at depth >= 6
+  (d0 - d6 -2.19 +/- 12.04 nElo), and its design R SPRT against off stopped
+  for futility after stage 3 (-2.93 +/- 7.16 Elo, 3,200 games, try 1 of 2),
+  so by the kill criterion part 5 is retired**; docs/history/phase-4/sprt-log.md.
+  **Part 6 (root-gap time management) dropped (owner, 2026-11-11):** the
+  head-to-heads picked RootGapBand b7 (+16.20 ± 9.83 nElo over the
+  placeholder b14) and RootGapExtra x333 (+7.41 ± 9.83 over the placeholder
+  x667), and the design R STC SPRT of the pair against off (i61-rg-stc, try
+  1 of 2) gave **H0, −4.89 ± 7.03 Elo** after 2 stages, 3,200 games (LLR
+  −1.81); the owner chose to drop it rather than retry. The switch stays off
+  on its branch, and nothing reaches phase-4.
+  **runtime cost:** possible (refiner calls at pruning sites). **earliest phase:** Phase 4.
+
+## 62. Label depth at equal generation time
+
+- **type:** ELO (data generation; no runtime cost).
+- **idea** (owner, 2026-11-09): do fewer positions with deeper saved
+  searches (50,000 or 100,000 nodes) make a better network than more
+  positions at the standing 20,000, at equal generation CPU? Unsaved and
+  in-check searches stay at 4,000 and 2,000 nodes.
+- **design:** docs/research/labels-teacher/report.md §1 (branch
+  research/labels-teacher): three arms D20, D50, D100 side by side, 3
+  threads each for 40 hours (120 thread-hours each), Hash 1 / 3 / 5 MB, one
+  PGO build and one seed; predicted 36.2 M, 16.2 M and 8.5 M kept positions
+  (estimates from g3's node model); B0 small nets, two seeds per arm,
+  idea 13's recipe; seed-paired fixed-node stages (1,600 games each, 800,000
+  nodes per move).
+- **decision rule (declared in the design):** a deeper arm wins only at
+  +5 Elo or more against D20 with its 95% interval above 0 (pooled over
+  both seed pairs), then an STC network SPRT [0, 5]; otherwise 20k stays.
+  A pass is a recommendation; the setting change is the owner's.
+- **cost:** about 360 thread-hours, 3 T4 GPU-hours, 4-6 fixed-node stages,
+  about 3 days; about 47.7 M kept positions of production forgone (the arm
+  data stays usable).
+- **status:** **approved (owner, 2026-11-09): starts after retrain 8b
+  launches**, with a 30-minute rate probe first, then the arms as designed
+  under the declared rule. **runtime cost:** none. **earliest phase:**
+  Phase 4.
+- **settings re-check (owner, 2026-11-12, about 1:30 PM EST: the split search's settings (the save share and the saved and unsaved node budgets) are re-checked whenever the data volume grows substantially, like other tuned values; the label-depth experiment's result (idea 62) and idea 80's 8c arm together decide the next settings (for example deeper saved labels and/or a higher save share if deeper labels win at equal CPU)).**
+
+## 63. Ensemble teacher
+
+- **type:** ELO (training data; no runtime cost in the TCEC binary).
+- **idea** (owner, 2026-11-09): label or relabel training data with the
+  averaged evaluation (with search) of 3-4 independently initialised S512
+  networks, against the same-network bias of labels made by the default
+  net alone (the bias idea 51's pre-test could not measure).
+- **design:** docs/research/labels-teacher/report.md §2: E3 = S512ppr3 and
+  item 7's two scratch seeds (no new GPU time); separate searches averaged
+  in win probability (no engine code) or one search on the averaged
+  evaluation (engine code later); staged: step 0 offline, step 2 small nets
+  at equal data against the default searching to equal total nodes, step 3
+  data generation. Compared with idea 58 in the design (cheaper at every
+  stage; both share the lineage's label bias).
+- **status:** **step 0 ordered (owner, 2026-11-09): run now, report before
+  any small nets**, including the TD pre-test's measured same-network bias.
+  Declared before any label in docs/research/labels-teacher/step0-declaration.md
+  (dc90302): golds by both scratch seeds at 1M nodes on idea 51's set H,
+  labels at 20k-100k on H and a new H2 (20,000 g3j-w05-val games), the gate
+  to step 2. **Step 0 result (2026-11-09, 6:47-9:27 PM EST; docs/research/labels-teacher/step0-results.md,
+  branch research/labels-teacher 1721493): killed by the declared gate.** S512ppr3 searching 60k nodes beats E3
+  (three members at 20k each, equal total nodes) on both yardsticks: Y1 (Brier against results, 15,499 kept records)
+  E3 - 60k +0.001111 [+0.000858, +0.001362]; gold-mean Y2 (3,131) +0.000455 [+0.000300, +0.000620]; all three 1M golds
+  agree. Averaging helps against one 20k search, but by about a quarter of what three times the nodes on one net
+  buys. No small net is trained. The same run measured idea 51's same-network bias: about zero (results-8b.md,
+  idea51/td-labels 68d1527). **runtime cost:** none. **earliest phase:** Phase 4.
+
+## 64. Score-fall time extension
+
+- **type:** ELO (time management).
+- **idea** (owner, 2026-11-09): beside idea 61's root-gap time, extend the
+  soft limit when the root score fell over the last two finished
+  iterations.
+- **design:** docs/research/eval-trend-tm/design.md: fall = the drop over
+  two iterations from depth 8, mate and table scores excluded; an
+  extension factor up to ScoreFallExtra (placeholder 667 per mille) at
+  ScoreFallSpan (placeholder 16 cp), combined with root gap by the larger
+  of the two and multiplied onto time management (b); switch
+  UseScoreFallTime, off by default. Names and constants screened
+  (2026-11-09): no specific match. Fork's data: the signal is real, but an
+  equal-time replay showed no gain over (b) (expected 0 to +4 Elo at STC,
+  a judgement).
+- **status:** **parked (owner, 2026-11-09)**: the design and the screened
+  names are kept; implemented and queued only if GitHub is idle (test plan
+  in the design: head-to-heads of span and extra, then design R at STC and
+  LTC, after idea 61's items 60-62). **runtime cost:** none. **earliest
+  phase:** Phase 4.
+
+## Go-derived training ideas (owner, 2026-11-09)
+
+Three training ideas taken at concept level from KataGo (David J. Wu,
+"Accelerating Self-Play Learning in Go", arXiv:1902.10565, 2019; credited
+as the source; UNVERIFIED as exact descriptions of the paper). Plan only:
+each waits for the conversion-and-defense analysis
+(docs/research/conversion-defense/, branch research/conversion-defense),
+whose weaknesses and data gaps decide their targets and order.
+
+## 65. Auxiliary training targets, revisited
+
+- **type:** ELO (via the resulting net; training only).
+- **idea:** training-only output heads beside the evaluation, for example
+  the material balance some plies ahead, whether the game ends drawn, and
+  the change of the search's evaluation between iterations; the heads shape
+  the shared layers and are dropped from the inference net, so the shipped
+  net has the same size and speed. This revisits idea 14 (untested) with
+  targets chosen from the conversion-and-defense findings.
+- **test:** a retrain arm (equal data against the control in a retrain
+  round), screened per the testing rule; verify the shipped net is
+  identical in size and speed (file size, layer shapes, bench nps).
+- **needs:** the trainer's support for extra heads and the targets in the
+  data (material ahead and the result are in the game records; the
+  iteration change needs a datagen field).
+- **status:** untested (plan only, owner, 2026-11-09; after the
+  conversion-and-defense results). **runtime cost:** none. **earliest
+  phase:** Phase 4.
+- **2026-11-14 (owner, with bake-off round 3's option (d)):** recorded as a
+  zero-runtime-cost option for a later retrain: auxiliary targets
+  predicted during training only, for example **mobility** and **king
+  danger** (the kind of context option (d) feeds the output layer at run
+  time, learned here instead as training-only heads). The owner's message
+  called this idea 66; the content is this entry's (idea 66 is
+  turning-point starts). Plan only; no run scheduled.
+
+## 66. Turning-point starts
+
+- **type:** ELO (data generation).
+- **idea:** start self-play games from positions where Fork's evaluation
+  swung, or where it failed to hold a worse position (the
+  conversion-and-defense analysis's turning points and defense failures,
+  from Fork's own games only), so the data covers the positions that
+  decide games; folded into the defense-data design.
+- **data policy:** the starting positions come from Fork's own games (its
+  self-play and SPRT games); positions from games against other engines
+  are analysed, never used as training data or starts.
+- **test:** a data arm at equal data in a retrain round, screened per the
+  testing rule.
+- **status:** untested (plan only, owner, 2026-11-09; after the
+  conversion-and-defense results). **runtime cost:** none. **earliest
+  phase:** Phase 4.
+- **2026-11-10 (owner; DESIGN.md decisions log):** approved as the
+  analysis's fixes 1 and 2, generated in one run: a **positional-advantage
+  slice** (queens on, equal pieces, level or one pawn apart, |label| 80-400
+  cp) and a **defense-start slice** (the side to move at -100 to -300,
+  queens on), both drawn from Fork's own datagen records and played out at
+  80,000 nodes with adjudication raised (report.md: 1,500 cp over 16
+  plies, no decided-opening cut). **A pilot first** (about 16 CPU-h); the
+  full slices (about 120 + 60 CPU-h) only if the pilot's rates and label
+  checks look right; then **arms in retrain 8c** (fixed-node screen, STC
+  SPRT [0, 5]). Fix 3 (R32's endgame-start slice, widened) waits for this
+  result.
+- **pilot, gold half (2026-11-10; research/defense-slices 5e42e4a):**
+  9.6 CPU-h per million positions; the positional slice passed every
+  declared check (gate +0.030 [+0.021, +0.040]); the defense slice failed
+  check 3 (defenders hold 6.4%, minimum 10%). **Owner, 2026-11-10:** the
+  positional slice at 12.5 M positions (~120 CPU-h); **the defense slice
+  dropped for 8c**, no redesign now (a near-level band only if 8c's
+  positional arm shows defense still lacking); the positional main pilot
+  run first, the full slice only if it passes and after the label-depth
+  arms.
+- **2026-11-14 (finding, idea 180):** the queens-on understatement behind the positional-advantage slice and arm Q was measured on pooled data; split by phase bucket it is largely phase mix (see idea 180). The combined queens-on arm (owner's trim, same day) still tests the data directly; read its result with this in mind.
+
+## 67. Draw-probability head
+
+- **type:** ELO (via the resulting net; training only).
+- **idea:** a training-only head predicting the probability that the game
+  is drawn, so the shared layers learn which worse positions are holdable
+  (the defense failures); dropped at inference, no speed cost.
+- **test:** a retrain arm at equal data, screened per the testing rule;
+  report the head's calibration on held-out games.
+- **status:** untested (plan only, owner, 2026-11-09; after the
+  conversion-and-defense results). **runtime cost:** none. **earliest
+  phase:** Phase 4.
+
+## 68. Endgame slice v2 (ChessTB-labelled 6-7-piece positions)
+
+- **type:** ELO (training data).
+- **idea** (owner, 2026-11-09): random legal 6-7-piece (and selected 8-piece) positions in the material classes where
+  Fork errs most (rook endings, rook against a minor, queen endings and queen imbalances, piece against pawns),
+  labelled by ChessTB WDL, replacing half of the current 3-5-piece Syzygy slice so the slice stays 2% of a retrain.
+- **design:** docs/research/endgame-slice-v2/design.md (branch research/endgame-slice-v2); facts and the data-policy
+  line in the KB's chesstb.md (adopted, DESIGN.md training-data decision 1).
+- **decisions (owner, 2026-11-09):** budget R (about 97 GiB downloaded, 34.5 GiB peak); the arm in retrain 8c; the
+  pure-Python prober first, the C++ library only if labelling would exceed about a day; tables in WSL; the class shares
+  wait for the final conversion-and-defense numbers.
+- **keep rule (declared 2026-11-09, before any data):** v2 is kept if its arm's fixed-node screen interval is not
+  entirely below 0 AND the held-out 6-7-piece misjudgment falls by at least 25% against the control arm.
+- **decisions (owner, 2026-11-11, about 10:50 PM EST):** the materials include queen against rook and minor endings
+  (KQvKRBP among them; budget R's KQvKRBP, KQvKRNP, KQPvKRB, KQPvKRN), the held-out 6-7-piece set's positions
+  excluded (tools/nnue/heldout_67.tsv, board and side to move; another seed than 2026111167). The held-out
+  6-7-piece check of the keep rule is that set (5,600 positions, 200 per material; a cursed win or blessed loss
+  counted drawn; reported for every candidate and flagged when more than 15% worse than the current default net,
+  with the change against the run's warm start also reported, never a gate on screening or promotion), and every
+  8c arm reports it beside the 4-5-piece check.
+- **keep rule confirmed (owner, 2026-11-12, about 5:00 PM EST):** "slice v2 keeps its declared Nov 9 keep rule
+  (screen interval not entirely below 0 AND held-out 6-7 misjudgments down >= 25% vs the control)": the arm's own
+  keep rule, the one place a held-out count is a condition; it is not a screening or promotion gate (DESIGN.md
+  decisions log, 2026-11-12).
+- **status:** untested (designed; the prober installed and verified and the held-out set built 2026-11-11; data
+  generation after the conversion-and-defense results and before 8c).
+  **runtime cost:** none. **earliest phase:** Phase 4.
+
+## 69. Class-weighted sampling in the trainer
+
+- **type:** ELO (training).
+- **idea** (the conversion-and-defense analysis's fix 4, 2026-11-10): weight
+  each training position by its material and structure class so the
+  classes that decide games (queens-on middlegames with level material,
+  equal pieces with level pawns, queens-on bishop against knight, passers
+  on both sides) are seen more often, and the over-represented ones
+  (rook-and-minor endings a piece up, queens-on a minor up) less; weights
+  capped (report.md proposes 2x up and 0.5x down), normalised to equal
+  positions seen. No new data generation.
+- **evidence:** report.md item 5 (matched ratios 2.3-3.96 for the
+  under-trained classes, 0.18-0.64 for the over-trained ones).
+- **decision (owner, 2026-11-10):** a design review of the loader change
+  first, then an arm in retrain 8c.
+- **design review approved (owner, 2026-11-10; DESIGN.md decisions log):**
+  docs/research/class-sampler/design.md (research/class-sampler f235d27),
+  recommendations 1-9 as written (per-position loss weights, board-only,
+  material class alone, all deciding positions as the target, small cells
+  at 1, separate arms, a second control seed if the quota allows, no
+  validation-loss kill rule), **with the conversion-failure classes (rook
+  against minor pieces, queen imbalances, a piece against pawns, one-wing
+  structures as the report classifies them) floored at 1.0 instead of
+  0.5**, the scale re-solved to a mean weight of 1. **Keep rule (declared):
+  +5 Elo head to head against the control, or a passing STC SPRT.**
+- **after the pre-arm checks (owner, 2026-11-10):** 4 checks pass (class
+  function, item 5's counts exactly, weighted shares, CPU determinism);
+  all-ones against the control needs CUDA (a Kaggle preflight); the
+  floors are **narrowed to the conversion-failure material classes**
+  (rook against minors, queen imbalances, a piece against pawns as
+  implemented: minor-EG with a minor up), **one-wing structures no
+  longer floored**; the speed gate is **trained positions/s within 1%
+  of the control's on Kaggle** (replacing the 3% CPU bound, which the
+  CPU mapper missed at +4.95%). The trainer change merges only with the
+  owner's OK.
+- **2026-11-10 (owner): the arm runs now as an extra retrain 8b arm
+  ("cw")**, on arm c's exact data, recipe and seed, after a Kaggle
+  preflight; compared against 8b's control by the keep rule above.
+- **test:** the 8c arm at equal positions against the control; per-class
+  validation loss; fixed-node screen, STC SPRT [0, 5].
+- **status:** **dropped (owner, 2026-11-11).** The cw arm (bake/r8bcw
+  9fd957b): fixed-node screen against S512ppr3 +3.04 ± 9.74 (run
+  42940727058), head-to-head against the control r8bc +3.04 ± 9.25
+  (42945518194), then its STC SPRT r8b-stc-cw [0, 5] against r8bc **H0
+  accepted, −7.60 ± 4.91 Elo** (nElo −13.18 ± 8.51) after 4 stages, 6,400
+  games, LLR −4.16 (runs 42949849410 to 42955981034; sprt-log). Its
+  second-seed control c2 (bake/r8bc2 38155d9) measured the seed noise:
+  c2 against r8bc −6.08 ± 9.42 (1,600 games at 800,000 nodes, run
+  42958000486), so **every future retrain arm runs 2 seeds** (owner,
+  2026-11-11). **runtime cost:** none. **earliest phase:** Phase 4.
+
+## 70. Result fine-tune of the base net
+
+- **type:** ELO (training).
+- **idea** (owner, 2026-11-10; from the clean-room engine survey 2026-11,
+  concept level): fine-tune the base net with a 100% game-result target
+  (no search-score target) at a low learning rate, as Ethereal reports
+  (+42.7 STC / +35.6 LTC on its own net, one engine's self-report); several
+  engines report smaller gains from result-weighted final stages.
+- **plan:** right after retrain 8b's SPRT decides the base net, fine-tune
+  the winner (td90 or the control) on existing 8b data, two seeds; the
+  usual gates; a fixed-node screen against the base; an SPRT. Kaggle hours
+  reported to the owner before the launch.
+- **status:** **adopted: r8brft1 was the default network from 2026-11-11
+  (owner); its endgame-preserving form (rft-ep-lo) gave r8ceplo2, the
+  default since 2026-11-14 (below).** **2026-11-10:** 8b's SPRT decided the base net: r8btd90
+  (the TD(0.9) arm, promoted), so the fine-tune starts from it. The run
+  (docs/research/retrain-8b/rft-plan.md, branch retrain/8b-rft 43f6ecc):
+  r8btd90's window average, result weight 1.0, LR 1e-5 constant, 60
+  superbatches on g4s1, the mean of superbatches 46-60, seeds 1 and 2.
+  Fixed-node screens against r8btd90: seed 1 +7.17 ± 9.93 (run
+  42962187538), seed 2 +6.73 ± 9.44 (42966665389); seed 1's STC SPRT
+  [0, 5] against r8btd90 **H1 accepted, +5.74 ± 3.81 Elo** (nElo +9.69 ±
+  6.43) after 11,200 games (r8b-rft-stc; sprt-log); the endgame check 7
+  of 900. Bench 10,708,227 / c5dfc0ec1923d3b0 (docs/nets.md).
+  **2026-11-11 (owner, after the bug review's T1):** the result fine-tune
+  raised the held-out check's five-piece errors (queen against two minor
+  pieces, tools/nnue/endgame_heldout.py) from 126 to 189 of 600 (r8btd90
+  -> r8brft1; all classes 526 -> 612 of 3,800). **Future fine-tunes report
+  this set** (tools/nnue/gates.sh reports it for every candidate, flagged
+  when more than 15% worse than the current default and, since 2026-11-12,
+  with the change against the run's warm start). **The
+  6-7-piece set (2026-11-11, tools/nnue/heldout_67.py)** shows the same step:
+  r8btd90 732 -> r8brft1 770 of 5,599 (58 to 20 discordant), mostly queen and
+  pawn against rook and minor. **8c arm (owner, 2026-11-11, about 10:50 PM
+  EST): a slice-preserving result fine-tune**, the endgame slice kept at its
+  normal weight during the fine-tune, **plus a lower-LR variant if the Kaggle
+  quota allows**; like every 8c arm it reports both held-out checks (4-5 and
+  6-7 pieces). **2026-11-14: the endgame-preserving variant adopted; r8ceplo2
+  is the default network (owner's pre-approval on H1, gates and no held-out
+  flag).** Retrain 8c A1 (docs/research/retrain-8c/plan.md, branch
+  retrain/8c-prep): rft-ep (the result target only on records with 8 or more
+  pieces, the base's own target on 7 or fewer, the slices at their WDL) and
+  rft-ep-lo (rft-ep at LR 5e-6) on the control's window averages; by the
+  declared rules rft-ep replaced rft (pooled −1.74 [−8.01, +4.54]) and
+  rft-ep-lo replaced rft-ep (−5.65 [−11.92, +0.62]); rft-ep-lo against the
+  control pooled +5.21 ± 6.39 [−1.17, +11.60] (seed 2 +13.47 ± 9.14). The
+  plain control's promotion SPRT (r8cc2-promo-stc) was stopped by the owner
+  at LLR −0.79 after 3 stages (−0.80 ± 5.26); the fine-tuned seed 2,
+  r8ceplo2, then beat r8brft1 (itself a result fine-tune: like for like) at
+  STC [0, 5]: **H1 accepted, +5.48 ± 3.32 Elo** (nElo +9.94 ± 6.02) after
+  12,800 games (r8ceplo2-promo-stc; sprt-log), with held-out ratios against
+  r8brft1 of 0.86 (4-5 pieces, 525 against 612 of 3,800) and 0.98 (6-7
+  pieces, 756 against 770 of 5,599). The endgame-preserving fine-tune
+  (rft-ep-lo) stays in the standard recipe until a main-training fix (the
+  per-class lambda, idea 180) replaces it; the plain variants (rft, rft-ep)
+  stay dropped (owner, 2026-11-14). Bench 5,403,414 / 34c916638218aa11
+  (docs/nets.md). **runtime
+  cost:** none. **earliest phase:** Phase 4.
+
+## 71. Feature-transformer weight decay
+
+- **type:** ELO (training).
+- **idea** (owner, 2026-11-10; engine survey 2026-11, concept level): weight
+  decay on the feature transformer's weights in the trainer, as Stockfish's
+  recent trainer change reports (+4.0 STC / +5.3 LTC there).
+- **plan:** a candidate arm for retrain 8c, at equal data against the
+  control; the testing rule's screen, then the STC SPRT.
+- **status:** untested (8c candidate). **runtime cost:** none. **earliest
+  phase:** Phase 4.
+
+## 72. Threat-aware quiet ordering, the any-attack set (tier 2, T56)
+
+- **type:** ELO (search); flag `use_threat_buckets` (on since 2026-11-11).
+- **idea** (KB search-techniques.md §3.34, its first family): the butterfly
+  history split into four buckets by whether an enemy piece attacks the
+  quiet move's from-square and its to-square in the position before the
+  move ("any enemy attack"); read and update use the same bucket.
+- **history:** built on tier2/batch3 (740c6cc, 2026-11-02) with a second
+  set, the cheaper-attacker set (2f6f4ac). The offline measurement
+  (tools/tier2_measure/threat_set.json, d5a6eb6) put both below off; the
+  cheaper set was SPRTed and rejected (H0, −6.08 ± 3.59 after 12,800
+  games, 2026-11-06; sprt-log "threat-set-cheaper-vs-base"). The
+  any-attack set was never game-tested.
+- **status:** untested; **first game test queued (owner, 2026-11-10):
+  "first game test, not a retest"**. The offline measurement is no longer
+  treated as decisive. Ported onto phase-4 b787fba (r8btd90) behind the
+  switch, off (tier2/threat-any dc341d5, bench unchanged 9,594,307); test
+  side sprt/threat-any bfbc1c8 (bench 9,236,850 / 0f723ee4c163a419).
+  Design R STC SPRT `t56-any-stc` (ledger idea `t56-any`, try 1 of 2),
+  night queue item 63, after root-gap's items 60-62. Nothing is adopted
+  before its verdict; an H1 goes to the owner (LTC next by the owner's
+  rule). The cheaper-attacker set stays closed.
+  **2026-11-11: adopted.** STC t56-any-stc **H1, +7.49 ± 4.89 Elo** (nElo
+  +13.04 ± 8.51, 6,400 games, LLR 3.19); LTC t56-any-ltc (40+0.4) **H1,
+  +8.07 ± 5.15 Elo** (nElo +15.12 ± 9.64, 4,992 games, LLR 3.01); adopted
+  on the owner's pre-approval (2026-11-11) onto phase-4 4470f24 (branch
+  adopt/t56-any), `UseThreatBuckets` on, the switch kept until the Phase 4
+  re-validation; bench 10,166,167 / d874b380155a2e8c (r8brft1);
+  docs/history/phase-4/sprt-log.md.
+- **runtime cost:** possible (an attack map built once per node that
+  reaches its quiets or a quiet cutoff; the butterfly table grows from
+  16 KB to 64 KB). Speed not yet measured (UNVERIFIED; still not measured
+  at adoption, bench/ab.py not run); the SPRT result is to be reported with
+  its nps change (the 2026-10-24 rule).
+- **earliest phase:** Phase 4.
+
+## 73. ProbCut, the capture probe (tier 2, T31): one LTC test on the tuned search
+
+- **type:** ELO (search); flag `use_capture_probe` (on since 2026-11-11).
+- **idea** (KB search-techniques.md §3.22): at a non-PV node at least
+  CaptureProbeMinDepth deep, a capture whose SEE could lift the pruning
+  eval to beta + CaptureProbeMargin is searched on a zero window at that
+  bar, first by the quiescence search, then CaptureProbeReduction plies
+  shallower than a normal child; a capture that holds it makes the node
+  fail high.
+- **history:** built on tier2/batch3 (97f548c, 2026-11-02); its values
+  measured (capture_probe.json, d9-r5-m80; 5c9e755). STC SPRT on S512r2:
+  H0, −5.29 ± 3.58 Elo after 12,800 games (2026-11-06; sprt-log
+  "probcut-d9r5m80-vs-base"), then no retest by the owner's rule.
+- **status:** **adopted 2026-11-11** (pre-approved by the owner): probcut-ltc2 **H1, +9.40 ± 5.03 Elo**
+  (nElo +18.03 ± 9.64, Ptnml [24, 516, 1283, 647, 26], LLR 3.73) after stages 8-10, 4,992 games
+  (runs 43109070620, 43120086216, 43129867831; 9:08 PM EST). Ported onto phase-4 (branch adopt/probcut),
+  `UseCaptureProbe` on, the switch kept until the Phase 4 re-validation; the constants 9 / 5 / 80 join the
+  final retune's SPSA (class (b)); decisions log and sprt-log. Before that: **Owner, 2026-11-11 3:10 PM EST: "ProbCut: I lift the no-retest rule for ONE LTC-only design R test on the current default (tuned search); record it as LTC try 1 of 2. Start it now in the free lane."**
+  Ported onto phase-4 4470f24 (r8brft1, R14, cut-node) behind the switch,
+  off (tier2/probcut-r2 a40b1ff, bench unchanged 9,942,973); test side
+  sprt/probcut-r2 d145d40 (bench 9,903,350 / 95f7f190cf02d64e). Design
+  R LTC SPRT `probcut-ltc` (ledger idea `t31-probcut`, LTC try 1 of 2;
+  fresh openings from stage 8), night queue lane A item 18, started 3:55
+  PM EST. T56 any-attack (adopted 3:43 PM EST, db0bb31) is in neither
+  side. **Moved (about 4:00 PM EST)** to db0bb31's engine with T56 on,
+  as `probcut-ltc2`: base tier2/probcut-r3 d47e479 (bench 10,166,167), test
+  sprt/probcut-r3 6d7ffb1 (bench 9,639,207 / 07f7ae19b9250f38); still LTC
+  try 1 of 2 (the first version was never dispatched). No STC retest. An H1 goes to the owner; nothing is adopted
+  before then (superseded by the overnight pre-approval of 2026-11-11 for search items that pass their SPRT and
+  their LTC where required).
+- **runtime cost:** none measurable (2026-11-11, after the adoption; clang-release, Windows, the shared machine busy; A = phase-4 a95e269, B = the adopting commit e005049, r8brft1): bench/ab_search.py, 10 interleaved rounds, not pinned: median nps 2,043,662 against 2,034,450 (-0.5%), best 2,075,512 against 2,061,329 (-0.7%), under its 3.1% noise threshold, no significant difference; 12 further paired ABBA rounds: B/A nps 0.999, 95% interval 0.989 to 1.009 (t, 11 df). So no measurable nps price; the bench itself finishes in about 5% less time because it searches 5% fewer nodes.
+- **earliest phase:** Phase 4.
+- **over-pruning check (2026-11-13):** a tactical-suite comparison (Arasan's wacnew and ecmgcp, 483 positions,
+  test data only) of phase-4 929f114 against d33a4db found no broad over-pruning (335 vs 334 at 100k nodes, 412
+  vs 409 at 1M, 434 vs 441 at 2 s; none significant), but with `UseCaptureProbe` off the head solves
+  significantly more (350, 429, 456: p 0.0026, 0.0033, 0.0002); on the 18 positions the head newly failed at
+  two or more limits, ProbCut off solved all 18 at about a seventh of the nodes. **Owner (2026-11-13, about
+  2:00 PM EST): keep ProbCut; widen `CaptureProbeMargin`'s final-retune range toward more conservative values
+  (60-200, was 40-160); flag ProbCut as a priority switch in the removal round, tested at LTC.**
+
+## 74. Quiet history pruning, the history skip (tier 2, T24; survey B13)
+
+- **type:** ELO (search); flag `use_history_skip` (on since 2026-11-12).
+- **idea** (KB search-techniques.md §3.19; the engine survey's B13): at a
+  non-PV node out of check, at most `HistorySkipMaxDepth` (3) deep, once a
+  move has been searched and past late move pruning, a quiet move whose
+  ordering score (the butterfly history in its threat bucket plus the
+  weighted reply and follow tables) is at or below
+  -`HistorySkipPerPly` x depth is skipped unsearched.
+- **history:** built on tier2/b4 as "history-skip" (d2b086d, 2026-11-05) and
+  dropped untested on 2026-11-10: at 5000 per ply it changed 30 bench nodes
+  of 14 M. The bench clears history per position, where the eligible quiet
+  moves' scores stay within a few hundred of zero; in games, where history
+  carries over, such thresholds do fire.
+- **status:** **adopted 2026-11-12** (the owner's overnight pre-approval for
+  search items that pass their SPRT): qhp-h2h picked **700 per ply** (1300 −
+  2000 +9.42 ± 9.83 nElo, 700 − 2000 +9.62 ± 9.83 nElo, 9,600 games, runs
+  43113474240 to 43125463839); qhp-stc (design R [0, 6] at STC, test
+  sprt/qhp-t56-700-e1 4701319 against off tier2/qhp-t56-e1 4cae4f4, both on
+  adopt/e1 25623ab) **H1, +6.04 ± 4.37 Elo** (nElo +10.52 ± 7.61, Ptnml [83,
+  899, 1917, 998, 103], LLR 2.99) after stages 2-6, 8,000 games (runs
+  43182618097 to 43193266205; 4:57 AM EST). Ported onto phase-4 (branch
+  adopt/qhp), `UseHistorySkip` on, the switch kept until the Phase 4
+  re-validation; `HistorySkipPerPly` 700 and `HistorySkipMaxDepth` 3 join the
+  final retune's SPSA (class (a)); decisions log and sprt-log. Before that:
+  **owner, 2026-11-11 3:10 PM EST: "Build quiet
+  history pruning (B13) with a threshold chosen to actually fire (quick
+  measurement first), then design R at STC".** Built on phase-4 b2e083e
+  (r8brft1, cut-node and T56 on) behind the switch, off: tier2/qhp-t56
+  c84722b, bench unchanged (10,166,167 / d874b380155a2e8c). Firing-rate
+  measurement (tools/tier2_measure/history_skip.json, rule declared before
+  its run; 48 replayed SPRT games, history carried, 200,000 nodes a
+  search): the values predicted to skip 5%, 10% and 20% of the eligible
+  quiet moves are 2000, 1300 and 700 per ply; switched on they skip 13.9%,
+  26.2% and 44.1% in the same replay (bench 11,081,805, 10,008,258 and
+  9,886,698). Test commits (switch on, children of c84722b):
+  sprt/qhp-t56-2000 c06d62b, sprt/qhp-t56-1300 f6397e0, sprt/qhp-t56-700
+  13d4d05. Lane B items 66 (qhp-h2h: round robin, 2 stages a pairing at
+  STC, 2000 kept on a tie) and 67 (qhp-stc: design R of the winner against
+  off on fresh openings from stage 2; ledger idea `qhp`, try 1). A first
+  build on 4470f24 (tier2/qhp 11ed51e; candidates 2300, 1600 and 900 on
+  sprt/qhp-2300, -1600, -900) was superseded before any game when T56's
+  threat buckets were adopted. Nothing is adopted before its verdict. The
+  STC ran on commits rebased onto E1 (gate-e1; suffix -e1).
+- **runtime cost:** measured after the adoption with bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 e79cbf7, B = the adopting commit 9d574d9 (built as 22ab719, before its rebases onto 32384e1 and 8cb60b8, which changed no engine code), r8brft1): 12 interleaved rounds, median nps 3,163,250 against 3,083,790 (-2.5%), best 3,213,989 against 3,175,134 (-1.2%), under the 3.7% noise threshold; 16 more rounds, median 2,900,246 against 2,815,540 (-2.9%), best 2,983,721 against 2,991,063 (+0.2%), under the 6.3% threshold. No significant difference in either; both medians lean 2.5-3% slower, so a small nps price (the ordering score computed for each eligible quiet move at depths 1-3) is possible but not resolved at this noise (UNVERIFIED). The bench searches 3.9% fewer nodes (9,263,568 against 9,639,207).
+- **follow-up, the exemption for checking quiets (B13 with D13; owner, 2026-11-12 about 12:50 PM EST): adopted 2026-11-12** (flag `use_skip_check_exempt`, on): the skip never takes a quiet move that gives direct check (`gives_direct_check`, D13's test), since its score has no D13 bonus. Built behind the switch on phase-4 96ebfec (tier2/skip-check-exempt 5cd267c; test side sprt/skip-check-exempt cb66f9b, bench 9,443,408 / 6d421599a985f97c). skip-check-exempt-stc (STC 8+0.08, Hash 16, design R [0, 6], cap 8, futility look after 2 stages, from stage 0): capped undecided at +2.80 ± 3.43 Elo (nElo +4.90 ± 6.02), Ptnml [136, 1494, 3030, 1611, 129], LLR 1.21 (bounds −1.56, 2.77) after stages 0-7, 12,800 games (runs 43285168897 to 43307235492; 4:27 PM EST); under the owner's order of about 4:50 PM EST (one non-regression test, adopted on a pass) skip-check-exempt-nonreg ([−3, 0] nElo, alpha = beta = 0.05, the same pair, fresh openings, stages 8-20): H1, +2.86 ± 2.77 Elo (nElo +5.08 ± 4.91), Ptnml [167, 2274, 4587, 2378, 194], LLR 3.14 (bounds ±2.94) after stage 19, 19,200 games (runs 43330489013 to 43356312529; 10:21 PM EST). Ported onto phase-4 016d952, `UseSkipCheckExempt` on, the switch kept until the Phase 4 re-validation; bench 9,443,408 / 6d421599a985f97c (DESIGN.md decisions log, 2026-11-12; sprt-log). Runtime cost: bench/ab_search.py (clang-release, Windows, not pinned; A = phase-4 016d952, B = the port's build of this commit's engine code from the uncommitted tree on 016d952, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -0.1%, best +0.2%, under the 3.0% noise threshold: no significant difference. The bench searches 3.6% more nodes (9,443,408 against 9,118,607).
+- **earliest phase:** Phase 4.
+
+## 75. The summed pair-table update (the engine survey's D8)
+
+- **type:** ELO (search); flag `use_pair_sum_update` (on since 2026-11-12).
+- **idea** (the engine survey's D8, its rank 1; concept only): a cutoff's
+  bonus and maluses move each pair-table entry (reply and follow) by the
+  usual self-limiting rule, but with the self-limiting term read from the
+  move's reply and follow entries summed instead of the entry alone, so the
+  two tables approach the limit together (`PairHistory::apply_from_sum`,
+  clamped to ±`HistoryMax`). A table the node does not read is neither
+  summed nor updated. No constant.
+- **status:** **adopted 2026-11-12** on its STC pass (survey-d8-stc, design R [0, 6] against off:
+  +4.29 ± 3.46 Elo, nElo +7.47 ± 6.02, H1 after 12,800 games; sprt-log), pre-approved by the owner;
+  ported onto phase-4 2c294d3, bench 8,773,005 / 413d5ae2f1af08de (DESIGN.md decisions log, 2026-11-12). No
+  constant, so no SPSA dimension. History: (owner, 2026-11-11 3:10 PM EST: "the survey's
+  top cheap techniques: D8 (summed continuation update), D9 (failed-child
+  prior-move bonus), D13 (direct-check ordering bonus), each design R at
+  STC"). Built on phase-4 784b1b0 behind the switch, off:
+  tier2/d8-pair-sum 55bb786, bench unchanged (10,166,167 /
+  d874b380155a2e8c). Test commit sprt/d8-pair-sum 8ffc602 (switch on; bench
+  10,236,778 / 6338c0c3a941915a). Lane B item 68 (survey-d8-stc: design R
+  at STC against off from stage 0; ledger idea `d8-pair-sum`, try 1),
+  gated until E1's SPRT (state/gate-e1.done; owner, about 6:40 PM EST).
+  Rebased onto E1 as tier2/d8-pair-sum-e1 aa8dd0d and sprt/d8-pair-sum-e1 dd132c9 before it ran.
+- **runtime cost:** one extra table read per updated move at a cutoff. bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 2c294d3, B = the port's build of this commit's engine code from the uncommitted tree on 2c294d3 plus the zugzwang tools, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -0.5%, best -0.4%, under the 3.0% noise threshold: no significant difference (a price of that size is inside the noise, UNVERIFIED). The bench searches 6.3% fewer nodes (8,773,005 against 9,366,920).
+- **earliest phase:** Phase 4.
+
+## 76. The prior-move credit (the engine survey's D9)
+
+- **type:** ELO (search); flag `use_prior_move_credit` (off).
+- **idea** (the engine survey's D9, its rank 2; S1 item 8; concept only): a
+  main-search node where no move beat alpha (not a singular test's search)
+  credits the parent's quiet move that led to it with
+  `PriorCreditQuarters` / 4 of the cutoff bonus at the node's depth, in the
+  tables the parent's own cutoff would update (butterfly in the move's
+  threat bucket, reply and follow), with no maluses.
+- **status:** **rejected 2026-11-12, both tries used** (design R [0, 6] at STC against off; sprt-log): 4
+  quarters H0 after stage 0 (survey-d9-stc: −11.95 ± 9.62 Elo, nElo −21.17 ± 17.02, 1,600 games), 3 quarters
+  a futility stop after 2 stages (survey-d9-retry: −1.95 ± 6.94, nElo −3.39 ± 12.04, 3,200 games). Both ran
+  rebased onto E1 (off tier2/d9-prior-credit-e1 54543fe; tests sprt/d9-prior-credit-4-e1 ab7e93f and
+  sprt/d9-prior-credit-3-e1 6c3c302). The switch stays off on its branch, nothing reaches phase-4, and
+  `PriorCreditQuarters` is not a final-retune dimension. History: (owner, 2026-11-11 3:10 PM EST, as idea 75.)
+  Built on phase-4 784b1b0 behind the switch, off: tier2/d9-prior-credit
+  ef30f4f, bench unchanged. **Re-planned by the owner (about 7:35 and
+  7:45 PM EST; decisions log): no head-to-head for a constant the final
+  retune will tune.** Design R at STC at the natural value, **4 quarters**
+  (1× the cutoff bonus; sprt/d9-prior-credit-4 83fb64b, bench 9,946,948 /
+  9feddb70e3ad7ea6; it matches Stockfish releases 7-15.1 and is credited in
+  ORIGINALITY.md, not replaced): lane B item 69a, survey-d9-stc, ledger idea
+  `d9-prior-credit`, try 1. If it fails, one retry at **3 quarters**
+  (sprt/d9-prior-credit-3 39074b1, bench 10,516,912): item 69b,
+  survey-d9-retry, try 2. If adopted, `PriorCreditQuarters` becomes a
+  dimension of the final retune's SPSA. Both gated until E1's SPRT. The 1-
+  and 6-quarter commits (37f8a43, bb59b7f; bench 9,560,037 and 10,270,243)
+  stay unused; 6 quarters, a near match to one case of Stockfish 16.1, stays
+  credited. Nothing is adopted before its verdict.
+- **runtime cost:** none expected (one history update per fail-low node;
+  not measured: rejected before an adoption's nps check, UNVERIFIED).
+- **earliest phase:** Phase 4.
+
+## 77. The direct-check ordering bonus (the engine survey's D13)
+
+- **type:** ELO (search); flag `use_check_order_bonus` (on since 2026-11-12).
+- **idea** (the engine survey's D13, its rank 10; concept only): in the
+  main search out of check, a quiet move (not castling) whose piece attacks
+  the enemy king from its destination adds `DirectCheckBonus` to its
+  ordering score; the direct-check squares per piece type are computed once
+  per node when the quiets are scored (`direct_check_targets`).
+- **status:** **adopted 2026-11-12** at `DirectCheckBonus` 5000 on its STC pass (survey-d13-stc, design R
+  [0, 6] against off: +5.50 ± 3.93 Elo, nElo +9.73 ± 6.95, H1 after 9,600 games; sprt-log), pre-approved by
+  the owner; ported onto phase-4 85672d8, bench 9,118,607 / 208629aa15e140a9 (DESIGN.md decisions log, 2026-11-12).
+  `DirectCheckBonus` is a class (a) dimension of the final retune's SPSA (final-retune.md §3.1). The retry
+  (item 70b, 2500) was not needed. History: (owner, 2026-11-11 3:10 PM EST, as idea 75.)
+  Built on phase-4 784b1b0 behind the switch, off: tier2/d13-check-order
+  ceb984a, bench unchanged. **Re-planned by the owner (about 7:45 PM EST;
+  decisions log): no head-to-head for a constant the final retune will
+  tune.** Design R at STC at the natural value, **5000**, half a history
+  table's range (sprt/d13-check-order-5000 5a99405, bench 10,253,460):
+  lane B item 70a, survey-d13-stc, ledger idea `d13-check-order`, try 1. If
+  it fails, one retry at **2500** (sprt/d13-check-order-2500 006ae9c, bench
+  10,246,388): item 70b, survey-d13-retry, try 2. If adopted,
+  `DirectCheckBonus` becomes a dimension of the final retune's SPSA. Both
+  gated until E1's SPRT. The 10000 commit (90338de, bench 9,776,602) stays
+  unused. Rebased onto E1 as tier2/d13-check-order-e1 35209f0 and sprt/d13-check-order-5000-e1 cc7b3bc
+  before it ran.
+- **runtime cost:** four attack lookups per node that scores its quiets. bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 85672d8, B = the port's build of this commit's engine code from the uncommitted tree on 85672d8, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps +1.2%, best -2.9%, under the 6.0% noise threshold: no significant difference (a price of that size is inside the noise, UNVERIFIED). The bench searches 3.9% more nodes (9,118,607 against 8,773,005).
+- **earliest phase:** Phase 4.
+
+## 78. The drift tables: per-colour pieces (R34), minor, major and threat (E4)
+
+- **type:** ELO (search); flags `use_piece_drift`, `use_minor_drift`, `use_major_drift`, `use_threat_drift`
+  (`use_minor_drift` on since 2026-11-12, the others off).
+- **idea** (KB search-techniques.md §3.23, static evaluation correction history; the think tank's R34, the
+  engine survey's E2 and E4): learn, per key and side to move, how far search results land from the raw
+  static eval, and add that drift to the eval pruning and the quiescence stand-pat use. The pawn drift
+  table's design (T32, idea 40's L2) with four other keys: each colour's pieces with its king (the term is
+  the two tables' mean), knights and bishops, rooks and queens, and Fork's threat configuration.
+- **history:** the pawn key (E1) was tried as the drift table: −0.35 ± 3.72 at LTC, undecided (not
+  adopted). E4 was dropped by think-tank decision 20 without a test and reinstated by the owner
+  (2026-11-11).
+- **status:** **the minor table adopted 2026-11-12 at `MinorDriftShare` 32/64**; the others in progress. Built on tier2/corr-tables (201277c, 2992817; bench unchanged).
+  Passive ranking (decision accuracy at X10's RFP and futility rows, 200,000 nodes, 120 games): threat
+  +17.95, minor +14.44, major +9.82, pieces +7.51 per 1,000 rows (DESIGN.md decisions log, 2026-11-11).
+  The ranking only orders the tests (owner): each table gets a design R STC SPRT against off at its
+  share's natural value 64 and, only if that fails, one retry at 32 (try 2); no head-to-head, the shares
+  being final-retune SPSA dimensions (owner, 7:45 PM EST); a pass is adopted (pre-approved). In that
+  order, night items 19-corr-a to 19-corr-h, gated on E1's fix and its SPRT. A later table is tested whatever an earlier one gives. Every table
+  lost decision accuracy at futility rows in the passive run (C15, correction size in pruning, and E5,
+  the update rules, are the follow-ups this unblocks).
+  **Results (2026-11-12, design R STC against off tier2/corr-tables-e1 dd5db13; sprt-log):** threat 64 H0
+  (−10.53 ± 6.95 Elo, 3,200 games), threat 32 H0 (−7.38 ± 7.01, 3,200; both tries used), minor 64 H0
+  (−18.26 ± 9.95, 1,600), **minor 32 H1 (+5.57 ± 4.01, 9,600 games), adopted** on phase-4 (pre-approved;
+  DESIGN.md decisions log, 2026-11-12). An offline diagnosis (2026-11-12) found a single table at share 64
+  runs away (its applied term feeds the results it learns from) and stays bounded at 32. The owner's table
+  rule: if several tables pass alone, only the best is adopted and the next-best is tested on top of it.
+  `MinorDriftShare` 32 and `DriftLimit` 300 join the final retune's SPSA (class (a)). **Pieces 64 H1 alone
+  (corr-piece-stc, against tables off dd5db13: +7.86 ± 4.35 Elo, nElo +13.77 ± 7.61, 8,000 games; sprt-log),
+  not adopted alone:** minor 32 was already on phase-4, so by the table rule the pieces table goes on top of
+  it, and that stack failed its offline gate (see "stacking" below); `UsePieceDrift` stays off, the pieces
+  retry at 32 (item 19-corr-h) was not needed. The major table (items 19-corr-e and 19-corr-f) is not run:
+  dropped and paused pending the redesign (the diagnosis recommends a depth-scaled term first).
+- **runtime cost:** the minor table on (its adoption, 2026-11-12): measured before the commit with bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 75d53f0, B = the port's build of this commit's engine code from the uncommitted tree on 75d53f0, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -2.0%, best -3.4%, under the 4.9% noise threshold: no significant difference; a small price (the material keys kept at each make, the table read at each estimate) is possible but not resolved at this noise (UNVERIFIED). The bench searches 1.1% more nodes (9,366,920 against 9,263,568). The threat key (two attack maps per node) is not measured (UNVERIFIED).
+- **earliest phase:** Phase 4.
+- **follow-up (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):** a window-gated variant (full correction near alpha/beta, fading to zero far from the window; idea 59's gate margin), tested alongside the depth-scaled share against the minor@32 head, offline gate first (idea 59's follow-up plan, item 1).
+- **stacking (owner, 2026-11-12, about 2:05 PM EST):** pieces@64 passed alone (+7.86 ± 4.35 against tables off), but pieces@64 on top of minor@32 failed the offline gate (error +12.74 cp [+6.50, +19.11] against the head, the minor table at the limit on 1.23% of visits: the shares sum to 96 of 64), and pieces@32 on top failed too (+2.99 [+1.19, +5.09], 0.24%); with the depth scale both stacks tie the head at about 0.013% (~/fork-jobs/night/reviews/corrstack-gate-2026-11-12.txt, outside the repo). **No standalone stacking SPRT now:** the stack folds into idea 59's follow-up redesign (item 1): the depth-scaled (and window-gated) variant of minor@32 + pieces@32 (shares sum to 64) is tested against the minor@32 head when slots open. **Rule:** the offline gate is a safety check only (it blocks runaway: worse error or more than 0.1% of visits at the limit); a stack that passes it goes to a design R SPRT, which decides adoption.
+
+## 79. Nested-width evaluation (novel-ideas 1)
+
+- **type:** ELO (eval speed / network).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): one net whose first K hidden columns are a usable narrow evaluator (the narrow output a partial sum of the full one); far from the window use the narrow sum, near it finish the full net; the same machinery can make a wider net pay only near the window. Leans on idea 59's control split (near-window accuracy is what counts).
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): its fixed-node oracle first, measuring **both accuracy and speed**: a narrow readout refitted on r8brft1's frozen first 256 columns, the band from |narrow - full|, then an FN screen of "narrow far, full near" (accuracy) and a synthetic half-width build on a quiet machine (speed). Kill: worse than -8 Elo at a band of 100 cp or less. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** **probe (accuracy half) done; its fixed-node screen is to be built (owner, 2026-11-11, about
+  10:25 PM EST).** Offline (tools/measure/head_probes.py narrow on tools/probes-1111 b5143af; cloud VM): a narrow
+  readout refitted on r8brft1's frozen first 256 columns of each perspective (ridge, per bucket, to the full output;
+  320,000 positions of the label-depth arm D20, 80,000 held out): |narrow - full| median 31 cp, p90 83, p95 104,
+  p99 151; above 50 cp 29.5%, above 100 cp 5.6%, above 150 cp 1.0% (smaller in the low-material buckets 6-7: 3.1% and
+  1.7% above 100 cp). Gold error (S512ppr3 1M): full 0.00849, narrow 0.01366. So a band of about 100 cp is the
+  narrowest this untrained readout supports; the speed half was not measured.
+
+## 80. Label the unsaved half (novel-ideas 2)
+
+- **type:** ELO (training data).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): the split search discards its unsaved records (45.5%); give them TD(lambda) targets from the next saved record (variant A, no new assumption; td_labels.py --from-next) or the PV-child score (variant B), in derived shards.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): **an arm in retrain 8c**, defined precisely (owner, 2026-11-11): the **same self-play games and the same number of training steps** as the control; the arm samples from saved plus unsaved (TD-labelled) positions, the control from saved positions only; **two seeds each**. Kill: head-to-head at or below 0 on both seeds. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+- **settings re-check (owner, 2026-11-12, about 1:30 PM EST: the split search's settings (the save share and the saved and unsaved node budgets) are re-checked whenever the data volume grows substantially, like other tuned values; the label-depth experiment's result (idea 62) and idea 80's 8c arm together decide the next settings (for example deeper saved labels and/or a higher save share if deeper labels win at equal CPU)).**
+
+## 81. Colour-coherent split search (novel-ideas 3)
+
+- **type:** ELO (training data).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): in a share of games one colour searches 20,000 nodes every move and the other 4,000, so every position is labelled and Fork-pure games contain slow slides; a defender-favoured form.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): **parked** (owner): the strength gap biases game results (the result label mixes position merit and skill gap). No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+
+## 82. Multi-fidelity output heads (novel-ideas 4)
+
+- **type:** ELO (network training).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): tag each record with its label budget and pick the output head by phase and fidelity; ship only the high-fidelity heads (same size and speed).
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): its **offline probe on the existing gold labels**: freeze r8brft1's first layer, refit the 8 heads on high-fidelity records, compare with the shipped heads on the 1M-node gold set (overall and by class), then one FN screen. Kill: no gold-set gain beyond the seed spread and an FN screen at or below 0. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** **probe: gold half flat; its fixed-node screen runs (owner, 2026-11-11, about 10:25 PM EST: drop it if
+  that is flat too).** Offline probe (tools/measure/head_probes.py heads on tools/probes-1111 b5143af; cloud VM, about
+  20 CPU-minutes): r8brft1's first layer frozen, its 8 heads refitted (TD(0.9) labels, S = 88) on idea 62's
+  label-depth arms (first run, labeller S512ppr3, same openings: D20 against D100), 400,000 kept records per arm,
+  two seeds per arm (the two halves of the games). Squared win-probability error on idea 51's 3,131 records, S512ppr3
+  1M gold: shipped 0.008486; D100 seeds -0.000075 [-0.000205, +0.000051] and +0.000087; D20 seeds +0.000190 and
+  +0.000115; the independent golds agree; on idea 52's controls both D100 seeds are worse (+0.00026, +0.00027). No
+  gain beyond the seed spread (0.00016), in any material class.
+
+## 83. Label super-resolution (novel-ideas 5)
+
+- **type:** ELO (training data).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): a small regression from what each record already has (stored score, static eval, their difference, band, class) to the deep label; rewrite labels offline and build TD targets on them.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): its **offline probe on the existing gold labels** (idea 51's 3,131 positions and idea 52's 2,000 controls), cross-validated. Kill: squared error in win-probability space not at least 10% below the raw label's, or the slope on "search minus static" not clearly positive. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** **killed (owner, 2026-11-11, about 10:25 PM EST).** Offline probe (tools/measure/label_probes.py
+  superres on tools/probes-1111 b5143af; PC, about 2 CPU-minutes): f = b1 s + b2 (s - e), 10-fold cross-validated,
+  on idea 51's 3,131 kept records against the S512ppr3 1M gold: squared win-probability error 0.00169 raw, 0.00162
+  corrected, a reduction of **3.7% [1.7, 6.1]** (10% needed); b2 = 0.026 [-0.019, 0.079], not clear of zero. With
+  band and class terms 4.0%; against the independent golds 5.0% and 6.2% (upper ends 7.1%, 8.4%); on idea 52's
+  2,000 controls (200k gold) 1.7% [-0.7, 4.1] with b2 0.068 [0.021, 0.119]. Both kill conditions hold.
+
+## 84. Evaluator-diverse Lazy SMP (novel-ideas 6)
+
+- **type:** ELO (parallel search).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): thread groups use different nets of one shape, sharing the TT's moves and bounds (a one-bit evaluator tag on stored evals), with a root vote; later a second net trained to be decorrelated from the first.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): **after minimal Lazy SMP (step 17a) exists**; keep the network pointer per searcher when 17a is built. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+- **follow-up (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):** unchanged: after Lazy SMP (idea 59's follow-up plan, item 5).
+- **plan for a cheap test (owner, 2026-11-15, about 8:20 PM EST: "once the scaling curve is in"; nothing built or run yet):**
+  1. **One architecture for both nets.** Fork compiles the inference for the embedded net's architecture
+     (CMakeLists.txt, FORK_NET_ARCH from the net file's header): r3kr1 is architecture 9 (H512+PP, four king
+     regions), r8ceplo2 and r3pp1 (r3kr1's same-recipe S512+PP control, bake/r3-pp1) are architecture 8. Each
+     helper net is first extended to architecture 9 with tools/nnue/extend_weights.py --arch h512pp (its piece
+     rows copied into each king region), the lossless step that made r8brft1kr4 from r8brft1 (bench identical to
+     r8brft1's). Check: the extended net's bench equals the original's in a build of each (r8ceplo2kr4 against
+     tests/bench-r8ceplo2.ref; r3pp1kr4 against r3pp1's), else stop. Names (`r8ceplo2kr4`, `r3pp1kr4`) follow
+     r8brft1kr4's.
+  2. **Score scale.** tools/nnue/match_scale.py with r3kr1 as the control, over the same held-out positions:
+     the matched S of each helper net against its own S, and both mean |eval| values. Report the ratio; a helper
+     whose matched S differs from its own is run at the matched S (a header edit, as the bake-off does) so all
+     threads' scores share one scale. **Pass line (owner, 2026-11-15, about 8:30 PM EST): after matching, the
+     helper's mean |eval| on the reference positions is within 2% of r3kr1's; otherwise stop for that helper.**
+     **Calibration agreement (owner, the same order), before any match:** both nets' eval-to-result curves,
+     fitted with the calibration study's tooling (~/fork-data/calib-1112/analyze.py, not committed: whether it
+     takes one net's games at a time is UNVERIFIED; port it to tools/measure if it needs changes), must agree
+     within their 95% intervals: the logistic scale k pooled and per output phase bucket (idea 180 found k
+     varies mainly by bucket), each net on its own games at STC (r8ceplo2's and r3kr1's SPRT games; r3pp1's
+     fixed-node screen games); otherwise stop for that helper.
+  3. **The engine change, on an experiment branch only** (not phase-4 unless it wins): a second net embedded
+     at build time (CMake FORK_HELPER_NET, default none: release and TCEC builds unchanged), given to the
+     helpers' Searchers through the per-searcher net pointer (searcher.hpp `net_`, set between searches; the
+     main thread keeps the default); a one-bit evaluator tag in the TT entry's flags (bit 3; the digest
+     already covers the flags byte), so a stored static eval is reused only by a thread of the same net
+     (scores and bounds stay shared: the idea's stated risk); bench (one thread) identical by construction.
+     New names screened before use.
+  4. **Speed (the cache cost of two nets).** smp-scaling.yml on the experiment build and its base at the same
+     depth: nps at 2 threads (and 4 where the runner has the CPUs), each against its own one-thread run; plus
+     the local 2-thread nps if a quiet window comes. r3kr1 is 3.79 MB, so two nets need about 7.6 MB of cache
+     (runner L3 sizes per the CPU survey; UNVERIFIED how much of it stays hot).
+  5. **Matches** (fixed length, sprt_run.sh --kind fixed, STC, both sides Threads 2, **one game at a time per
+     4-vCPU runner**): (a) r3kr1 main + r8ceplo2kr4 helper against r3kr1 on both threads; (b) r3kr1 main +
+     r3pp1kr4 helper against r3kr1 on both threads. 2 stages each (3,200 games, about +/- 5 Elo by the
+     2-vs-1 run's spread; one game per runner makes a stage about 3x as long as a normal STC stage). Needs a
+     small driver change first: sprt_run.sh does not yet pass sprt.yml's `concurrency` input (a
+     --concurrency option recorded in design.json, as --hash is, with test_sprt_run.sh checks).
+  6. **Report:** Elo of (a) and (b), the nps ratios, and the TT tag's effect if measurable. A gain would then
+     go to 4 threads (rented hardware or a quiet PC window) before any adoption decision; voting across groups
+     stays a separate item (concurrency review A4/A6).
+- **result (2026-11-15/16 overnight):** steps 1-5 done. Both helper nets extended to architecture 9 bench-equal to
+  their originals (r8ceplo2kr4 S 87; r3pp1kr4 matched to S 90); gate 1 passed (mean |eval| ratios 0.997, 1.004);
+  gate 2 passed on interval overlap in every phase bucket (r8ceplo2's paired ratios exclude 1 pooled and in b0-b1,
+  b6-b7; on its own games its b7 does not overlap: recorded for the owner). Engine: exp/i84-helper-net 4d4fd62 (a
+  second embedded net for the helpers, FORK_HELPER_NET; a one-bit evaluator tag in TT flags bit 3). nps at 2
+  threads against each build's own 1 thread: x1.97 base, x1.99 r8ceplo2 helper, x1.92 r3pp1 helper (no cache cost
+  resolved). **Matches (Threads 2 both sides, one game per runner, STC, fixed 2 stages): r8ceplo2 helper -2.39 +/-
+  6.40 Elo, r3pp1 helper -2.82 +/- 6.25** (3,200 games each): no gain at 2 threads. **status:** tested at 2
+  threads, no gain; a 4-thread test would need the PC or rented hardware (the owner's call). **Parked (owner,
+  2026-11-16): for the rented-EPYC test plan** (its test belongs at high thread counts), with Lazy SMP v2's skip rule.
+
+## 85. Class-matched TD horizon (novel-ideas 7)
+
+- **type:** ELO (training labels).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): a lambda per phase bucket or material class instead of one 0.9, chosen from Fork's own data.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): its **offline check**: the result-residual variogram by class and the per-class lambda that minimises error against the gold set. Kill: queens-on middlegames and endgames differ by less than 0.05 in best lambda. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** **probe passed; an arm in retrain 8c (owner, 2026-11-11, about 10:25 PM EST).** Offline check
+  (tools/measure/label_probes.py tdclass on branch tools/probes-1111 b5143af; 2026-11-11, PC, about 4 CPU-minutes):
+  on idea 51's held-out set (3,131 kept records) the TD(lambda) label's error against the 1M golds is lowest at
+  lambda 0.35 for queens-on middlegames (a queen on, phase >= 13; 1,482 records; bootstrap mass 93% on 0.30-0.40)
+  and 0.65 for endgames (no queen, phase <= 9; 1,117 records; 63% on 0.60-0.70), on the mean of the two independent
+  golds (scratch-s1/s2; S512ppr3's gold: 0.35 and 0.60). The difference (0.30) passes the kill line (0.05). The
+  direction is the opposite of the proposal's (queens-on middlegames want the shorter horizon), and this yardstick
+  favours low lambda overall (its best over all records is 0.40, while TD(0.9) won in games), so the values are a
+  per-class contrast, not a recipe. The result-residual variogram (3,000 games of g3j-w05-val) grows about twice as
+  fast in queens-on middlegames (0.0184 at 32 plies) as in endgames (0.0095). **Arm (owner):** a per-class lambda TD
+  arm in retrain 8c: queens-on middlegames about 0.35, endgames about 0.65, every other record 0.9; two seeds,
+  beside the plain TD(0.9) control (same games and training steps).
+
+## 86. Pawn-clocked context rows: bishop colour complexes (novel-ideas 8)
+
+- **type:** ELO (network inputs).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): inputs pairing each pawn with which bishop colour complexes each side keeps (384 rows), changing only on pawn moves or bishop captures; a new member of the pawn-link family.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+
+## 87. Fail-firm returns (the engine survey's B3, think tank R7)
+
+- **type:** ELO (search); flags `use_firm_rfp`, `use_firm_stand_pat`, `use_firm_fail_high` (off).
+- **idea** (the engine survey's B3; think tank R7, step 12's first; concept only): a fail high returns beta
+  plus `Firm*Quarters` / 4 of its surplus over beta instead of the whole fail-soft score, at three sites:
+  reverse futility's return, the quiescence search's stand-pat cut, and a main-search node whose move beat
+  beta (the TT stores the same value). Mate and tablebase scores are never pulled.
+- **status:** **reverse futility's site H0 at its natural value, 2026-11-12; its retry queued** (sprt-log).
+  Built on phase-4 26323e1 behind the three switches, off (tier2/b3-firm 9201f8f; bench unchanged; recorded
+  on that branch's ideas.md as idea 87, entered here with the result). Coordinator's overnight build list
+  (2026-11-11) under the owner's rules of 2026-11-11 (the SPRT at the natural value, one retry at 1 quarter
+  if it is not H1; a pass adopted, pre-approved, its constant joining the final retune's SPSA): RFP first
+  (night items 50a, 50b), then stand-pat (50d, 50e) and fail high (50f, 50g), gated behind E1's SPRT.
+  survey-b3-rfp-stc (`FirmRfpQuarters` 2, sprt/b3-firm-rfp-2 08c6b97, design R [0, 6] at STC against off):
+  **H0 after stage 4, −2.82 ± 4.49 Elo, nElo −4.79 ± 7.61, 8,000 games.** The retry (item 50b, 1 quarter,
+  sprt/b3-firm-rfp-1 3f94316, try 2) and the other two sites had not run at 2:15 PM EST. Nothing is adopted
+  before its verdict.
+- **runtime cost:** none expected (one multiply at a fail high).
+- **earliest phase:** Phase 4.
+
+## 89. History ageing between searches (the engine survey's D17, think tank R16)
+
+- **type:** ELO (search); flag `use_history_ageing` (on since 2026-11-12).
+- **idea** (the engine survey's D17; think tank R16, step 12; concept
+  only): at the start of each search (each `go`) every history entry keeps
+  `HistoryKeepQuarters` / 4 of its value.
+- **status:** **adopted 2026-11-12** at `HistoryKeepQuarters` 2 on its STC pass (survey-d17-stc, design R
+  [0, 6] against off: +5.71 ± 3.77 Elo, nElo +9.74 ± 6.43, H1 after 11,200 games; sprt-log), pre-approved by
+  the owner's rule of 2026-11-11; ported onto phase-4 1b5a482, bench 9,443,408 / 6d421599a985f97c, unchanged
+  (DESIGN.md decisions log, 2026-11-12). `HistoryKeepQuarters` is a class (a) dimension of the final
+  retune's SPSA (final-retune.md §3.1). The retry (item 52b, 3 quarters) was not needed. History: built on
+  phase-4 a95e269 behind the switch, off, branch tier2/d17-history-ageing 94999a9 (coordinator, 2026-11-11
+  night; owner's rules of 2026-11-11: nat/retry; recorded on that branch's ideas.md as idea 89, entered here
+  with the result); test side sprt/d17-history-ageing-2 ee3a6c7; night item 52a, gated behind
+  state/gate-e1.done. The drift tables, added to phase-4 since, are not aged (UNVERIFIED whether they
+  should be).
+- **runtime cost:** one pass over the history tables (about 2.4 MB, nearly all the two pair tables) per
+  search. bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 1b5a482, B = the port's build of this commit's engine code from the uncommitted tree on 1b5a482, r8brft1; identity checked on all 24 runs, `--same-nodes`): 12 interleaved rounds, median nps +0.9%, best +2.5%, under the 3.0% noise threshold: no significant difference. The bench pays one ageing pass per position (each position is its own search, on cleared tables), so the pass's price is inside that measurement; the bench's nodes are unchanged.
+- **earliest phase:** Phase 4.
+
+## 90. The improving flag in late move pruning and LMR (the engine survey's B9, think tank R17)
+
+- **type:** ELO (search); flags `use_improving_lmp` and `use_improving_lmr` (both on since 2026-11-13).
+- **idea** (the engine survey's B9; think tank R17, step 12; concept only):
+  a node is improving when its pruning eval is above the same side's two
+  plies up (four when that node was in check). LMP's quiet allowance is
+  scaled by (8 ± `LmpImprovingEighths`) / 8 by the flag; LMR reduces late
+  quiets `LmrNotImprovingPlies` more at a node that is not improving.
+- **status:** **the LMP use adopted 2026-11-13** at `LmpImprovingEighths` 1 on its STC pass (survey-b9-lmp-stc, design R [0, 6] against off: +6.82 ± 4.37 Elo, nElo +11.87 ± 7.61, H1 after 8,000 games; sprt-log), pre-approved by the owner's rule; ported onto phase-4 254841c, bench 9,430,886 / 647c5ee9a57cae18 (DESIGN.md decisions log, 2026-11-13). `LmpImprovingEighths` is a class (a) dimension of the final retune's SPSA (final-retune.md §3.1). **The LMR use adopted 2026-11-13** at `LmrNotImprovingPlies` 1 on its STC pass (survey-b9-lmr-stc, night item 53d, design R [0, 6] against the same off 74e485a, the LMP use off on both sides: +12.71 ± 7.00 Elo, nElo +21.88 ± 12.04, H1 after 3,200 games; sprt-log), pre-approved by the owner's rule, on top of the LMP use (one at a time; the stacking check that follows covers the interaction); phase-4 17717a8 with its switch on, bench 6,238,381 / 8d4a17943d604c99 (DESIGN.md decisions log, 2026-11-13). `LmrNotImprovingPlies` is a class (a) dimension of the final retune's SPSA. R17's kill rule (two H0s among the two uses drop the flag) no longer applies. History: built on phase-4 a95e269 behind the two switches, off, branch tier2/b9-improving 74e485a (coordinator, 2026-11-11 night; R-STC; recorded on that branch's ideas.md as idea 90, entered here with the result); test sides sprt/b9-improving-lmp 3273148 (night item 53a, gated behind state/gate-e1.done) and sprt/b9-improving-lmr d3b3930 (night item 53d).
+- **runtime cost:** one frame store per node, and a comparison with a switch on. bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked on all 24 runs), A = 254841c, B = the port: median nps -2.1%, best -1.7%, under the 3.0% noise threshold, so no significant difference. The LMR use: bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked on all 24 runs), A = 17717a8, B = the port: median nps +0.5%, best +0.3%, under the 3.0% noise threshold, so no significant difference.
+- **earliest phase:** Phase 4.
+
+## 120. Move-count pruning in the quiescence search (the engine survey's B16)
+
+- **type:** ELO (search); flag `use_quiesce_move_cap` (on since 2026-11-13).
+- **idea** (the engine survey's B16, its rank 11; concept only): a quiescence node out of check searches
+  at most `QuiesceMoveCap` moves and prunes the rest (the survey: Raphael +5.1, Tarnished +4.1, Hobbes
+  +3.3, at STC).
+- **status:** **adopted 2026-11-13** at `QuiesceMoveCap` 2, the retry value, on its STC pass
+  (b16-qs-move-cap-retry, design R [0, 6] against off: +8.90 ± 5.56 Elo, nElo +15.75 ± 9.83, H1 after
+  4,800 games; sprt-log), pre-approved by the owner's rule (2026-11-11: one SPRT at the natural value,
+  one retry at a second value if it fails); the first try at the natural value 3 (b16-qs-move-cap-stc)
+  stopped for futility after 3,200 games (−0.22 ± 6.92 Elo, nElo −0.38 ± 12.04). Ported onto phase-4
+  929f114, bench 6,064,962 / ad41c57a026bb021 (DESIGN.md decisions log, 2026-11-13). `QuiesceMoveCap` is a class (a)
+  dimension of the final retune's SPSA (final-retune.md §3.1). History: the coordinator's overnight build
+  list, 2026-11-12 ("B16 - qsearch LMP. R-STC"); built on phase-4 ab70fa5 behind the switch, off, on
+  tier2/b16-qs-lmp af8f35c (bench 9,639,207 / 07f7ae19b9250f38, r8brft1); test commits sprt/b16-qs-lmp
+  a03b0db (3) and sprt/b16-qs-lmp-2 73dd82f (2); night items 60a and 60b (ledger idea `b16-qs-move-cap`,
+  tries 1 and 2), gated behind state/gate-e1.done.
+- **runtime cost:** one comparison per quiescence move; fewer quiescence nodes. bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, the shared machine busy; identity checked on all 24 runs), A = 929f114, B = the port: median nps +5.1%, best -1.5%, under the run's 15.8% noise threshold, so no significant difference (the two search different trees: 6,624,814 against 6,064,962 bench nodes; the code change itself is one comparison per quiescence move).
+- **earliest phase:** Phase 4.
+
+## 124. Root reductions (bug review 2026-11-11 §3)
+
+- **type:** ELO (search); flag `use_root_lmr` (on since 2026-11-13).
+- **idea** (bug review 2026-11-11 §3: "Root moves are never reduced"): late
+  quiet root moves get the LMR table's reduction (less the check relief),
+  with the usual full-depth re-search when they beat alpha.
+- **status:** **adopted 2026-11-13** on its STC and LTC passes (design R [0, 6] against off; sprt-log):
+  root-lmr-stc +17.71 ± 6.74 Elo (nElo +31.68 ± 12.04, H1 after 3,200 games) and root-lmr-ltc (40+0.4)
+  +14.94 ± 6.24 Elo (nElo +28.29 ± 11.80, H1 after 3,328 games), pre-approved by the owner (2026-11-13:
+  "pre-approved adoptions as before (incl. root LMR on an LTC pass)"). Ported onto phase-4 bbc19c5, bench
+  5,386,021 / 5ecd49d976e215e1 (DESIGN.md decisions log, 2026-11-13). No constant, so no final-retune
+  dimension. History: the coordinator's overnight build list, 2026-11-12 ("Root reductions. R-STC + LTC
+  (depth)"); built on phase-4 ab70fa5 behind the switch, off, on tier2/root-lmr 350ea3a (bench 9,639,207 /
+  07f7ae19b9250f38, r8brft1); test commit sprt/root-lmr b56adb9; night items 64a and 64c (ledger idea
+  `root-lmr`), gated behind state/gate-e1.done.
+- **runtime cost:** a few comparisons per root move; fewer nodes (bench 11.2% fewer). Speed: bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned; identity checked on all 24 runs), A = bbc19c5, B = the port: median nps -1.5%, best -2.0%, under the run's 3.0% noise threshold, so no significant difference (the two search different trees: 6,064,962 against 5,386,021 bench nodes; the code change itself is a few comparisons per root move).
+- **earliest phase:** Phase 4.
+
+## 173. The linear history bonus (the engine survey's D11, think tank R15)
+
+- **type:** ELO (search); flag `use_linear_bonus` (on since 2026-11-13).
+- **idea** (the engine survey's D11; think tank R15, step 12; concept only): a cutoff's history bonus
+  and maluses grow linearly with depth, `LinearBonusPerPly` per ply, with the quadratic bonus's cap
+  (`HistoryBonusCap`, reached at the same depth 10), so shallow and middle-depth cutoffs weigh more.
+- **status:** **adopted 2026-11-13** at `LinearBonusPerPly` 125 on its STC pass (d11-linear-bonus-stc,
+  design R [0, 6] against off: +8.98 ± 5.70 Elo, nElo +15.50 ± 9.83, H1 after 4,800 games; sprt-log),
+  pre-approved by the owner (2026-11-11: one SPRT at the natural value); ported onto phase-4 49494bb, bench
+  6,624,814 / 8aa09aa2e1ed5ede (DESIGN.md decisions log, 2026-11-13). `LinearBonusPerPly` is a class (a) dimension of
+  the final retune's SPSA (final-retune.md §3.1); `HistoryBonusFactor` is inert while the switch is on.
+  The retry (item 82e, 250) was not needed. History: built on phase-4 26323e1 (a95e269) behind the
+  switch, off, with R15's other half, D10 (the TT-cutoff credit), on tier2/d10-d11-history-bonus 23e579e
+  (coordinator, 2026-11-11 night); test side sprt/d11-linear-bonus f289442 (night item 82d, gated behind
+  state/gate-e1.done). **D10 rejected 2026-11-13** (d10-tt-cut-credit-stc, test sprt/d10-tt-cut-credit 2355168 against the
+  same off 23e579e: a futility stop after stage 1, −2.93 ± 6.97 Elo, nElo −5.06 ± 12.04, 3,200 games, runs
+  43438699344 and 43442565958); its code is not ported. Numbered 173, past the last entry.
+- **runtime cost:** none expected (a multiply in place of a square per cutoff). bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, the shared machine busy; identity checked on all 24 runs), A = 49494bb, B = the port: median nps -2.9%, best -2.6%, under the run's 8.9% noise threshold, so no significant difference (the two search different trees: 6,426,679 against 6,624,814 bench nodes; the code change itself is one multiply in place of a square per cutoff).
+- **earliest phase:** Phase 4.
+
+## 130. The pass-best stop rule (bug review 2026-11-11, E1)
+
+- **type:** ELO (search); flag `use_pass_best_stop` (on since 2026-11-12).
+- **idea** (docs/research/bug-review-2026-11-11.md, E1): when a search stops mid-iteration, the old rule played a
+  move of the unfinished iteration only if its exact score beat the last finished iteration's, so when the
+  previous best came back lower at the new depth and another move scored above it in the same pass, the previous
+  best was still played. With the switch on, once the unfinished aspiration pass has searched the last finished
+  iteration's best move again, that pass's best exact move is played whatever its score; the iteration's best is
+  kept per pass, so an earlier pass cannot supply it; an unresolved root fail high is never played (rv-failhigh's
+  rule, unchanged). It affects every node-limited search (data generation, fixed-node screens) and every
+  hard-limit stop; bench is unchanged (its searches finish every iteration).
+- **phase:** Phase 4 (bug review follow-up). **metric:** design R SPRT at STC against off.
+- **status:** built behind the switch on tier2/stop-rule 959cc32 (test side sprt/stop-rule d97e358; test_search's
+  pass-best case: on the bench positions' node-limited stops, 13 stops differ, all E1's case, and the completed
+  iteration agrees with the new rule in 13 of 13). STC stop-rule-stc (design R [0, 6]) **capped undecided, +3.26
+  ± 3.35 Elo** (12,800 games, LLR 1.82); under the owner's rule (2026-11-11: an undecided result with a
+  non-negative estimate gets one non-regression test) stop-rule-nonreg ([−3, 0]) **H1, +2.41 ± 2.69 Elo**
+  (20,800 games, LLR 2.96). **2026-11-12: adopted** onto phase-4 fa2ad80 (e5a073f), `UsePassBestStop` on, the
+  switch kept until the Phase 4 re-validation; bench 9,639,207 / 07f7ae19b9250f38 (r8brft1), unchanged;
+  docs/history/phase-4/sprt-log.md. Numbered 130, past the numbers the builders' branches use (87-129).
+- **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
+  measured (UNVERIFIED; bench/ab.py not run).
+- **earliest phase:** Phase 4.
+
+## 185. The time scale's deep-depth clamp (bug review 2026-11-11, E2)
+
+- **type:** ELO (time management, a TCEC-depth fix); flag `use_deep_time_depth` (on since 2026-11-14).
+- **idea** (docs/research/bug-review-2026-11-11.md, E2; bug-review-followup-2026-11-11.md, E2): the soft limit's
+  scale (time management variant b) clamped the depth at 19, the end of X6's fit, so past depth 19 a stable best
+  move got the 0.36 floor at any share and deep searches spent less than their soft limit (the cloud replay of
+  720 searches of 96M nodes from 24 LTC games: 0.83 and 0.79 of the plain soft limit at the two deepest budgets).
+  With the switch the depth is clamped at 60 (`TimeScaleDeepMaxDepth`, a fixed-point guard, not a tuned value),
+  and the spend returns to 0.96-1.03. Identical up to depth 19; bench unchanged (its searches are depth-limited).
+- **phase:** Phase 4 (bug review follow-up; a TCEC hazard). **metric:** design R SPRT at LTC against off (LTC only,
+  owner, 2026-11-11).
+- **status:** **adopted 2026-11-14 under the non-regression standard (owner), not on a pass.** e2-time-depth-ltc
+  (40+0.4, Hash 64, [0, 6] nElo, cap 6; test sprt/e2-time-depth e4fa310 against off tier2/e2-time-depth e7ec553,
+  r8brft1) was **capped undecided after 6 of 6 stages at +2.16 ± 3.47 Elo** (nElo +4.24 ± 6.82, Ptnml [38, 1113,
+  2626, 1179, 36], LLR 0.61, 9,984 games, no time losses; runs 43577728887 to 43610249077; sprt-log). The owner
+  (about 12:20 PM EST): "E2 (depth-19 time-clamp fix): adopt under the non-regression standard (TCEC-depth fix;
+  its capped LTC result +2.16 +- 3.47 has a 95% lower bound above -3), with records noting why. Include it in
+  idea 23's simulator when that work starts." The lower bounds, −1.31 Elo and −2.58 nElo, are above −3, the
+  non-regression bound; no separate non-regression SPRT was run. Ported onto phase-4 89dc994 (branch
+  adopt/e2-time-depth), bench 5,386,021 / 5ecd49d976e215e1 (r8brft1), unchanged (DESIGN.md decisions log,
+  2026-11-14). No final-retune dimension (a guard, not tuned). Goes into idea 23's simulator when that work
+  starts. Numbered 185, after Fable's network ideas (175-184).
+- **follow-up L1 (2026-11-16, the time-management audit; owner's order):** past depth 27 the clamp at 60
+  extrapolates the fits (DepthFit's slope is about twice ShareFit's, so the scale grows about 11% per ply and an
+  unstable deep search gets the hard limit). Built as `use_time_guards` (option `UseTimeGuards`, off; branch
+  tm/deep-depth-cap): the depth clamped at 27 (`TimeScaleValidatedDepth`, the top of E2's validated range) and a
+  per-move guard (`TimeGuardPermille` 500: at most the increment plus half of the rest of the clock), both
+  recorded in DESIGN.md §5.2 "Search constants". Bench unchanged. Next: the VM check
+  (`tools/measure/l1_check.sh`) and a non-regression SPRT [−3, 0] of on against off. The full redesign (a re-fit on
+  deep TCEC-like traces) is recorded in docs/research/idea23-revamp-2026-11-14.md §15.
+- **runtime cost:** none (one comparison per finished iteration). Speed not measured (bench/ab.py not run).
+- **earliest phase:** Phase 4.
+
+## 150. RSPSA for the final retune: adaptive per-parameter step sizes
+
+- **type:** TOOLING (tuning method); no engine flag. Recorded by the owner's order of 2026-11-12, about 1:15 PM EST
+  (plan only, no runs now).
+- **idea:** RSPSA (SPSA with resilient, per-parameter step sizes: each parameter's step grows while its gradient
+  sign holds and shrinks when it flips) in place of one calibrated step schedule for every dimension. Implement it
+  in the SPSA driver (tools/github/spsa.py, branch tune/spsa) behind an option, then compare it with the calibrated
+  SPSA on a small parameter set before the final retune (docs/research/phase4-designs/final-retune.md) uses it.
+- **phase:** Phase 4, before the final retune. **metric:** on the same small parameter set and game budget,
+  RSPSA's final values against calibrated SPSA's, judged by an SPRT of the two tuned results (or of each against
+  the start), plus how often each run ends with parameters pinned at a range bound.
+- **status:** untested (plan). Sources: the RSPSA method's original description, to be fetched and logged in
+  docs/ORIGINALITY.md before implementation (not consulted yet; ideas only, never code).
+- **runtime cost:** none (tuning side only).
+- **earliest phase:** Phase 4.
+
+## 151. CLOP-style local quadratic fitting for 1-3 parameter questions
+
+- **type:** TOOLING (tuning method); no engine flag. Owner, 2026-11-12, about 1:15 PM EST (plan only, no runs).
+- **idea:** for a question about one to three parameters, fit a local quadratic model of the win rate to games
+  sampled across the parameter range (CLOP's approach: confidence-weighted local regression, sampling
+  concentrated where the model predicts the optimum) instead of a multi-candidate head-to-head between fixed
+  values. Fork's own implementation.
+- **phase:** Phase 4 or later. **metric:** on a past head-to-head question with a known answer, the fitted optimum
+  and its interval against the head-to-head's pick, for the same or fewer games.
+- **status:** untested (plan). Sources: CLOP's original paper, to be fetched and logged in docs/ORIGINALITY.md
+  before implementation (not consulted yet).
+- **runtime cost:** none (tuning side only).
+- **earliest phase:** Phase 4.
+
+## 152. Texel-style offline fitting for small handcrafted eval add-ons only
+
+- **type:** TOOLING (tuning method); no engine flag. Owner, 2026-11-12, about 1:15 PM EST (plan only, no runs).
+- **idea:** fit a small handcrafted term's weights offline by minimizing the prediction error of game results
+  (or labels) over recorded positions, Texel-style, only for small add-ons on top of the network: for example
+  F10's scale or a correction table's scale. Not for search constants and not for the network itself.
+- **phase:** when such an add-on needs a value. **metric:** the fitted value then gets the normal SPRT against
+  its current value.
+- **status:** untested (plan). Sources: the Texel tuning method's description, to be fetched and logged in
+  docs/ORIGINALITY.md before use (not consulted yet).
+- **runtime cost:** none (offline).
+- **earliest phase:** Phase 4.
+- **not adopted (owner, same date):** Hooke-Jeeves pattern search, simulated annealing and genetic algorithms are
+  not adopted for parameter tuning; SPSA (with idea 150's comparison), head-to-heads or idea 151 for small
+  questions, and idea 152 for small eval add-ons cover the cases.
+
+## 153. Uncertainty-weighted label budget
+
+- **type:** ELO (training data). Recorded by the owner 2026-11-12, about 1:40 PM EST, as a candidate (plan only;
+  tested after the current batch, as a retrain arm).
+- **idea:** during data generation, end the saved-position search early when its best move is stable and extend it
+  when unstable, using the time manager's stability signal (TM (b)), at equal average nodes per saved position, so
+  the label budget goes where the label is least settled.
+- **phase:** Phase 4, after the current batch. **metric:** a data arm in a retrain against the standard settings at
+  equal CPU (the retrain's SPRT), with the held-out endgame checks reported.
+- **status:** candidate (plan).
+- **runtime cost:** none (data-generation side only).
+- **earliest phase:** Phase 4.
+
+## 154. SPRT-game harvesting
+
+- **type:** ELO (training data). Owner, 2026-11-12, about 1:40 PM EST: candidate, plan only.
+- **idea:** store the GitHub SPRT games (Fork against Fork, with each move's search score and the result) as an
+  additional data source, instead of discarding them after the verdict.
+- **phase:** Phase 4, after the current batch. **metric:** first the volume per day and its label quality (search
+  depth per move, the openings' overlap with generation's book); then a data arm in a retrain.
+- **status:** candidate (plan).
+- **runtime cost:** none (test side only; the SPRT workflow would have to keep the games and scores).
+- **earliest phase:** Phase 4.
+
+## 155. Surprise-guided saving
+
+- **type:** ELO (training data). Owner, 2026-11-12, about 1:40 PM EST: candidate, plan only.
+- **idea:** raise the save probability for positions where the static eval and the search score disagree by more
+  than a threshold, within the 5% targeted-data cap.
+- **phase:** Phase 4, after the current batch. **metric:** a data arm in a retrain against standard saving; the
+  threshold is measured before use (no value from memory).
+- **status:** candidate (plan).
+- **runtime cost:** none (data-generation side only).
+- **earliest phase:** Phase 4.
+
+## 156. PV harvest
+
+- **type:** ELO (training data). Owner, 2026-11-12, about 1:40 PM EST: candidate, plan only.
+- **idea:** label the positions along each saved search's principal variation with their own search scores (from
+  the same search), adding records at little extra cost; tested like idea 80 (the same games and the same number of
+  training steps as the control arm).
+- **phase:** Phase 4, after the current batch. **metric:** as idea 80's arm.
+- **status:** candidate (plan).
+- **runtime cost:** none (data-generation side only).
+- **earliest phase:** Phase 4.
+
+## 157-161. Bake-off round 3 input candidates (owner, 2026-11-12)
+
+Recorded by the owner 2026-11-12, about 1:45 PM EST, as input candidates for bake-off round 3 (plan only). Novelty
+of each is **UNVERIFIED** pending a prior-art check. **Priority for round 3: ideas 157 and 159.** Each candidate
+gets its nps cost measured first, then the speed-adjusted fixed-node screen (the testing policy of 2026-11-09,
+DESIGN.md decisions log). Common fields: **type** ELO (network architecture); **phase** Phase 4, bake-off round 3;
+**metric** nps cost (bench/ab.py), then the speed-adjusted fixed-node screen, then the round's SPRT; **status**
+candidate (plan); **runtime cost** possible (each changes the network's inputs or output, so the nps change is
+reported with any result); **earliest phase** Phase 4.
+
+**Round 3's outcome (2026-11-14):** the king-input designs were measured first (DESIGN.md decisions log, about
+8:15 AM and 10:30 AM EST): option (a), H-512's king regions on S512+PP (four regions, M4, with a refresh cache:
+architecture 9, H512+PP), was the only one trained; option (b), idea 157's king-relative offsets (0.534-0.782 of
+phase-4's nps), was parked. **Option (a)'s candidate r3kr1 is the default network since 2026-11-14** (owner's
+order, about 7:20 PM EST): fixed nodes against its same-recipe control +23.92 ± 9.12 (FN_adj +12.18 at the in-situ
+r 0.933), then the STC SPRT [0, 5] against r8ceplo2 **H1, +8.04 ± 4.75** (nElo +14.42 ± 8.51) after 6,400 games
+(docs/history/phase-4/sprt-log.md; docs/nets.md); speed 0.941 of S512+PP's nps (bench/ab_search.py). Its LTC
+confirmation against r8ceplo2 is non-blocking, with no automatic revert (pending). Ideas 158-161 unchanged.
+
+### 157. King-relative offset inputs (round 3 priority)
+
+- **idea:** encode each piece by its offset from each king (rather than, or beside, its absolute square), so the
+  inputs describe the position around each king; the king-side accumulators refresh when that king moves.
+- **status (2026-11-14):** parked as round 3's option (b) (owner, about 8:15 AM EST); round 3's king inputs went to
+  option (a), H512+PP's king regions, promoted the same day (above).
+
+### 158. King-zone piece-pair inputs
+
+- **idea:** extend the pawn-pair inputs to pairs of pieces that attack the enemy king's zone, so the network sees
+  coordinated attackers directly.
+
+### 159. Output experts by material-imbalance class (round 3 priority)
+
+- **idea:** choose the output layer's expert by a material-imbalance class (for example which side has the extra
+  minor, the exchange, the bishop pair) instead of by game phase alone.
+
+### 160. Fifty-move and repetition proximity inputs
+
+- **idea:** feed the output layer the fifty-move counter's distance to the limit and a repetition-proximity signal,
+  so drawish shuffles and approaching claims lower the evaluation's confidence.
+
+### 161. Passed-pawn race features
+
+- **idea:** features describing passed-pawn races (each passer's distance to promotion against the defending king's
+  distance, and whose move it is), for the endings where the network's 6-7-piece held-out errors concentrate.
+
+## 162-165. Build and concurrency techniques (owner, 2026-11-12)
+
+Recorded by the owner 2026-11-12, about 2:00 PM EST (plan only). Common fields: **type** TOOLING (speed; no
+playing change, bench must stay identical), **metric** nps by bench/ab.py with bench unchanged (DESIGN.md §7),
+**status** candidate (plan), **runtime cost** none or a gain (each aims at speed), **earliest phase** Phase 4.
+
+### 162. Compile-time specialization of the kept switches
+
+- **idea:** at the Phase 4 close, once the re-validation decides which search switches stay, turn the kept switches
+  into compile-time constants (templates or constexpr) so the shipped search pays no runtime branch for them;
+  measured for nps.
+- **phase:** Phase 4 close (after the re-validation).
+
+### 163. Function multiversioning for the TCEC build
+
+- **idea:** one TCEC binary with AVX2, AVX-512 and VNNI paths chosen at startup (GCC/Clang `target_clones` or an
+  equivalent dispatch), answering the launcher question (DESIGN.md, the TCEC build row: "to ask TCEC: a launcher")
+  without relying on TCEC to pick a binary.
+- **phase:** Phase 4, before the TCEC build is fixed. **metric:** nps of each path against the matching
+  single-target build (no loss), and the same bench on every path.
+
+### 164. std::atomic_ref for lock-free TT access in Lazy SMP
+
+- **idea:** access the shared transposition table through `std::atomic_ref` (C++20) so concurrent reads and
+  writes are well defined without locks; this is already the first fix of the concurrency review
+  (~/fork-jobs/night/reviews/concurrency-review-2026-11-11.md, kept outside the repo).
+- **phase:** with Lazy SMP (step 17a). **metric:** TSan clean on the threaded suites, nps unchanged at one thread,
+  bench identical. Check first that libstdc++ 11 (TCEC's gcc 11.4) provides `std::atomic_ref` (UNVERIFIED).
+
+### 165. Coroutine interleaving to hide memory latency (research)
+
+- **idea:** C++20 coroutines interleave independent work on one thread (for example sibling subtrees, or batched
+  TT and NNUE fetches) so that one task's cache misses overlap another's computation.
+- **novelty for chess engines:** UNVERIFIED (a prior-art check first).
+- **phase:** research, after SMP. **metric:** a prototype measured for nps before anything else; no further work
+  unless it gains.
+- **targets (owner, 2026-11-12, about 2:10 PM EST; plan only):**
+  1. **First target, data generation:** one thread juggles several independent games, so a memory stall in one
+     game is filled by work on another. **Metric:** positions per hour at equal threads against today's
+     generator; the labels must be byte-identical per game (each game's records equal to the same game played
+     alone).
+  2. **Second target, for TCEC:** asynchronous 7-man tablebase probes: the search continues while a cold disk
+     probe completes. Design only, after Lazy SMP.
+- **result, first target (2026-11-13; prototype branch proto/datagen-interleave 90789c3, kept unmerged as a
+  record):** **correct but slower; not adopted.** One worker thread held K game slots and switched stackfully at
+  each node's TT read (behind the CMake option `FORK_DATAGEN_INTERLEAVE`, off by default). Output was
+  byte-identical to today's generator, whole shards included (a test that failed on both injected faults).
+  Positions per hour against today at 2 threads (WSL, g4c's settings, 3 rotated rounds; today's own spread about
+  12%): K=2 -12.6%, K=4 -18.8%, K=8 -28.4%. Per node (perf stat, 1 thread, K=4): instructions +3.4%, cycles
+  +26-31%, last-level cache misses +136-140%, L1d misses +40-46%. The switch is cheap; the loss is the working
+  set: each game slot brings its own TT, histories and stack (peak RSS about +4.5 MB per slot) against a 1 MB L2
+  per core, so hiding one prefetched TT line per node cannot pay for the misses the extra games cause. A server
+  CPU with higher memory latency and more threads sharing L3 (EPYC) is expected to lose more, not less. No
+  runner measurement (owner, 2026-11-13: not needed).
+- **lesson for any future coroutine or interleaving work (owner, 2026-11-13):** interleave only tasks that share
+  most of their working set (for example batched TT/NNUE lookups within one search, or sibling work on the same
+  tables), never independent games or searches, whose separate state multiplies the working set. The second
+  target (asynchronous tablebase probes within one search) fits this rule; the first did not.
+
+### 166. Register-tiled accumulator updates (speed sprint 3)
+
+- **type:** TOOLING (speed; bench identical). **phase:** Phase 4, speed sprint 3 (owner's order, 2026-11-12, about
+  3:35 PM EST). **idea:** the accumulator update loads each register tile of the parent's sums once, applies every
+  removed and added row, and stores it once, instead of a row loop per vector.
+- **metric:** instructions:u per bench, then nps by bench/ab_search.py in a quiet window. **result:** instructions
+  -31.4%; nps +14.7% median (x86-64-v3, WSL, core 4) and +5.4% (native AVX-512, Windows), both beyond the noise
+  threshold; bench 9,118,607 / 208629aa15e140a9 unchanged (docs/history/phase-4/perf-log.md, speed sprint 3).
+- **status:** adopted (46f2b1e on phase-4; developed as b3b1f5c). GCC 11.4 (update.sh, x86-64-v3): +9.0% median,
+  +7.8% best (window 2). **runtime cost:** a gain. **earliest phase:** Phase 4.
+
+### 167. Int8 feature-transformer rows (I4; speed sprint 3)
+
+- **type:** TOOLING (speed; changes the net's numbers, so an SPRT would decide). **idea:** the first layer's rows
+  stored as int8 with a per-unit multiplier, widened and multiplied when accumulated (FORK_FT_INT8), the net
+  re-quantized from the float weights by tools/nnue/int8_rows.py (r8brft1i8).
+- **result (2026-11-12):** every quality gate passed (loss max 17.7, p99 13.7, mean 3.6 cp; endgame and both
+  held-out checks within their flags), but nps -0.9% median and best against the int16 rows on the same net (bench
+  identical; instructions +11.6%): below the owner's 3% bar, so no SPRT (docs/history/phase-4/perf-log.md,
+  window 2). **status:** not adopted; the code stays on the unmerged branch speed3/nnue-i4 (b550b5b). Revisit only
+  if a larger net makes the update bandwidth-bound (and once on TCEC's EPYCs, UNVERIFIED).
+
+### 168. The output layer on AVX-512 (VNNI where compiled) and a startup CPU check (speed sprint 3)
+
+- **type:** TOOLING (speed; bench identical). **idea:** squared_sum on 32 lanes (C1's idea of 2026-11-06), for the
+  x86-64-v4 TCEC build; plus src/core/cpu_gate.cpp, a baseline-compiled constructor that refuses with a message a
+  CPU without the build's instruction sets (no dispatch: .claude/rules/simd.md).
+- **result (2026-11-12):** instructions -4.0% (-3.9% with VNNI), nps +2.1% / +1.6% (VNNI +1.4% / +1.6%), within the
+  3.0% threshold: no significant difference. **status:** the output layer not adopted (archive/speed3-nnue-avx512,
+  6e01c57); the CPU check adopted on its own (owner, 2026-11-12, about 5:50 PM EST): src/core/cpu_gate.cpp and its
+  ctest cpu_gate_refusal on phase-4, without the output layer.
+
+### 169. Frame changes refreshed lazily from per-frame snapshots (speed sprint 3)
+
+- **type:** TOOLING (speed; bench identical). **idea:** a frame change recomputes a perspective only when an
+  evaluation needs it, from the frame's snapshot plus the pieces and links that differ (the 2026-11-06 round's E1
+  was eager and lost 5.3%).
+- **result (2026-11-12):** instructions -2.5% (the lazy refresh alone -0.26%), nps +1.1% / +1.1%, within the 3.0%
+  threshold: no significant difference. **status:** not adopted (branch speed3/nnue-refresh, b477ba2).
+
+### 170. Build target of the native builds: x86-64-v3 against native (speed sprint 3)
+
+- **type:** TOOLING (build choice; bench identical). **question:** with the tiled update adopted, is the native
+  (AVX-512) build still the faster one for data generation (the Control Center's g4d build, cmake/pgo.cmake
+  ARCH=native) and the play build?
+- **result (2026-11-12, window 2):** the fused head 46f2b1e built by cmake/pgo.cmake (clang 21 PGO, WSL) for
+  x86-64-v3 and for native: native -1.5% median, -1.4% best against x86-64-v3, within the 3.0% threshold. So native
+  is not faster; x86-64-v3 is at least as fast on this machine. On TCEC's EPYCs UNVERIFIED (the TCEC build matrix).
+  **status:** measured; the build choice is the owner's.
+
+
+### 171. Speed sprint 3, the search core: captures generation and SEE (speed sprint 3)
+
+- **type:** TOOLING (speed; bench identical). **phase:** Phase 4, speed sprint 3 (owner's order, 2026-11-12, about
+  3:15 PM EST). **profile (e6b2ac3):** move selection 13.2% of cycles, TT 7.4%, move generation 7.3%, SEE 4.8%,
+  make/unmake 3.7%, gives_check 0.7% (a cheaper one is capped below the 1% rule); quiet scoring is already lazy at
+  stage level.
+- **ideas:** (a) captures-only generation visiting only the king squares of the generated kind and the pawns that
+  can add a move; (b) SEE keeping its attacker set and looking up only the last capturer's line again.
+- **metric:** instructions:u per bench, then cycles per node and nps in a quiet window (20 interleaved rounds).
+  **result (2026-11-12, 5:29-5:39 PM EST):** (a) cycles per node +2.91% (x86-64-v3, threshold 1.59%) and +2.40%
+  (x86-64-v4, threshold 1.54%), nps +2.70% / +2.47%, instructions -1.73%; (b) on top of (a) -0.09%, instructions
+  -0.06%. Bench 9,118,607 / 208629aa15e140a9 unchanged (docs/history/phase-4/perf-log.md).
+- **status:** (a) adopted under the 1% cycles-per-node rule (owner, about 5:50 PM EST); (b) dropped
+  (archive/speed3-see-xray). TT observations (the key-check digest, about 1% of cycles, recomputed per slot on each
+  probe and deposit; cheaper only with a layout change) go to step 17a's design, not a separate change.
+  **runtime cost:** a gain. **earliest phase:** Phase 4.
+
+### 172. CalibratedScore: the reported score on the network's scale (the unbalanced-position calibration)
+
+- **type:** TOOLING (display only; bench identical). **phase:** Phase 4 (owner's order, 2026-11-12, about 10:45 PM
+  EST: measure Fork's eval against results on balanced and UHO starts; follow-up by a declared rule).
+- **metric:** logistic scale k of E[score] = 1 / (1 + exp(-(s + b) / k)) by data set, band residuals, queens on/off;
+  ~/fork-data/calib-1112 (method.md declared first, results.md). **result:** search k 56-69 cp against r8brft1's
+  S = 88 (scale), not larger on UHO starts (reverse), no band beyond 0.03 (no shape), queens on much steeper (R4):
+  branch (c).
+- **status:** **adopted 2026-11-13, removed the same day by the owner** (about 7:10 PM EST: "get rid of the cosmetic
+  eval thing that was added, it may cause confusion in the future no need for it": confusion risk, no need). Fork
+  prints the search's own score again; the harness flags and guard stay until no build from c7a61ea up to the
+  removal is played (DESIGN.md decisions log, 2026-11-13). The TCEC hazard "reported-score calibration" is open
+  again: before any TCEC entry, re-check with tools/nnue/uho_diag.py's numbers for the then-default net whether raw
+  scores could trigger TCEC's eval-based adjudication early, and decide then (owner, 2026-11-13). The measurement
+  below stands. Was, as adopted (owner: "adopt CalibratedScore (display-only; off in all harnesses, datagen and labeling tools, never used inside search)"): the UCI option `CalibratedScore`
+  (default on) shows N x 88 / 67; mates, tablebase scores, bounds and pv unchanged; off in every harness and
+  labelling tool (tools/check_score_display_off.py), never in the search (CTest score_display_boundary). The data
+  side (b): arm Q, the queens-on unequal-material slice, prepared on branch slice/pos-x and gate-passed (+0.029
+  [+0.022, +0.036]), launch at g4c's seal; arm A (1,500 x 16 adjudication) waits for its count on g4c (provisional
+  on g1b: +10.1% positions); arm U (unbalanced starts) not supported. **runtime cost:** none (one multiply per info
+  line). **earliest phase:** Phase 4.
+- **note (owner, 2026-11-13 ~4:20 PM EST): the leading explanation for the UHO conversion failures** against SF19
+  (0 wins from 200 advantaged UHO starts; the UHO/SF19 analysis of 2026-11-13) is a **two-sided misjudgment:
+  queens-on edges underrated, level queenless positions overrated.** The diagnostic benchmark
+  `tools/nnue/uho_diag.py` measures it per net on fixed sets from those games (test data only, outside the repo;
+  ORIGINALITY.md): adv (200 advantaged starts; SF19 median +97.5 cp), levelql (272 level queenless positions; SF19
+  0), qtrade (528 slightly-ahead positions with a queen trade available). Baselines (raw cp, medians; static /
+  100k-node search; the sets as regenerated after the game-id fix, see below): r8brft1 adv +40 / +50 (ratio to SF
+  0.42 / 0.51), levelql +24 / +17.5; r8btd90 +37 / +46, +22.5 / +16.5; r8bep1 +40 / +49, +23.5 / +16.5; r8bep2
+  +40.5 / +50, +24 / +15; the 8c-early nets r8ec1 +37 / +47, +24 / +18.5 and r8ei801 +37.5 / +46, +23 / +16;
+  static only: s512ppr3 +39.5, +25; s512 +33.5, +22; b0r2 +33, +18. Queen trades when slightly ahead: every net's
+  search trades in 0.08-0.09 of SF-to-move positions where SF19 traded in 0.05, and in 0.11-0.14 of Fork-to-move
+  positions where Fork's game traded in 0.12: **no clear excess trade preference**, so the queens part of the
+  explanation lives in the evaluation's level (both sides of it), not in a trade-seeking choice. The nets differ by
+  at most 3-4 cp on this benchmark. Run per arm in retrain 8c (post_a1.sh uhodiag, report only), arm Q and the
+  per-class lambda arm.
+  **Piece trades (owner, 2026-11-13 ~4:47 PM EST: "add a per-piece-type trade rate"; the hypothesis: Fork trades
+  active pieces too readily, rooks and minors, especially queenless with a small edge):** the set ptrade (931
+  positions, side to move +20 to +100 cp by SF19, a rook-rook, knight-knight, bishop-bishop or bishop-knight trade
+  available by capture, offer or the game line; queenless and queens-on apart; S: SF19 to move, F: Fork to move)
+  and per-class rates of the search's line against the reference. Baselines (any class, net / reference, n):
+  queenless S 0.08-0.14 / 0.07 (110), queens-on S 0.07-0.09 / 0.10 (300), queenless F 0.14-0.17 / 0.17 (221),
+  queens-on F 0.16-0.17 / 0.16 (300), for r8brft1, r8btd90, r8bep1, r8bep2, r8ec1 and r8ei801. The only excess is
+  queenless with SF to move: any class +0.01 (r8brft1) to +0.07 (r8btd90), mostly bishop for knight (0.05-0.12
+  against 0.05 of 74; by capture 0.10-0.26 against 0.05 of 19); 110 positions, so within or near noise. On the same
+  positions a 100k-node search otherwise trades about as often as SF19 chose to. **Game-id fix (2026-11-13
+  evening, found by the trade analysis):** fastchess repeats a pair's Round number, so ids built from the Round
+  collided between a pair's two games (100 games, 50 distinct Rounds per PGN), which shared their per-game seed;
+  the id now carries Fork's colour and the game's number, all four sets were regenerated (counts unchanged) and
+  every baseline re-run. The resample alone moved r8brft1's levelql static median from +28 to +24 and its queenless
+  S any-class rate from 0.11 / 0.10 to 0.08 / 0.07: differences of that size between nets are noise. The
+  per-trade judging is the trade analysis's (~/fork-data/trade-1113).
+
+### 174. Speed sprint 4: huge pages for the network and the Searcher (R19), and the pair tables' colour fold
+
+- **type:** TOOLING (speed and memory; bench identical). **phase:** Phase 4 (owner's order, 2026-11-13, about
+  11:20 AM EST: "R19 huge pages for the TT and net" and "fold the reply/follow tables").
+- **ideas:** (a) R19: the TT already uses 2 MiB-aligned `madvise` blocks on Linux; put the parsed network
+  (a heap `NetFile`, not .rodata) and the Searcher on such blocks too; Windows large pages need
+  SeLockMemoryPrivilege, which this PC's account lacks (not built). (b) The colour fold (the concurrency review of
+  2026-11-11, A5): each pair table keeps a row per arrival piece type and square, half the memory, the same values.
+- **metric:** cycles:u per node and instructions:u per bench (the 1% rule), nps (ab_search.py's rule), 16
+  interleaved rounds against phase-4 49494bb on a loaded PC. **result:** (a) cycles per node -0.13% / -0.07%
+  (threshold 4.11%), L1 DTLB misses per node 23.6 -> 17.7; (b) cycles per node -0.29% / -0.78% (threshold 2.45%),
+  instructions +0.31%. Bench 6,426,679 / 4c4375887f835cc7 unchanged (docs/history/phase-4/perf-log.md).
+- **status:** neither adopted under the speed rule. (a) archive/speed4-r19-hugepages: worth re-measuring at a
+  large Hash on a runner or TCEC-class machine. (b) archive/speed4-pair-fold: a memory change (1.125 MiB less
+  per searcher), the owner's decision. No runner A/B workflow exists; a minimal one is proposed to the owner.
+  **Owner, 2026-11-13 (about 12:40 PM EST):** (a) goes on the TCEC hardware test plan at a TCEC-sized Hash (4 GB+
+  and 262144 MB); (b) the tag is kept, revisited in step 17a (Lazy SMP) and measured in the TCEC hardware session
+  (docs/research/tcec-hardware-test-plan.md entries 1 and 2); the runner A/B workflow is built (speed-ab.yml, PR #11
+  to main).
+  **runtime cost:** none measurable. **earliest phase:** Phase 4.
+
+## 175-184. Fable's network ideas (owner, 2026-11-14)
+
+Recorded by the owner 2026-11-14, about 11:30 AM EST, from Fable's read-only proposal
+docs/research/network-novelty-2026-11-14.md (its ideas 1-10 are ideas 175-184, in order; mechanisms, evidence,
+estimates and falsifiers are there). **Novelty of each is UNVERIFIED** (no prior-art search was made; every Elo
+and nps figure in the proposal not citing a Fork measurement is an estimate; its outside citations are from memory,
+UNVERIFIED). Common fields: **type** ELO (network) unless noted; **phase** Phase 4, after retrain 8c's promotion
+decision and around bake-off round 3's training (owner's plan, DESIGN.md decisions log 2026-11-14); **metric** each
+idea's falsifier first, then the speed-adjusted fixed-node screen and the STC SPRT where it trains; names in the
+proposal are placeholders, screened before use.
+
+### 175. State-folded rows (proposal idea 1)
+- **idea:** each piece's first-layer row is chosen by (piece, square, a small pawn-relation state): attacked by an
+  enemy pawn, defended by an own pawn (minors), rook file open/half-open/closed, the king's pawn-shield class, passed
+  pawns; trained factored (shared delta inputs per set bit), fused at export; warm start with deltas at zero
+  (bench-identical). Adds row choices, not rows.
+- **plan (owner):** step 2 of the owner's order: the residual study (ranking only, CPU: R36's rule) and a zero-delta
+  speed prototype by round 3's method; **killed below 0.95**. Idea 176's column-utilisation count rides on the same
+  data pass. **Idea 175 and option (a) (H512+PP, king regions) are alternatives on one body** (their tables
+  multiply), not additions. **status:** candidate (plan).
+
+- **2026-11-14 (owner): killed** by its declared rules: residual study 0.006% for all tier A states (largest 0.032%) against the 0.5% line; speed 0.905-0.913 against 0.95 (the state finder costs about 7-8%); no further finder work. Finding: pawn-relation states (attacked by an enemy pawn, defended by an own pawn, rook file state, king shield class, passed pawn) explain almost none of r8brft1's residual (all tier A states together 0.006% of residual variance held out, 0.107% pooled over squares; the largest single state 0.032%), so the queens-on misjudgment is not missing pawn-structure knowledge; consistent with idea 180's finding that the score-to-result scale varies mainly by phase bucket. Report docs/research/idea175-screens.md; prototype on local branch proto/i175-state-rows (unpushed). **status:** killed.
+### 176. Split-clone columns by queen state (proposal idea 2)
+- **idea:** E of the 512 hidden columns kept in two copies (queens on / queens off), the rest shared; a position
+  still evaluates 512 columns; warm start by a function-preserving column permutation with equal copies.
+- **plan (owner):** only its per-column utilisation count by output bucket (CPU) now, folded into idea 175's data
+  pass; no build. **status:** candidate (plan).
+
+- **2026-11-14 (owner): parked**: r8brft1 already specialises 74 hidden columns to queens-on positions (used 4x or more with queens on; 162 at 2x; 5 the other way at 4x; no dead column), the proposal's stated risk. **status:** parked.
+### 177. Banded first layer (proposal idea 3)
+- **idea:** each piece family writes to a band of hidden-layer sectors (structured sparsity), cutting update work.
+- **status:** **parked** (owner, 2026-11-14).
+
+### 178. The stand-pat liabilities plane (proposal idea 4)
+- **idea:** the exposure rule applied to the side to move's pieces only, its rows confined to a 64-column block of
+  the accumulator; cuts L-lower (x_lower's rule) and L-exact (the full rule).
+- **plan (owner):** its share measurement (CPU: the mover's exposed pieces' share of r8brft1's residual) and a speed
+  prototype **after x_lower's result**. (Status: see below.)
+- **2026-11-14/15 (prototype on r3kr1, local proto/i178-r3 2a464fb):** L-exact killed by both rules (mover part of the residual share 0.28-0.42; speed 0.931 of r3kr1, under 0.95). L-lower: speed 0.965 of r3kr1 (x86-64-v3), 0.922 stacked vs r8ceplo2 (passes 0.95 and the owner's 0.90); residual mover part mixed on the held-out set (0.29-0.57), under half in the larger in-sample set. **Owner (2026-11-15): train L-lower as one arm** (warm start r3kr1, same-recipe control, the quota reported before any launch); residual results rank only (idea 186).
+- **2026-11-15: closed on its screen (owner, about 3:05 PM EST).** Kaggle session M (fork-i178-m, seed 3, round 3's recipe, warm start r3kr1; 3.18 GPU-h): the arm i178mb1 (bake/i178-mb1 513c76c, architecture 12, bench 5,357,477 / fc4115a6c8570751) against its same-recipe control i178kc1 (bake/i178-kc1 95f1704, bench 5,117,313 / 67b43377d333f5e7); both gates passed, 0 held-out flags. Fixed-node screen (800,000 nodes, 1,600 games, run 43750199075; pooled from its shard progress, 1,596 games): **-0.65 Elo (95% -9.8 to +8.5)**, ptnml [5, 209, 376, 200, 8]; speed-adjusted at 0.965 about -6.8. No second seed (the owner's rule: +2 to +14); the full-width variant (architecture 13, local proto/i178-full 0e11093: 0.940 of r3kr1, break-even +10.5) is not trained.
+- **Possible reasons (recorded, not tested):** (1) the king regions already carry much of the threat information near the king that the block adds; (2) the mover-only half: the side to move's liabilities are what quiescence and the next ply resolve anyway, while the opponent's side (x_lower's other half) is not included; (3) block isolation: 64 of 512 columns fed only by the block may be too narrow or too separated from the piece rows to combine with them.
+- **status:** closed (2026-11-15).
+
+### 179. A king-offset lane with per-king-square snapshots (proposal idea 5)
+- **idea:** option (b)'s king-relative offsets into a narrow separate lane, with one snapshot per king square.
+- **status:** **parked** (owner, 2026-11-14).
+
+### 180. Depth-extrapolated class calibration of the labels (proposal idea 6)
+- **idea:** fit per-class (queen state x phase, R33's structure classes) monotone maps from search score to the
+  score that predicts results, extrapolate the trend over search budgets to Fork's playing depth, and rewrite the
+  labels' scores before the TD targets are built. **runtime cost:** none.
+- **plan (owner): first of the four**, step 2 only and no training: rescale r8brft1's output heads by queen state
+  (and phase) from Fork's own calibration fit (an edit of the net file); a fixed-node screen vs r8brft1 plus the
+  UHO/SF19 diagnostic; **reported to the owner before any label work.** **status:** candidate (plan).
+
+- **2026-11-14 (owner): step 2's finding:** the score-to-result scale varies mainly by output phase bucket, not by queen state: in Fork's own STC games the logistic scale k falls from 106.9 cp in bucket 0 to 55.4 cp in bucket 7 (LTC 116.9 to 51.9; flat at 69-74 cp in 20,000-node data games); within a bucket the queens-on/off split is small and mixed (b3 on 70.0 vs off 66.2; b4 on 61.9 vs off 65.0); the pooled 'queens on 59.6 vs off 74.1 cp' was largely phase mix, because queenless positions sit in the low buckets (idea 180 step 2's fit, 2026-11-14: g4c 1.21 M positions, the calib-1112 STC 2.64 M and LTC 0.43 M SPRT positions; report docs/research/idea180-step2.md on branch exp/i180-head-scale). **Order:** the phase-only net-file edit (r8brft1hs, S 104, heads scaled by bucket; bench 4,913,609 / ba18170f0bf15ae7) is screened first against r8brft1 at fixed nodes with the UHO/SF19 diagnostic, as soon as retrain 8c is decided; the per-(bucket, queen state) multiplier (exp/i180-head-scale) only if the edit gains, after a quiet speed re-measure.
+- **2026-11-14 (owner): killed by its declared rule.** Step 2 on r8ceplo2 (phase-only head rescale, r8ceplo2hs): -0.43 +/- 9.23 Elo at fixed nodes vs r8ceplo2; the UHO diagnostic moved +7.5 / -5.5 cp, under the 8 cp line; the label version is not built, the multiplier variant not run. The label-side question rests with A2's per-class lambda arm (idea 85). **status:** killed.
+### 181. Bound-supervised targets (proposal idea 7)
+- **idea:** one-sided targets from the root-move bounds a saved search already proves (a TreeStrap-style use of
+  stored searches); needs a datagen sidecar.
+- **status:** **parked** (owner, 2026-11-14).
+- **2026-11-17, ML frontier pipeline, 2026-11-16 (its idea 2, "use the inside of every label search, not only its
+  top"; moved to the post-Phase-4 backlog by the owner's order of 2026-11-17):**
+  - **core change:** take positions deep inside each 20,000-node label search, not only the root's alternatives
+    (whose bounds this entry's note calls weak), with all three kinds of result: exact values trained by ordinary
+    error, proven "at least" / "at most" bounds by a penalty only when the network is on the wrong side. Kept only:
+    inner positions with at least five levels of search left, from sub-searches that finished and were not ended by
+    the network's own score, with the correction tables switched off. The record format has no room: a side file.
+    Premise in Fork's own data: of 5,433 sampled sites where the search used the network's score, 18.6% had the
+    score and a deep search on opposite sides of the limit that mattered (DESIGN.md, crucial-point ground truth,
+    2026-11-07).
+  - **pre-registered test (proposal §2 idea 2):** first, the share of sampled inner positions where today's network
+    is on the wrong side of the stored limit: **stop below 10%**. Then a 20-million-position mini-part with the side
+    file (about 3 desktop-hours) and a short fine-tune with and without the extra records, two seeds (about 0.75
+    GPU-hours); read the wrong-prune rate on positions that were not in the training searches: **stop if it moves by
+    less than 3%**. Then a full retrain, two arms, two seeds, two fixed-node screens per arm, 3,200 games pooled:
+    **killed if the pooled result is below +4 Elo**.
+  - **cost (proposal's estimate):** to the kill point about 3 desktop-hours, about 5.2 GPU-hours, 80 lane-minutes.
+    Proposal's probability of a measurable gain: 20% (estimate). Its §3 ranks it second of "three to bet on",
+    **gated by idea 210** (which says first whether the route is worth the side file).
+  - **prior art:** TreeStrap (Veness, Silver, Uther and Blair, "Bootstrapping from Game Tree Search", NIPS 2009)
+    and TDLeaf(lambda) (Baxter, Tridgell and Weaver); the pipeline's literature check rated it "known" (citations
+    UNVERIFIED, not opened). **ORIGINALITY.md must credit it if this is ever built.**
+  - **source:** ML frontier pipeline, 2026-11-16 (proposal `~/.claude/plans/fork-ml-frontier.md`, untracked, §2
+    idea 2 and §3; every probability and cost marked "estimate" there is the proposal's judgement, not a
+    measurement).
+  - **status:** post-Phase-4 backlog (owner, 2026-11-17), after idea 210; not started.
+
+### 182. Move-delta rows (proposal idea 8)
+- **idea:** one precomputed row per (piece, from, to) for quiet non-pawn moves instead of a subtract and an add
+  (rows per update about 3.09 -> 2.1); a table of about 7.8 MB built at net load. **type:** speed (bench identical).
+- **plan (owner):** build, bench parity, and A/B on this PC and on the GitHub runners (the speed A/B workflow);
+  **cache-size caution for TCEC** (EPYC L3 per core; UNVERIFIED); adopted under the speed rules (the 1%
+  cycles-per-node rule, faster on the runners and in the TCEC build). S512+PP body only (with king regions the table
+  is four times larger). **status:** candidate (plan).
+
+### 183. Knot-tied heads (proposal idea 9)
+- **idea:** output heads per (phase, queen state) generated from a few trained knot heads by piecewise-linear
+  blending; precomputed, no speed cost.
+- **status:** kept as a **later refinement** (owner, 2026-11-14).
+
+### 184. Queen-gated king-zone values (proposal idea 10)
+- **idea:** (b2)'s king-zone vector computed only when the enemy still has a queen (zeros otherwise).
+- **status:** kept as a **later refinement** (owner, 2026-11-14); rides on whatever is decided for (b2).
+- **2026-11-15 (owner):** (b2), which this rides on, is **parked**: on r3kr1 it measured 0.922-0.924 of r3kr1 and 0.883-0.886 stacked vs r8ceplo2 on x86-64-v3, under the owner's 0.90 line; d_lite parked with it (0.917-0.929, stacked 0.878-0.890). Local branches proto/b2-r3 783883d, proto/dlite-r3 a0df96f (not pushed).
+
+### 186. Vision step 0: the calibrated residual pass and the head-routing refits (vision ideas, 2026-11-14)
+- **type:** TOOLING. **phase:** 4. **runtime cost:** none.
+- **idea:** one CPU pass (idea 175's held-out ridge study, on g4c 600 k and g4s2-val, against r3kr1 and r8brft1): (a) calibrate the 0.5% residual kill line on inputs known to win (x_lower and the full exposure plane; the 608 pawn links on S512r2 if the loader reads it), since E10's links cut the loss by only 0.06% yet gained +32.7 STC; (b) x_lower split into pawn/knight attackers vs slider attackers; (c) the panel of ideas 189-197's families (plus two predicted-null controls); (d) r3kr1's heads refit on a frozen body under phase, a learned progress score, phase x kings' wings and phase x one hidden column.
+- **metric:** the calibrated line and each family's share against it; held-out loss per routing.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** done (2026-11-15).
+- **result (2026-11-15; docs/research/vision-step0-2026-11-14.md, local branch research/vision-step0 9ae0b8e):** (a) **idea 175's 0.5% line does not stand**: on g4c the full exposure plane reads 0.61/0.79/0.85% (by square/pooled/by bucket; +25.7 at fixed nodes), x_lower 0.15/0.27/0.29% (+17.6), the 608 pawn links 0.018/0.018/0.13% (+46.1, Fork's best input); on g4s2-val all three are under 0.5%; the share does not rank winners by game value. Implied lines: 0.077/0.133/0.144% (the two threat winners) or 0.009/0.009/0.066% (with the links; at the noise floor). Tool checked: it reproduces idea 175's r8brft1 numbers; injected effects recovered at 51-93% (never over-read). (b) x_lower's slider half carries more than its pawn/knight half (0.160% vs 0.099% pooled on r3kr1, at half the prevalence), so lens 3's premise holds. (c) Every family is under the threat line in every design on both sets; under the links' line seven pass on g4c and one replicates on g4s2-val (under-defended mover pieces, 0.030%/0.037%); the signal sits on the mover's side; both null controls null. (d) No head routing beats the phase refit (idea 187).
+- **open (owner):** which line applies: the threat winners' line (0.077-0.144%, half x_lower's share) or the pawn links' line (0.009-0.066%, at the noise floor) is the owner's choice.
+- **owner (2026-11-15, about 6:50 AM EST):** the residual line is **step 0's calibrated line, half the smaller known winner's share**; residual results **rank and trim candidates only, never kill alone** (the deciding tests stay the zero-weight speed prototype and a fixed-node arm).
+
+### 187. Routed heads (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** none (a head index).
+- **idea:** pick among the output heads by a learned linear progress score, by phase x the kings' wings (same or opposite), or by phase x one self-chosen hidden column, instead of phase alone (shogi's progress router, Bonanza/YaneuraOu's two-king routing, KataGo's global pooling as an analogue).
+- **cheapest form (est.):** a head index only, about 1.00 speed; +2 to +3 Elo, chance 15-30%.
+- **gate:** idea 186 (d); then a fixed-node screen of the refit net.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** killed by its step-0 gate (2026-11-15).
+- **step 0 (2026-11-15):** killed at its CPU gate: r3kr1's body frozen, heads refit; against the phase refit on g4c: kings' wings +1.8e-6 +/- 2.1e-6, a self-chosen column +3.8e-6 +/- 1.9e-6 (does not transfer between sets), progress octiles 11% worse; on g4s2-val wings -4.0e-6 +/- 1.7e-6 (0.02% of the loss, opposite sign). No fixed-node screen built.
+
+### 188. Reply-square and square-fate auxiliary targets (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** none (training only).
+- **idea:** training-only heads predicting the squares of the next move and of the opponent's reply, and which side holds each square some plies later (KataGo's opponent-reply and ownership targets, translated).
+- **cheapest form (est.):** zero inference cost; needs a target carrier in the loader (later moves of the game), about 1.5 EU (UNVERIFIED); then a three-arm fine-tune; +3 / +2 Elo, chance 25% / 20%.
+- **gate:** the carrier is designed after idea 186 (owner, 2026-11-14).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 189. Pinned-piece rows in idea 178's liabilities block (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** the mover's pinned pieces (absolute; to the queen) as rows in idea 178's 64-column block; a single layer can't form a three-piece line relation, and Fork's SEE counts a pinned piece as a defender.
+- **cheapest form (est.):** extra rows in the block, 0.975-0.985 speed; +4 to +10 at fixed nodes, chance 25%.
+- **gate:** idea 186 (b) and (c); idea 178.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+- **step 0 (2026-11-15):** the mover's pins 0.030% (by bucket, r3kr1); the opponent's pins about 0.001%. Fails its gate under the threat winners' line; the owner chooses the line (idea 186).
+
+### 190. King-pair (KK) rows (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** 2,048 rows for the exact pair of king squares, shared across king regions, changing only on king moves (Bonanza's KK terms, translated): the king-against-king conjunction four coarse regions lose.
+- **cheapest form (est.):** extra rows, 0.98-0.99 speed; +4 with the wing heads, chance 25%.
+- **gate:** idea 186 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+- **step 0 (2026-11-15):** the KK pair 0.039% by bucket; fails under both lines. Fails its gate under the threat winners' line; the owner chooses the line (idea 186).
+
+### 191. Defence surplus and the attack-balance class (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** loose, overprotected, and attacked-twice-defended-at-most-once mover pieces, on idea 178's exact cut.
+- **cheapest form (est.):** rows in the block on top of 178's L-exact, 0.93-0.95 in total; +2, chance 15%.
+- **gate:** idea 178's L-exact is built; idea 186 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+- **step 0 (2026-11-15):** under-defended mover pieces 0.034% (the one family that replicates on g4s2-val under the links' line); loose / overprotected 0.047% by bucket. Fails its gate under the threat winners' line; the owner chooses the line (idea 186).
+
+### 192. Captured-material ordinals (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** about 38 thermometer rows (own and enemy, each kind at count >= k), changing only on captures and promotions (shogi's hand-piece encoding, translated).
+- **cheapest form (est.):** extra rows, 0.97-0.99; +2, chance 15%.
+- **gate:** idea 186 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+- **step 0 (2026-11-15):** material ordinals 0.064% by bucket (100% prevalence). Fails its gate under the threat winners' line; the owner chooses the line (idea 186).
+
+### 193. File-line contact state for rooks and queens (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** what each heavy piece first meets along its file: an own heavy piece, an enemy heavy piece, or nothing (the classical fight for the open file).
+- **cheapest form (est.):** 768 rows in the block, 0.975-0.99; +2, chance 20%.
+- **gate:** idea 186 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+- **step 0 (2026-11-15):** below the threat line (figures in the report). Fails its gate under the threat winners' line; the owner chooses the line (idea 186).
+
+### 194. King-zone square-state lane (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** occupant x own and enemy attack counts on each king-zone square, as a small embedding into the head (shogi's effect features; the row-choice form is ruled out under the cost lesson).
+- **cheapest form (est.):** output-layer lane, 0.90-0.93; +4, chance 12%.
+- **gate:** only if b2 or d_lite is adopted (its finder paid).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+- **step 0 (2026-11-15):** not measured (not in step 0's order).
+
+### 195. Next-move double-threat counts (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** the opponent's next-move fork squares, pawn-push forks and discovery candidates against the mover, as a few values beside d_lite's vector.
+- **cheapest form (est.):** output-layer values, 0.97-0.98; 0 to +3, chance 20%.
+- **gate:** idea 186 (c); d_lite.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+- **step 0 (2026-11-15):** the opponent's next-move forks and discovery candidates 0.001-0.003%; fails under both lines. Fails its gate under the threat winners' line; the owner chooses the line (idea 186).
+
+### 196. Blockade occupant of passed pawns (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** who stands on each passed pawn's stop square (enemy minor, heavy piece, king, own piece).
+- **cheapest form (est.):** 384 rows beside the pawn links, 0.985-0.995; +1.5, chance 15%.
+- **gate:** idea 186 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+- **step 0 (2026-11-15):** below the threat line (figures in the report). Fails its gate under the threat winners' line; the owner chooses the line (idea 186).
+
+### 197. Trapped pieces and the back rank (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** counts of trapped pieces and a back-rank weakness bit per side.
+- **cheapest form (est.):** output-layer counts with d_mob, about 0.955 with d_mob; small, chance 10% (the back-rank bit is expected null).
+- **gate:** idea 186 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+- **step 0 (2026-11-15):** below the threat line; the back-rank bit 0.5% prevalence (figures in the report). Fails its gate under the threat winners' line; the owner chooses the line (idea 186).
+
+### 198. The Lichess puzzle database as a diagnostic set (vision ideas, 2026-11-14)
+- **type:** TOOLING. **phase:** 4. **runtime cost:** none.
+- **idea:** the Lichess puzzle database (CC0) as a motif-tagged diagnostic: how far Fork's static evaluation sits from its own search at each puzzle's start position, by theme.
+- **rule (owner, 2026-11-14):** **approved as a diagnostic set only: never training data and never a fitness signal** (no tuning, selection or adoption decision may be made on it). Its puzzles were selected and solved by Stockfish and tagged by a program, so non-negotiable 6 bars any other use. Recorded in docs/ORIGINALITY.md.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** approved as a diagnostic (owner, 2026-11-14); not downloaded yet.
+
+### 199. Sparse int8 pairwise head with QAT (network survey rank 7)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** r3kr1's accumulator halves multiplied pairwise into 512 one-byte inputs, then a sparse int8 16 -> 32 -> 1 head in 8 stacks, with a neuron permutation, a sparsity penalty and QAT (docs/research/network-survey-2026-11/shortlist.md rank 7).
+- **evidence so far (2026-11-14, offline, local branch research/head-design 2fb20ad):** share of live groups of 4 on 100,000 g4s2-val positions: r3kr1's SCReLU values 80.9% (60.5% permuted): that form killed (line 55%); r3kr1's pairwise products 41.6% (30.7% permuted): passes; g1afs (AF-S, pairwise, no penalty) 73.7% (51.0% permuted; endgame buckets 63-64%). The speed model (0.93-0.96, est.) is unproven.
+- **rules (owner, 2026-11-14):** the AF-S vs r3kr1 speed A/B (the model's check) runs at the next natural part boundary; the sparsity-penalty arm is mandatory; a head that wins at fixed nodes but fails STC gets one LTC SPRT try, counted as its try.
+- **2026-11-15: speed tests F2 and F4 (CPU only; local proto/sparse-head-bench 6ccd4c7, research/head-design fee2b62):** F2: r3kr1's output pass is 6.93% of bench cycles on x86-64-v3 (the spec assumed 3.4-4.5%). F4: an exact sparse-L1 micro-benchmark on real accumulators (bit-exact against a dense reference on every path; a fault injection caught) gives the head k times today's output pass, r = 1 / (1 + s(k - 1)): **x86-64-v3 at g1afs's density (51% live): 0.872 (0.860-0.878), break-even +23.2: below the 0.90 kill line**; v3 at r3kr1's density (31%): 0.903; AVX-512 at 51%: 0.911; AVX-512 at 31%: 0.938. The method reproduces AF-S's dense head (0.755 vs 0.75 measured). The head's fixed part (pairwise products, live-group list, layers 2-3) alone is 1.41 times today's output pass. F3 not needed; F5 not started.
+- **2026-11-15 (owner): parked, not killed,** as a TCEC/AVX-512-track candidate: it fails 0.90 on x86-64-v3 (0.872 at 51% live) but passes on AVX-512 (0.911-0.938), and TCEC runs AVX-512/VNNI hardware. Revisit after Lazy SMP, with AVX-512 testing (GitHub runners or the rented-hardware dry run).
+- **GitHub runner CPUs (survey of 6 CI runs, 2026-11-15; each job's own CPU line and Fork's SDE check):** of 89 jobs, 28 (31%) ran on AMD EPYC 7763 (no AVX-512: v4/VNNI binaries need SDE there); the rest had AVX-512 natively: AMD EPYC 9V74 (27 jobs; AVX-512 and VNNI native), AMD EPYC 9V45 (14; both native), Intel Xeon 6975P-C (10; both native), Xeon Platinum 8573C (7; AVX-512 native, VNNI not observed), Xeon Platinum 8370C (3; AVX-512 native, VNNI not observed), Xeon 6973P-C (1; no AVX-512 job observed). **An AVX-512 test lane is feasible but not free:** hosted runners can't be chosen by CPU, so about a third of shards land on a CPU without AVX-512; a lane would need each shard to check its CPU and either play the v4 pair natively or hand the shard back for re-dispatch (SDE is far too slow for games), costing roughly 30-45% more dispatches (est.). Both engines of an A/B always share a shard, so mixing CPUs across shards does not bias the pair.
+- **status:** parked (TCEC/AVX-512 track), 2026-11-15; revisit after Lazy SMP.
+
+### 200. Eval-difference history update (rare-ideas survey common.md CG-1)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** after a node's static eval is known, credit the previous move's quiet history by how much it changed the mover's static eval (a move that worsened the eval for the side that played it gets a malus), clamped.
+- **plan (owner, 2026-11-15):** queue 1 of 3: implement behind a switch (off), names and the constant screened, the constant at its natural value; design R STC SPRT, then LTC on a pass.
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** **rejected (futility stop), 2026-11-15.** Branches tier2/eval-shift-credit fc067da (bench 5,205,904 / dfe99ebe03b0972d) and sprt/eval-shift-credit 1a2c7c5 (bench 4,634,690 / 72424cd1e7d260f0); EvalShiftCap 100 cp, the natural value (one pawn); names: no match; constant: no value match, the update's shape a same-role near match to Stockfish (credited, owner's rule of 2026-11-11). eval-shift-credit-stc (STC, design R [0, 6]): -1.19 +/- 6.49 Elo, nElo -2.22 +/- 12.04, Ptnml [17, 399, 782, 382, 20], futility stop after 2 stages, 3,200 games (runs 43731554365, 43733278318; 11:21 AM EST); no LTC (r1b).
+
+### 201. TT cutoffs from shallower entries (rare-ideas survey rare.md RI-27)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** allow a transposition-table cutoff from an entry slightly shallower than the current depth when its bound is decisive enough (the survey's constant-free form first).
+- **plan (owner, 2026-11-15):** queue 2 of 3: STC then LTC, with a pressure-matched Hash (the owner's TT-policy rule of 2026-11-11). Its reported 8-thread result (Ethereal +3.43) is noted for the SMP plan (roadmap 17a; docs/kb/lazy-smp.md).
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** **rejected (H0), 2026-11-15:** STC at Hash 15 MB: -4.13 +/- 6.33 Elo (nElo -7.84 +/- 12.04), LLR -1.72 after stage 1 (runs 43739205810, 43740975473); no LTC. Branches as recorded above: tier2/reduced-tt-cut a7aafd2, sprt/reduced-tt-cut 6b8fd36.
+
+### 202. Root LMR keyed to the aspiration window (rare-ideas survey rare.md RI-12)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** at the root, after an aspiration fail high reduce every move but the first by one more ply; after a fail low reduce root moves less (refines the adopted root reductions, 2026-11-13).
+- **plan (owner, 2026-11-15):** queue 3 of 3: design R STC SPRT.
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** **rejected (H0), 2026-11-15:** STC: -7.71 +/- 6.24 Elo (nElo -14.89), LLR -2.85 after stage 1 (runs 43758397448, 43760154303); it had also failed the elementary-mate suite with the switch on. Branches: tier2/root-fail-lmr 94ed883, sprt/root-fail-lmr 0a8b1de.
+
+### 203. Elementary-mate regression suite (rare-ideas survey rare.md RI-41)
+- **type:** TOOLING. **phase:** 4. **runtime cost:** none.
+- **idea:** tests that Fork actually delivers mate in basic won endings (KRvK, KBNvK and the like) within the fifty-move rule, so a TT, tablebase or pruning change that breaks conversion is caught (Stockfish's TCEC issue).
+- **plan (owner, 2026-11-15):** now: added to the tests; no Elo test.
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **implemented (2026-11-15):** the `elementary_mates` suite (tests/test_elementary_mates.cpp, a fast test): 18 starts in KQvK, KRvK, KBBvK, KBNvK, KQvKP and KQvKR, generated with a fixed seed by tools/make_mate_positions.py and verified as table wins (python-chess, then Fathom in the test); Fork plays both sides at fixed nodes, the defender with the tables. Without its tables the attacker must mate in KQvK, KRvK and KQvKP (100k nodes a move, within 15 moves of the fastest mate against a lone king); with them, in all 18 before the fifty-move rule (20k nodes). Fault injection: the root ranking by the tables switched off fails 6 starts, the TT switched off and a 5k budget fail the first variant; mate scores that ignore the distance, and TT mate scores stored from the root, were not caught (the mates in these games are found only near the end).
+- **findings (measured on 6ed1f87 at 5k-300k nodes a move):** without its tables Fork never mated in KBNvK, nor in KQvKR's two hard starts, and KBBvK only at 100k; with the tables it mated in KBNvK always, and in KBBvK in 11 of 12 games, on the 50th move, the last the fifty-move rule allows (the root ranking keeps every move that still wins under the rule). That is the slow-mate pattern this idea is about; whether to act on it (e.g. preferring the fastest win at the root) is the owner's call.
+- **status:** suite added; the findings are open.
+
+### 204. Output-bucket factoriser in training (rare-ideas survey rare.md RI-39)
+- **type:** ELO. **phase:** 4. **runtime cost:** none (training only).
+- **idea:** during training, a shared output layer is added to each phase head's own and merged in at export, so inference cost is unchanged.
+- **plan (owner, 2026-11-15):** in the next retrain's recipe as an arm (with its same-recipe control).
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** planned (next retrain).
+
+### 205. Correction updates toward the mean of the raw and corrected eval (rare-ideas survey rare.md RI-31)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** update the correction tables toward the average of the raw and the corrected static eval instead of the raw one.
+- **plan (owner, 2026-11-15):** later, with the correction redesign.
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** later.
+
+### 206. Skip quiescence when the TT holds a move (rare-ideas survey rare.md RI-20)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** at depth 0, when the TT holds a quiet move for the node, search one more ply instead of dropping into quiescence.
+- **plan (owner, 2026-11-15):** later; LTC-only test (its gains appear at LTC, PlentyChess failed STC).
+- **result (2026-11-16, overnight; the coordinator within the pre-approved search pipeline):** built as `use_horizon_tt_move`, off (tier2/horizon-tt-move a1c0a10; test commit sprt/horizon-tt-move 15a61fd, bench 5,046,722 / fd7e38be18ab4a6b); design R at LTC: **futility stop after 2 stages, -1.25 +/- 5.96 Elo** (nElo -2.48). With the switch on the elementary-mate suite fails (KQvKP far: under-promotion to a knight, no mate in 50 moves), so it was not adoptable as is. The rule near-matches Reckless's former "reverse qsearch" (credited, ORIGINALITY.md).
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** rejected (2026-11-16).
+
+### 207. King-attack knowledge in quiet move ordering (rare-ideas survey rare.md RI-01)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** order quiet moves using static king-attack terms (attacks on the enemy king zone, moves into safe attacking squares), beyond the direct-check bonus.
+- **plan (owner, 2026-11-15):** later, after SMP (it costs nps).
+- **result (2026-11-16, overnight; pre-approved pipeline):** built as `use_king_zone_order`, off (tier2/king-zone-order 66f7df7): a quiet move to a square the opponent does not attack, from which the piece attacks a square next to the enemy king, gets `KingZoneOrderBonus` in the main search. Try 1 at 2500 (half of DirectCheckBonus; sprt/king-zone-order 3ef7085): **H0 after 2 stages, -9.12 +/- 6.27 Elo**. Try 2 at 1250 (sprt/king-zone-order-1250 316305f): **H0 after 1 stage, -9.77 +/- 9.28**. Both tries used: rejected. Names and constant screened (no match).
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** rejected (2026-11-16).
+
+### 208. Keep the king-region refresh cache across searches (correctness audit 2026-11-16, area 2 A2)
+- **type:** TOOLING (speed; data generation first). **phase:** 4, the next speed sprint. **runtime cost:** none expected (a gain if any).
+- **idea:** `FeatureStack::reset` (src/eval/nnue/accumulator.cpp:797) empties the 16 refresh snapshots at the start of every search, so the cache of the king-region net (r3kr1, architecture 9) lives one search; data generation runs many short searches per game, where a cache kept across searches (same game, same thread) could save full refreshes.
+- **plan (owner, 2026-11-16):** a measurement item for the next speed sprint: data generation throughput (positions/s, same seeds and threads) with the cache kept across searches against today's, plus the refresh counts; adopt only with a measured gain and identical output (determinism: the cache must not change any evaluation; the nnue walk test and bench parity).
+- **status:** planned (deferred from the audit, owner 2026-11-16).
+
+---
+
+## Post-Phase-4 backlog (owner, 2026-11-17)
+
+Ideas scheduled for after Phase 4 closes. **Phase 4's scope is frozen** (owner, 2026-11-17): nothing here is built or
+run before Phase 4 closes, except where an entry says otherwise (idea 212's measurement, and only on the owner's
+approval of its plan). ideas.md had no post-Phase-4 section before 2026-11-17; this one was created for the ML frontier
+pipeline's ideas (ideas 209-222, and idea 181's update) and is where later post-Phase-4 ideas go.
+
+**The ML frontier pipeline (2026-11-16).** A read-only proposal (`~/.claude/plans/fork-ml-frontier.md`, untracked,
+not in the repository): sixteen blind researchers, tournaments, two critics and a literature check, then a lookup in
+Fork's records; twelve ideas survived (its §2), plus four contaminated ones from researchers who guessed the domain
+(its §4: never ranked or attacked by the critics). Each entry below copies the core change, the pre-registered test
+with its kill result, and the cost from the proposal (§2 idea N, cited); **every probability, gain and cost the
+proposal marks "estimate" is its author's judgement, not a measurement.** Its literature check (stage 7) is cited as
+the pipeline recorded it: **the citations are UNVERIFIED** (not opened here). Where an idea has published prior art,
+**ORIGINALITY.md must credit it if the idea is ever built**; nothing is logged there now, since nothing is built.
+Common fields: **phase** after Phase 4; **source** ML frontier pipeline, 2026-11-16.
+
+### Post-Phase-4 order (owner, 2026-11-17)
+
+1. **Idea 212** (ML frontier idea 5): Elo per speed doubling at STC and LTC. It changes nothing in the engine, so it
+   may run before Phase 4 closes, **only on test capacity the removal round isn't using, and only after the owner
+   approves its plan** (in the entry).
+2. **Idea 215's offline check** (ML frontier idea 8, step 1 only): the signed gap between the static evaluation and a
+   1,000,000-node search at pruning sites, against the level of the bound, measured after correction history. Its
+   tuning runs and matches keep their place in item 3.
+3. **The rest by the proposal's ranking** (its §2 order, "my ranking by promise per unit of cost"), refined by its §3:
+   §3's three bets (ideas 1, 2 and 4) already lead §2's order; §3 makes idea 3 the gate of idea 2, so idea 3 runs
+   first. In order: **209** (idea 1), **210** (idea 3), **181** (idea 2, updated 2026-11-17), **211** (idea 4),
+   **213** (idea 6), **214** (idea 7), **215** (idea 8: the tuning runs and matches), **216** (idea 9; §3's
+   "craziest that would matter most", kept at its §2 place), **217** (idea 10), **218** (idea 11), **219** (idea 12).
+4. **Unranked** (the proposal's §4, contaminated, never ranked or attacked): **220** backward relabelling, **221**
+   cutting the label chain at weak cheap moves, **222** slow nets as labellers (**needs an owner decision** first).
+
+### 209. Train on the capture positions the quiet filter drops (ML frontier idea 1)
+- **type:** ELO (training data). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** add the capture-best positions the quiet filter drops (about a quarter of the fully searched positions;
+  not mate or tablebase scores) at half weight, with a loss that punishes over-rating twice as hard as under-rating;
+  only from the data parts with the newer TD labels (about a quarter of Fork's data), each labelled from the position
+  that follows it; stop if accuracy on quiet positions slips. Why now: since the TD labels, only 10% of a label is the
+  position's own score, so the filter's original reason has mostly gone, while the search still asks the network
+  about these positions at leaves (proposal §2 idea 1).
+- **pre-registered test (proposal §2 idea 1):** before any training, on 5,000 dropped and 5,000 kept positions, compare
+  a 1,000,000-node search with what the leaf returns today: **stop if the capture check already closes most of the
+  gap** (about 8 minutes of the data-generation desktop). Then two arms, two seeds, the standard recipe with and
+  without the dropped positions at the same number of training samples; two fixed-node screens per arm against its
+  control, 3,200 games pooled (about ±6.3). **Killed if the pooled result is below +4 Elo, or errors on either
+  held-out endgame set rise more than 15%, or the loss on kept positions rises by more than 0.00002.** If it passes:
+  the standard STC adoption test, up to 20,800 games.
+- **cost (proposal's estimate):** about 4.4 GPU-hours and 80 lane-minutes; no new data. Probability of a measurable
+  gain: 18% (estimate). One of §3's three bets.
+- **Fork's record:** new as proposed. Idea 47.2 only makes the filter stricter (the opposite direction); the mismatch
+  is noted in docs/research/vision-ideas-2026-11-14.md ("the net trains on quiet positions, yet it evaluates noisy
+  ones at stand-pat", as the proposal quotes it); the nearest run, idea 80 (a different set of excluded positions),
+  was flat (−0.98 ± 6.40, per the proposal).
+- **prior art:** the literature check: "known elsewhere but new for this kind of system": learning under sample
+  selection bias and covariate shift (Zadrozny, ICML 2004; Shimodaira, 2000), TreeStrap (Veness et al., NIPS 2009)
+  (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 1, §3).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 210. What the correction tables learn: the same in every search, or this search only (ML frontier idea 3)
+- **type:** TOOLING (an offline measurement; its games come only through idea 181). **phase:** after Phase 4.
+  **runtime cost:** none.
+- **idea:** split the in-search error the correction tables fix into a part common to all searches (to be trained
+  into the network: idea 181's route) and a part specific to one search (to keep adapting in the search: idea 57's
+  route). Compare four predictors of the error on held-out positions: the shipped table; a fixed map fitted on other
+  searches; the same map fitted on the first half of this search; a plain average shift. Count only what the fixed
+  map removes beyond the plain shift; split by position so nothing is seen twice; score on the quantities that have
+  moved with the tables before.
+- **pre-registered test (proposal §2 idea 3):** dump the needed quantities for 1,000 short-time-control searches and
+  compare the four predictors on unseen positions. **"Train it in" is licensed only if the fixed map removes at least
+  half of what the table removes, beyond the plain shift; "adapt in search" only if the within-search map beats the
+  fixed map on unseen positions. If neither holds, both routes are dropped** and idea 181's expected gain is lowered.
+- **cost (proposal's estimate):** no GPU, no games; a few CPU-minutes plus fitting. Probability it leads to an Elo
+  gain: 12% (estimate); "it will almost certainly be informative".
+- **Fork's record:** partly on file. The 2026-11-12 diagnosis (DESIGN.md decisions log, 2026-11-12) showed the tables
+  carry real information (root error 81.2 to about 68-72 cp, per the proposal); idea 57 (in-game adaptation) and
+  RI-33 (a correction keyed by the network's hidden state, docs/research/rare-ideas-2026-11/rare.md) are untested; at
+  near-window inner positions a deep search sits on average 122.6 cp above the network's score (branch
+  `idea59/step3`, per the proposal); `step0_routing.py` (docs/research/vision-step0-2026-11-14/) is almost the fixed
+  map. The split into "same everywhere" and "this search only" is new.
+- **prior art:** the literature check: "known elsewhere but new for this kind of system": Dyna-2's permanent and
+  transient memories (Silver, Sutton and Müller, ICML 2008), dynamic evaluation (Krause et al., 2017) (UNVERIFIED).
+  **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 3, §3).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17), before idea 181; not started.
+
+### 211. A longer label horizon: TD(0.97) (ML frontier idea 4)
+- **type:** ELO (training labels). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** fade the TD label by 0.97 per half-move instead of 0.9 (with 0.9, only 9% of the label's weight lies
+  beyond 23 half-moves; with 0.97, half does), tested as a replacement for the result fine-tune stage rather than an
+  addition; 0.9 kept for tablebase and few-piece positions; run on the part with the stricter adjudication (g4d:
+  1,500 cp on 16 positions in a row, instead of 700 on 8), where far fewer results are declared by Fork's own score.
+  The change touches only the quarter of the data that carries the TD labels. The label tool takes the fade as a
+  parameter.
+- **pre-registered test (proposal §2 idea 4):** three arms, two seeds each: (A) today's recipe with the fine-tune; (B)
+  fade 0.97, no fine-tune; (C) fade 0.97 with the fine-tune. Fixed-node screens of B and C against A, 3,200 games
+  pooled each. **C is kept if it beats A by at least +4 pooled. B replaces the fine-tune only if it is no worse than
+  −2 against A over 6,400 games and the held-out endgame errors stay at the current network's level. Killed if both
+  fail**; if 0.97 is clearly negative, the horizon explanation is wrong.
+- **cost (proposal's estimate):** about 6.6 GPU-hours plus about 0.8 for fine-tunes; about 160 lane-minutes.
+  Probability: 18% (estimate). One of §3's three bets.
+- **Fork's record:** partly tried, not a duplicate: TD(0.8) lost to TD(0.9) (idea 51) and the per-class fade of 0.35
+  and 0.65 lost (idea 85; −4.34 pooled, per the proposal), both shorter horizons; the one clean target gain was the
+  result fine-tune (idea 70; +5.74 ± 3.81, per the proposal). Above 0.9 is on file only in
+  docs/research/novel-ideas-2026-11-11.md ("Nothing above 0.9 has been tried"; "A plain global TD(0.95) arm is the
+  obvious control").
+- **prior art:** the literature check: "known": TD(lambda)'s bias-variance trade-off (Kearns and Singh, COLT 2000),
+  learning over multiple horizons (Fedus et al., 2019), TDLeaf(lambda) (Baxter, Tridgell and Weaver) (UNVERIFIED).
+  **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 4, §3).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 212. Elo per speed doubling, measured at each time control (ML frontier idea 5)
+- **type:** TOOLING (a measurement; a test-only build, never shipped). **phase:** may run before Phase 4 closes, on
+  capacity the removal round isn't using, once the owner approves the plan below. **runtime cost:** none.
+- **idea:** every verdict on a slower network is priced with one number fitted at STC: 118.3 ± 5.6 Elo per doubling
+  of speed (1.72 Elo per 1% nps; a fit over nine fixed-node/STC network pairs: docs/research/transfer-testing/report.md, used since 2026-11-09 in DESIGN.md §5.6's speed-to-Elo row).
+  Fork's own pairs imply anything from 84 to 192 per doubling (proposal §2 idea 5). Measure the ratio that matters:
+  **Elo per doubling of speed divided by the Elo of a fixed pair of equal-speed networks, at each time control.**
+- **pre-registered test (proposal §2 idea 5):** node odds at fixed nodes (800,000 against 400,000), 3,200 games; a
+  half-speed build against the normal one at STC (3,200 games) and LTC (3,328 games); a fixed pair of equal-speed
+  networks about 50 Elo apart, at STC and LTC; the stored threat-input network against its control, at STC and LTC.
+  **The speed gate changes only if the ratio falls by 25% or more from STC to LTC. Otherwise 118 and the gate stand,
+  now with a measured interval.**
+- **cost (proposal's estimate):** no GPU; about 11 lane-hours in total, most of it the three LTC matches. Probability
+  it changes a decision: 25%; that it leads directly to Elo: 10% (estimates). §3: "not a bet but should be run
+  anyway".
+- **Fork's record:** planned three times, never run: DESIGN.md §5.6 order step 9 (X8, "the throttled speed-to-Elo
+  measurement", 2 STC + 1 LTC stages) after step 6 (X12, "the throttle and zero-row build"); think tank decision 7
+  (DESIGN.md decisions log, 2026-11-07: a throttled 0.5x test-only build instead of 0.85x time odds);
+  docs/research/engineering-review-2026-11-11.md ("Step 9 ... was never run"). Not on file: the fixed network pair,
+  the 800,000-against-400,000 node-odds match, and timing the stored threat-input network under today's search.
+- **plan (for the owner's approval; written 2026-11-17, nothing started):**
+  - **Matches** (the game counts and time controls are the proposal's; STC 8+0.08, LTC 40+0.4):
+    - M1, node odds: the current default engine at 800,000 against 400,000 nodes a move, 3,200 games (2 stages of
+      1,600). Needs no new build.
+    - M2, speed: the half-speed build against the normal one, STC 3,200 games (2 stages), LTC 3,328 games (2 stages
+      of 1,664).
+    - M3, the yardstick: an equal-speed network pair about 50 Elo apart, at STC and LTC. The proposal gives no game
+      counts for M3 and M4; this plan assumes M2's (3,200 STC, 3,328 LTC).
+    - M4, the check on a real slow net: the stored threat-input network against its control, at STC and LTC (same
+      counts, assumed).
+    - The ratio R(TC) = M2's Elo per doubling / M3's Elo, at STC and at LTC; **decision: the speed gate changes only
+      if R falls by 25% or more from STC to LTC**; otherwise 118 and the 0.90 gate stand, with a measured interval.
+      M4 shows whether a real threat-input net's STC-to-LTC change matches R's prediction.
+  - **Must be built or chosen first:**
+    - **The half-speed build** (X12's throttle): **it does not exist.** No throttle code is in `src/` or
+      CMakeLists.txt on phase-4 or on any local branch (git grep, 2026-11-17); remote-only branches were not
+      searched. The think tank's design: the same binary burning cycles behind a test-only build flag
+      (phase-b-specialists.md H3 and ST3), bench unchanged, its speed ratio measured in situ on the runners and held
+      at 0.50 ± 0.02 (ST3's kill criterion). It is a test-only code change: **the owner should confirm it fits "changes
+      nothing in the engine"**; M1 can run without it.
+    - **The equal-speed pair: not chosen (UNVERIFIED).** Candidates are architecture-8 nets (S512+PP, S512ppr2,
+      S512ppr3, r8btd90, r8brft1, r8ceplo2: one architecture, so one speed; docs/nets.md); the pair about 50 Elo
+      apart must be read from the SPRT log before the run, and whether today's engine still loads architecture 8
+      on phase-4's head is unchecked (r8ceplo2 was screened on phase-4 b7ea9bf, 2026-11-14).
+    - **The threat-input net: r3xl1 against its same-recipe control r3pp1 is the candidate** (x_lower, architecture
+      10, nets/r3-xlower, bake/r3-xl1; fixed nodes +17.60 ± 8.69, speed ratio 0.9338: sprt-log, bake-off round 3).
+      The proposal names no net, so this choice is UNVERIFIED (alternatives: S512+X on nets/s512x, never played at
+      LTC; XGR-512 r2 was, −30.56 ± 9.96 at 40+0.4). Both nets need fresh bakes on today's engine (round 3's bakes
+      are on phase-4 7a7f99b's engine).
+    - **Node odds on the GitHub lane:** whether sprt.yml/h2h_run.sh can give the two engines different node limits
+      (fastchess per-engine `nodes=` through the engine options) is UNVERIFIED; checked before M1.
+  - **Compute** (stage times from the proposal §1: STC about 18-20 min per 1,600 games, LTC about 80 min per 1,664,
+    a fixed-node screen about 40 min per 1,600 at 800,000 nodes both sides): M1 under about 1.3 h (2 fixed-node
+    stages; the 400,000 side is cheaper); M2, M3 and M4 each about 0.6 h STC + 2.7 h LTC. **Total 14 stages (2
+    fixed-node, 6 STC, 6 LTC), about 11 lane-hours**, matching the proposal's estimate; one lane, in order M1, M2,
+    M3, M4, STC before LTC in each.
+  - **Cost:** no GPU, no Kaggle. GitHub-hosted runners are free (the repository is public). Developer time: the
+    throttle build (step 6 was estimated at 1.5-2.5 days together with the zero-row build and the runner speed A/B
+    job; speed-ab.yml is on main), the bakes, and the pair's choice.
+  - **Capacity rule:** only on test capacity the removal round isn't using. On 2026-11-17 (the coordinator) lane B
+    runs the removal round's ProbCut LTC test and lane A is free, so the measurement uses lane A, yields to any
+    removal-round stage, and starts and stops only through `tools/jobs/jobctl.py`.
+- **prior art:** odds matches (time and node handicaps between versions of one program); diminishing returns of
+  deeper search (Heinz's self-play experiments; Ferreira, ICGA Journal 2013); "Scaling Scaling Laws with Board Games"
+  (Jones, 2021); the literature check rated it "known" (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever
+  built** (the throttle build counts).
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 5, §3); the stored nets from docs/nets.md and
+  docs/history/phase-4/sprt-log.md.
+- **run (2026-11-17, the owner's approval with changes):** time odds replace the throttle, but the SPRT workflow cannot give the sides different time controls (tools/cloud/run_shard.sh:156-157: `-each tc` overrides a per-engine tc; fastchess 1.8.2-alpha tested), so time odds wait for a harness change after the removal round (owner: node odds now, time odds later, no throttle). Node odds (e1b0a07, 800,000 vs 400,000 nodes per move, the custom form at 600+6, 3,200 games): **+99.36 +/- 6.28 Elo** (nElo +201.06 +/- 12.04) per doubling of nodes. The equal-speed pair (owner: S512ppr2 vs S512+PP, recorded +20.11 +/- 7.22): STC **+15.86 +/- 6.91** (3,200 games); LTC and the threat net (r3xl1 vs r3pp1, STC then LTC, on lane B) running.
+- **bake branches (do-not-merge):** bake212/s512pp 6081589, bake212/s512ppr2 cd07a12, bake212/r3pp1 a370ed0, bake212/r3xl1 6f6715d (each on e1b0a07). Besides the net-value updates (FORK_NET, tests/bench-<net>.ref, the nnue parity refs, docs/nets.md), the baking agent edited tests to pass the pre-commit hook, and an audit found that every test edit WEAKENS an assertion (the owner's rule: not acceptable; the match results do not depend on them): on all four, tests/test_search.cpp:1098-1131 (the TT halfmove guard's fifty-move set) skips any position whose depth-4 minimax at clock 96 is nonzero under the embedded net and checks only kept > 0, not 34 of 34; on s512ppr2 and r3pp1, tests/test_elementary_mates.cpp:137-141 drops KQvKP "far" from the no-tables run; on r3xl1, :253-258 drops it from the with-tables run. The r3xl1 failure was traced to the test's table set (the defender under-promotes into KQvKN, not pinned), not to root ranking: r3kr1 mates in 20 with every attacker move DTZ-optimal; the table set is being completed.
+- **harness (2026-11-22, the owner's order):** per-side time controls in the GitHub SPRT path, branch tools/per-engine-tc (DESIGN.md §6, 2026-11-22): a `tc=S+I` in BASE_OPTS or TEST_OPTS is that engine's own clock (run_shard.sh drops `-each tc`); without one nothing changes. M2 then runs as kind fixed, 2 stages each: phase-4 8d186ea8 (r3kr1) at 8+0.08 (test) against itself at 4+0.04 (base), then 40+0.4 against 20+0.2 (night lane B items zzzA1/zzzA2, gated on state/gate-212-time.go).
+- **status:** **approved 2026-11-17 (node odds and the net comparisons running; time odds after the round).**
+
+### 213. Train the position where the search stopped: the main line's leaf (ML frontier idea 6)
+- **type:** ELO (training data). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** a search's final score is the network's score at the last position of its main line, so attach the label
+  to that leaf too: keep only leaves where the game then followed the main line for at least two half-moves, remove
+  the starting position's own score from the leaf's label, check first that the label fits the leaf better than the
+  network's current score, and test inside the short fine-tune recipe (where one data part gives a 20% share). The
+  record format has no room for the extra position: a side file.
+- **pre-registered test (proposal §2 idea 6):** first, under an hour of CPU: for 2,000 games, how often the main line
+  ends in a network score; then re-search 5,000 leaves at 1,000,000 nodes. **Go on only if the label is closer to the
+  deep value than the network's own score, and at least half the kept positions yield a usable leaf.** Switch the
+  side file on for the next data part (no added search). Fine-tune with and without leaf records, two seeds (about 0.8
+  GPU-hours); two fixed-node screens per arm. **Closed if the pooled result is below +2.** If it is +4 or more, a
+  timed test of at least 6,400 games decides.
+- **cost (proposal's estimate):** under 1 GPU-hour and 80 lane-minutes, after a data part that is generated anyway.
+  Probability: 15% (estimate). The pipeline's top idea on expected value.
+- **Fork's record:** set aside as not novel and never run: "Training on principal-variation leaves. Classical TDLeaf,
+  already credited under idea 51" (docs/research/network-novelty-2026-11-14.md). The nearest run, idea 80, was flat.
+- **prior art:** **TDLeaf(lambda)** (Baxter, Tridgell and Weaver, KnightCap, 1998/2000; named by the proposal), and
+  TreeStrap (Veness et al., NIPS 2009); the literature check rated it "known" (UNVERIFIED). **ORIGINALITY.md must
+  credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 6).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 214. Train on positions the search asks about, not positions games reached (ML frontier idea 7)
+- **type:** ELO (training data). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** sample training positions from the search trees, only where the network's score decided something
+  (leaves, and positions within one margin of a limit), labelled at 20,000 nodes, at 3% of a snapshot (the critics'
+  8% breaks the 5% cap on targeted data, with the endgame slice at about 2%); a third arm (game positions with the
+  same score-only label) tells the change of positions from the change of label.
+- **pre-registered test (proposal §2 idea 7):** first, the network's error at sampled search positions against game
+  positions matched for stage of the game and size of score: **stop if the ratio is below 1.15.** Then about 36
+  million labels at 20,000 nodes (about 10 desktop-hours, estimate) and three arms, two seeds each: control; search
+  positions; game positions carrying the same score-only label. Fixed-node screens pooled to 6,400 games (about ±5).
+  **Killed if the search-position arm is below +3 against the control, or no better than the third arm.**
+- **cost (proposal's estimate):** about 10 desktop-hours, about 6.6 GPU-hours, about 160 lane-minutes. Probability:
+  12% (estimate).
+- **Fork's record:** on file and left out: "A search-site slice (train on positions sampled from the search tree, not
+  the game line)" (docs/research/novel-ideas-2026-11-11.md, "Considered and left out"), whose free measurement "is
+  still worth making" and has no record of being made. A different form, idea 59's separate correction network
+  trained on such positions, lost (−19.78 ± 9.67, per the proposal). The sampler and the 5,433 labelled sites exist.
+- **prior art:** **DAgger-style sampling** (Ross, Gordon and Bagnell, AISTATS 2011), **TreeStrap-style training on
+  search-tree nodes** (Veness et al., NIPS 2009), Go-Exploit (Trudeau and Bowling, 2023); the literature check rated
+  it "known" (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 7).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 215. Pruning margins that depend on the level of the bound (ML frontier idea 8)
+- **type:** ELO (search). **phase:** after Phase 4 (its offline check second in the post-Phase-4 order).
+  **runtime cost:** possible (one multiply per comparison; the proposal expects no speed change).
+- **idea:** the network's quick score sits closer to zero than a deep search (126 cp closer, against a million-node
+  search, on a network four networks ago), so a fixed margin may be too lenient when the bar is negative and too
+  strict when it is positive. A stretch of the score is the same as a margin that depends on the bar's level: add one
+  number per group of pruning tests, pivoted so the average margin Fork has already tuned does not move, tuned
+  together with those margins, against a control that spends the same tuning budget on the existing margins alone.
+- **offline check first (owner's order of 2026-11-17: second in the post-Phase-4 order):** the signed gap between the
+  static evaluation and a 1,000,000-node search at pruning sites, on the current network, binned by the level of the
+  bound, **measured after correction history** (on the corrected evaluation the pruning tests use; the raw network
+  score reported beside it). **Stop if the gap is under about 40 centipawns** (proposal §2 idea 8).
+- **pre-registered test after the check (proposal §2 idea 8):** two tuning runs of 10,400 game pairs each, one with
+  the new numbers and one without; the two tuned builds head to head, 6,400 STC games (about ±4.75) plus one LTC
+  stage. **Killed if the head-to-head is below +3 Elo.**
+- **cost (proposal's estimate):** no GPU; about 9 lane-hours for the two tuning runs and about 2.5 for the matches
+  (the proposal suggests riding on the queued final retune; Phase 4 is frozen, so not there). Probability: 15%
+  (estimate).
+- **Fork's record:** new as a mechanism. Relatives lost: position-dependent score scaling (−0.72 ± 3.95, then
+  +1.76 ± 3.46, dropped), a per-bucket rescale (−0.43 ± 9.23, idea 180), a rising margin for one test
+  (−3.78 ± 2.92) (figures per the proposal). Fork's tuning rule forbids tuning "the eval scale (a degenerate
+  direction)"; the pivoted form is built to avoid it, but expect the objection. An owner decision on adding
+  margin-shape parameters before the final retune is already pending.
+- **prior art:** the literature check: "known": ProbCut and Multi-ProbCut's regression of the deep score on the
+  shallow one (Buro, ICCA Journal 1995; Jiang and Buro, 2003), the optimizer's curse (Smith and Winkler, Management
+  Science 2006) (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 8).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17): the offline check second, the games later; not started.
+
+### 216. A second read-out used only at the leaves (ML frontier idea 9)
+- **type:** ELO (network and search). **phase:** after Phase 4. **runtime cost:** possible.
+- **idea:** at a leaf the search takes the larger of the network's score and the short capture check's result, so an
+  over-rating there is final. Train a second small set of output weights (about 8,200 numbers) used only at leaves,
+  with that rule in the loss: ordinary error where raising the score is the only way to be right, and a penalty only
+  for exceeding the capture result elsewhere. The cache holds one score per position, so the plumbing (or computing
+  both read-outs, about 6 to 11 Elo of speed) is the first risk.
+- **pre-registered test (proposal §2 idea 9):** a do-nothing build with the new plumbing: identical play, **speed at
+  least 98.5%; stop otherwise.** The side arm on its own: correction tables off at leaves, the standard search test,
+  up to 12,800 games. Log 2 million leaves (about 35 desktop-minutes); fit the read-out with the rest frozen (under 1
+  GPU-hour); **go on only if the network's score is the deciding number at 60% or more of leaves and the fit cuts the
+  through-the-rule loss on held-out leaves by 10%, twice in a row.** One timed match of 12,800 games (about ±3.3):
+  **killed if the timed result is not clearly positive.**
+- **cost (proposal's estimate):** under 1 GPU-hour; about 2.7 lane-hours for the final match. Probability: 10% for the
+  read-out; 20% that the side arm alone is worth a point or two (estimates). §3: "the craziest that would matter most".
+- **Fork's record:** the read-out and its loss are new. Poor priors: refitting the output layer on a frozen network
+  gained nothing twice (idea 82, vision step 0), and three earlier changes to the leaf score lost (−11.73 ± 9.63,
+  −9.23 ± 6.81, −4.11 ± 3.93, per the proposal). The side arm (corrections off at leaves) is on file, measured offline
+  (worth only 0.1 to 0.2 of their size there) and never played.
+- **prior art:** the literature check rated the read-out "apparently new"; nearest: TDLeaf(lambda), TreeStrap, MMTO
+  (Hoki and Kaneko, JAIR 2014), "Smart Predict, then Optimize" (Elmachtoub and Grigas) (UNVERIFIED); the leaf-only
+  plumbing is a form of **lazy evaluation** (computing a part of the evaluation only where it is used). **ORIGINALITY.md
+  must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 9, §3).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 217. A loss that weights the scores where the search compares (ML frontier idea 10)
+- **type:** ELO (training loss). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** today's loss (error after squashing scores into win probabilities) counts an error at 220 cp about 9% as
+  much as near zero, and at 280 about 3%, while the search's margins sit between half and three times the squashing
+  scale. A one-parameter family of losses keeps the target and moves weight toward larger scores (the middle setting
+  is the new part); weights capped, the tablebase slice exempt; if the spread of scores changes by more than 10%, the
+  two or three nearest margins are retuned before a flat result is called flat. One line in the trainer.
+- **pre-registered test (proposal §2 idea 10):** first, where the search's comparisons actually fall: **dead if the
+  share beyond two scales is within 10 points of the 24% today's loss already gives.** Three arms, two seeds each:
+  control; scale refit only (Fork squashes with 92 while its newest data fits 81); the re-weighted loss; all
+  fine-tuned by the standing rule. Fixed-node screens, 3,200 games pooled per arm. **Killed if the re-weighted arm is
+  below +4 against the control, or no better than the scale-refit arm.**
+- **cost (proposal's estimate):** about 6.6 GPU-hours plus fine-tunes; about 160 lane-minutes. Probability: 10%
+  (estimate).
+- **Fork's record:** on file with the same arithmetic as the think tank's M5, the cross-entropy arm
+  (docs/research/phase4-think-tank/phase-b-specialists.md, M5; "never build in Phase 4" until data with conversion
+  phases exists, phase-c-synthesis.md); the scale refit is M6 (phase-b-specialists.md). The stricter-adjudication
+  part (g4d) partly answers the objection. A different weighting, by material class, lost (idea 69, −7.60 ± 4.91).
+- **prior art:** the literature check: "known elsewhere but new for this kind of system": proper scoring rules and
+  composite (Bregman) losses (Schervish, Annals of Statistics 1989; Buja, Stuetzle and Shen; Reid and Williamson, JMLR
+  2010) (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 10).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 218. An offline decision-error score that must first get two known answers right (ML frontier idea 11)
+- **type:** TOOLING (an offline screen; it never gates). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** score a network by the search decisions it would get wrong: log about 100,000 real comparisons, establish
+  each right answer with a deeper search, count wrong stops and missed stops (cost-weighted); trusted only after it
+  has predicted results Fork already knows.
+- **pre-registered test (proposal §2 idea 11):** no games; **it must score the retuned margins better than the old
+  ones (measured +37.93 ± 10.03) and the offline-picked margin that lost worse (measured −26.76 ± 9.93), and a
+  shuffled placebo must not reproduce the signal; either sign wrong, it is dead.** Then the archive check: a rank
+  correlation of at least 0.4 without the architecture pairs, and the same ordering from logs of two different
+  networks' searches. If it passes, it earns one use: ordering arms for the test lanes and choosing among training
+  snapshots. It never gates.
+- **cost (proposal's estimate):** about 85 desktop-minutes of deep searches, no GPU. Probability it passes both
+  checks: 15% (estimate).
+- **Fork's record:** partly on file: the logging and deep-search tools exist and were run; Fork's own rule is the
+  same ("A screen must be tested against known game results before it is used, and a placebo must not be able to
+  reproduce its signal"); offline criteria have been wrong five times out of five here (per the proposal). A
+  cost-weighted score for whole networks, validated on those two results, is new.
+- **prior art:** the literature check: "known elsewhere but new for this kind of system": decision-focused learning
+  (Mandi et al., JAIR 2024; Elmachtoub and Grigas), surrogate-endpoint validation (Prentice, Statistics in Medicine
+  1989), MMTO (Hoki and Kaneko, JAIR 2014) (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 11).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 219. A stronger copy of Fork as a stand-in opponent: the node-odds pilot (ML frontier idea 12)
+- **type:** TOOLING (a diagnostic first). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** Fork given about five times the search is, on paper, about as much stronger as the engine Fork loses to
+  from unbalanced openings; if it also defends that way, it is a cheap Fork-pure opponent to measure against. A
+  measurement first: the pass mark is whether the weaker side recognises trouble several half-moves late, as it does
+  against real opponents. Fixed node counts (Fork's notes rule against time odds). The original idea's second half
+  (training games where the losing side searches more) is dropped: it is idea 81's parked form.
+- **pre-registered test (proposal §2 idea 12):** pilot: 200 games from the favourable starts of the loss study, Fork
+  at 378,000 nodes a move against Fork at 1,820,000. Measured: how many half-moves later the weaker side's score
+  admits trouble; **pass at a median of 5 or more. Killed if the lag stays near one half-move, or if the side with the
+  advantage still wins more than half the games.** If it passes, it must order four stored networks as their real
+  tests did before anyone reads it.
+- **cost (proposal's estimate):** no GPU; minutes for the pilot; about 3 lane-hours per network compared afterwards.
+  Probability the pilot passes: 25%; that it leads to Elo: 8% (estimates). The pipeline's top idea on upside.
+- **Fork's record:** partly on file. The loss diagnosis (docs/research/uho-loss-diagnosis-2026-11-16.md: 0 wins from
+  200 advantaged starts against Stockfish 19) says a stronger Fork "shares Fork's blind spots, so it is no substitute
+  for another" engine; only 13 of 541 analysed losses were cases of not looking far enough (per the proposal), which
+  is the critics' near-kill.
+- **prior art:** **odds matches** (search-budget handicaps between versions of one program); the literature check:
+  "known elsewhere but new for this kind of system": Jones, "Scaling Scaling Laws with Board Games" (2021), exploiter
+  agents (Vinyals et al., Nature 2019), adversarial policies (Wang, Gleave et al., ICML 2023) (UNVERIFIED).
+  **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 12).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 220. Backward relabelling (ML frontier §4, contaminated)
+- **type:** ELO (training labels). **phase:** after Phase 4, unranked. **runtime cost:** none.
+- **idea:** after a game ends, re-search its positions from last to first with the search's memory kept, so each
+  label sees what the game later revealed. Proposed four separate times (proposal §4). Written as derived shards with
+  their own manifests (sealed data is never changed); Fork relabelling its own data with its own nets is allowed (data
+  strategy A+, DESIGN.md §5.4).
+- **test:** none pre-registered: §4's ideas came from researchers who guessed the domain, so they were never ranked
+  or attacked by the critics. A test with a kill result is written before it moves up the order.
+- **cost:** not estimated by the proposal. Constraint (§4): data generation's memory table is small (1 MB per worker),
+  which limits what a backward pass can carry.
+- **Fork's record:** new (proposal §4).
+- **prior art:** not literature-checked (§4's ideas skipped that stage); a prior-art check is due before it is built,
+  and **ORIGINALITY.md must credit whatever it finds if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§4).
+- **status:** post-Phase-4 backlog, unranked (owner, 2026-11-17); not started.
+
+### 221. Cutting the label chain at weak cheap moves (ML frontier §4, contaminated)
+- **type:** ELO (training labels). **phase:** after Phase 4, unranked. **runtime cost:** none.
+- **idea:** half of Fork's self-play moves come from quick 4,000-node searches; where such a move is later judged
+  weak, stop passing its consequences back as truth (cut the TD trace there). The quick searches' scores are not
+  stored, so "judged weak" must come from the neighbouring full searches (proposal §4).
+- **test:** none pre-registered (contaminated, never ranked or attacked); a test with a kill result is written before
+  it moves up the order. The novel-ideas proposal already warned, for idea 85, that with seed noise near ±6 Elo an
+  effect of this size "may be unresolvable" (docs/research/novel-ideas-2026-11-11.md).
+- **cost:** not estimated by the proposal.
+- **Fork's record:** new (proposal §4); idea 51 already keeps the cheap moves' scores out of the chain.
+- **prior art:** trace cutting in off-policy TD learning (Watkins's Q(lambda); Retrace) is the likely relative, named
+  here from general knowledge and not literature-checked (UNVERIFIED). **ORIGINALITY.md must credit it if this is
+  ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§4).
+- **status:** post-Phase-4 backlog, unranked (owner, 2026-11-17); not started.
+
+### 222. Slow nets as labellers (ML frontier §4, contaminated)
+- **type:** ELO (training data). **phase:** after Phase 4, unranked. **runtime cost:** none (the playing net is
+  unchanged).
+- **idea:** data generation runs at fixed nodes, so a network that wins at equal search effort but loses on the clock
+  could do the labelling while the fast one plays.
+- **Fork's record:** on file, never run: the think tank priced it at about +4 Elo for S512+X (about 0 for XGR r2) and
+  "Not recommended now; worth recording as a principle for a future large teacher"
+  (docs/research/phase4-think-tank/phase-b-specialists.md:3719-3725). It conflicts with the labeller policy
+  (data generation always uses the current default engine; DESIGN.md §5.3).
+- **needs owner decision: conflicts with the rule that training starts on the best engine.**
+- **test:** none pre-registered (contaminated, never ranked or attacked).
+- **cost:** not estimated by the proposal.
+- **prior art:** not literature-checked; a teacher stronger at fixed nodes labelling for a faster student is a form
+  of distillation, so a prior-art check is due before it is built, and **ORIGINALITY.md must credit whatever it finds
+  if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§4).
+- **status:** needs owner decision (owner, 2026-11-17); not started.

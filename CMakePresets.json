@@ -36,6 +36,8 @@
     { "name": "clang-vnni",    "inherits": ["clang", "vnni"] },
     { "name": "clang-fuzz",    "inherits": ["clang", "debug"],
       "cacheVariables": { "FORK_FUZZ": "ON", "FORK_BUILD_TESTS": "OFF" } },
+    { "name": "clang-stats",   "inherits": ["clang", "release"],
+      "cacheVariables": { "FORK_SEARCH_STATS": "ON" } },
     { "name": "clang-tsan",    "inherits": ["clang"],
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "FORK_TSAN": "ON" } },
     { "name": "gcc-debug",     "inherits": ["gcc", "debug"] },

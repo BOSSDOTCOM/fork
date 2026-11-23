@@ -1,0 +1,45 @@
+{
+ "ptnml": [
+  1,
+  13,
+  23,
+  12,
+  1
+ ],
+ "pairs": 50,
+ "finished_games": 100,
+ "time_losses": 0,
+ "abnormal": 0,
+ "fastchess_ptnml": [
+  1,
+  13,
+  23,
+  12,
+  1
+ ],
+ "meta": {
+  "base": "b49d6f5dece2c8c434b24aef03c1208fa678b316",
+  "test": "a71dd2daf4aa854346ab9f7e73c42cc7a321c4ca",
+  "runner": "github",
+  "arch": "x86-64-v3",
+  "base_build": "8b057f5d832287b2",
+  "test_build": "8f986f611198cf2c",
+  "tc": "600+6",
+  "hash": "16",
+  "base_opts": "nodes=800000",
+  "test_opts": "nodes=800000",
+  "shard": "0",
+  "shards": "16",
+  "stage": "0",
+  "opening_start": "1",
+  "opening_end": "50",
+  "rounds": "50",
+  "concurrency": "3",
+  "tables": "3-4-5",
+  "book": "UHO_Lichess_4852_v1.shuffled-20261027.epd",
+  "book_seed": "20261027",
+  "book_sha": "51eb21c01ab03f1caa96a5205268faf6f11f26547dc9e0e7ab6a574181b4dbdc",
+  "fastchess_exit": "0"
+ },
+ "status": "done"
+}

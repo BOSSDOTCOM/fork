@@ -1,0 +1,43 @@
+{
+ "bench_nodes": "9263568",
+ "bench_signature": "881c326307a2ba8a",
+ "branch": "phase-4",
+ "cmdline": null,
+ "commit": "75d53f03c3ad3ca0c0ce1924083f56ce36385d71",
+ "differs_from_previous": {},
+ "dir": "~/fork-data/gen4c",
+ "engine_changed": true,
+ "engine_commit": "75d53f03c3ad3ca0c0ce1924083f56ce36385d71",
+ "generation": 4,
+ "mode": "build",
+ "name": "g4c",
+ "need_bytes": 1055586605,
+ "net": "r8brft1",
+ "openings": "lichess-2026-09.epd",
+ "openings_sha256": "dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef",
+ "openings_source": "next-openings.json (set 2026-11-07 06:30:24 PM EST)",
+ "paths": {
+  "out": "/home/user/fork-data/gen4c"
+ },
+ "previous": "g4b",
+ "previous_positions": 46524651,
+ "previous_source": "sealed manifest",
+ "previous_target": 276000000,
+ "reuse_dir": null,
+ "settings": {
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "check_nodes": 2000,
+  "hash_mb": 1,
+  "nodes": 20000,
+  "openings": "lichess-2026-09.epd",
+  "positions_target": 229475349,
+  "save_percent": 50,
+  "seed": 20261118,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "threads": 10,
+  "unsaved_nodes": 4000
+ },
+ "started_by_app": 1794486106.1840804
+}
