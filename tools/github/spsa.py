@@ -39,7 +39,10 @@ The decision map (§2.1): |z| >= 2 important (joins its group); 1 <= |z| < 2 amb
 never-measured placeholder or its group is under 6 parameters, else frozen); |z| < 1 flat (frozen, logged
 "screened flat" with D +- SE).
 
-    spsa.py init NAME --spec FILE --commit SHA [--calibration FILE]
+    spsa.py init NAME --spec FILE --commit SHA [--calibration FILE] [--carry EARLIER ...]
+                                   --carry: the final values of an earlier finished tune on the same commit
+                                   (its final.json, checked against its log) join this spec's fixed options,
+                                   with the fixed options that run carried (carried_values)
     spsa.py dispatch NAME          the inputs of the next run (key=value lines); writes i<stage>/dispatch.json
     spsa.py step NAME --stage D [--meta wall_minutes=M]
                                    verifies stage D's downloaded results and applies its update
@@ -478,6 +481,13 @@ def resolve_spec(raw, table, label, commit):
     # reaches (an SPRT stage plays from line 1; tools/cloud/run_shard.sh).
     if spec['opening_reserve'] < 2000001 or spec['opening_reserve'] + spec['total_pairs'] - 1 > 2632036:
         raise Refused('the openings must lie in the tuning reserve, lines 2,000,001-2,632,036')
+    # Optional: the last line this run may use (its share of the reserve beside other runs), with room past
+    # the planned pairs for abandoned stages, whose openings are never reused; dispatch refuses past it.
+    if 'opening_limit' in raw:
+        limit = raw['opening_limit']
+        if not isinstance(limit, int) or not spec['opening_reserve'] + spec['total_pairs'] - 1 <= limit <= 2632036:
+            raise Refused("opening_limit must be a line from the run's last planned opening to the reserve's end")
+        spec['opening_limit'] = limit
     if screen:
         if not isinstance(spec['pair_sd'], (int, float)) or not spec['pair_sd'] > 0:
             raise Refused('pair_sd must be positive')
@@ -557,7 +567,19 @@ def cmd_init(a):
                             cwd=Path(__file__).resolve().parents[2])
     if header.returncode:
         raise Refused(f'cannot read src/tune/params.hpp at {a.commit}: {header.stderr.strip()}')
-    spec = resolve_spec(read_json(a.spec), table_from_header(header.stdout), a.name, a.commit)
+    table = table_from_header(header.stdout)
+    raw = read_json(a.spec)
+    sources = []
+    if a.carry:
+        values, sources = carried_values(a.carry, table, a.commit)
+        own = {k: str(v) for k, v in raw.get('fixed', {}).items()}
+        clash = sorted(k for k in values if k in own and own[k] != values[k])
+        if clash:
+            raise Refused(f"carried values differ from the spec's own fixed options: {', '.join(clash)}")
+        raw = dict(raw, fixed={**own, **values})
+    spec = resolve_spec(raw, table, a.name, a.commit)
+    if sources:
+        spec['carried'] = sources
     if is_screen(spec):
         hpp = subprocess.run(['git', 'show', f'{a.commit}:src/search/searcher.hpp'], capture_output=True, text=True,
                              cwd=Path(__file__).resolve().parents[2])
@@ -588,6 +610,45 @@ def cmd_init(a):
     return 0
 
 
+def carried_values(names, table, commit):
+    """The values earlier tune runs found, for a later run's fixed options (the final retune's waves: each
+    later wave starts from the earlier waves' tuned values, final-retune-expansion-2026-11-15.md §3.3):
+    ({option: value as a string}, [{'name', 'final_sha256'}]). Each run must be a finished tune of the same
+    commit whose final.json is the one its log gives (the rounded mean of the last average_tail of the
+    updates, every iteration in), each value inside the table's range; the fixed options that run itself
+    played (an earlier wave's carry) come along, so a later run can name only its predecessor, and any two
+    sources that disagree on an option are refused."""
+    values, sources = {}, []
+    for name in names:
+        try:
+            spec, state = checked_state(name)
+        except FileNotFoundError as e:
+            raise Refused(f'carry {name}: {e.filename} is missing (no such run)') from None
+        if is_screen(spec):
+            raise Refused(f'carry {name}: a screen tunes nothing')
+        if spec['commit'] != commit:
+            raise Refused(f'carry {name}: tuned on {spec["commit"]}, not {commit}')
+        hist = history(name)
+        if not state['done'] or len(hist) != spec['iterations']:
+            raise Refused(f'carry {name}: not finished ({len(hist)} of {spec["iterations"]} updates)')
+        try:
+            final_bytes = (data_dir(name) / 'final.json').read_bytes()
+        except FileNotFoundError:
+            raise Refused(f'carry {name}: no final.json (run spsa.py report {name})') from None
+        final = json.loads(final_bytes)
+        want = {k: round(v) for k, v in final_theta([h['theta_after'] for h in hist], spec['average_tail']).items()}
+        if final.get('params') != want or final.get('iterations') != len(hist):
+            raise Refused(f"carry {name}: final.json is not its log's result (run spsa.py report {name})")
+        for option, value in list(spec['fixed'].items()) + list(want.items()):
+            if option in table and option in want and not table[option][1] <= value <= table[option][2]:
+                raise Refused(f"carry {name}: {option}={value} lies outside the table's range")
+            if values.get(option, str(value)) != str(value):
+                raise Refused(f'carry {name}: {option}={value}, but another source gives {values[option]}')
+            values[option] = str(value)
+        sources.append({'name': name, 'final_sha256': hashlib.sha256(final_bytes).hexdigest()})
+    return values, sources
+
+
 def checked_state(name):
     spec, state = load_spec(name), load_state(name)
     if state['spec_sha256'] != spec_digest(spec):
@@ -606,6 +667,8 @@ def cmd_dispatch(a):
         lines = per * spec['shards']
         if state['opening_cursor'] + lines - 1 > 2632036:
             raise Refused('the tuning reserve is used up')
+        if state['opening_cursor'] + lines - 1 > spec.get('opening_limit', 2632036):
+            raise Refused(f"this run's share of the reserve (to line {spec['opening_limit']}) is used up")
         c = c_at(spec, state['iteration'])
         tuned = [(p['name'], state['theta'][p['name']], round(c[p['name']], 3)) for p in spec['params']]
         disp = {'label': spec['label'], 'commit': spec['commit'], 'stage': d, 'iteration': state['iteration'],
@@ -844,6 +907,7 @@ def main(argv=None):
     s.add_argument('--spec', required=True)
     s.add_argument('--commit', required=True)
     s.add_argument('--calibration')
+    s.add_argument('--carry', action='append', default=[])
     s = sub.add_parser('dispatch')
     s.add_argument('name')
     s = sub.add_parser('step')

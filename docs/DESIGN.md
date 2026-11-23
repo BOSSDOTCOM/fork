@@ -1632,6 +1632,21 @@ on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
   below 1 frozen as "screened flat"). The draws, shards, workflow and driver
   are the tune's, unchanged. The S1 spec: `tools/github/spsa-s1-screen.json`
   (32 class (a) candidates, 8 iterations of 1,600 STC games).
+- **The retune's group runs** (owner, 2026-11-22 and 2026-11-23; the groups
+  from S1): `tools/github/spsa-g3.json`, `spsa-g1b.json` (wave 1, one per
+  lane), `spsa-g2g4.json` (wave 2) and `spsa-g1a.json` (wave 3, with
+  NullSurplusPerPly), tune mode at the table's defaults, c as S1's,
+  iterations max(8, ceil(1.9 p)) of 1,600 games, A 10% of the pairs. A
+  later wave starts from the earlier waves' values by `spsa.py init ...
+  --carry EARLIER`: each named run must be a finished tune of the same
+  commit whose final.json is its log's result; its final values and the
+  fixed options it played become this run's fixed options (both sides), and
+  sources that disagree are refused; spec.json records each source's
+  final.json SHA-256. `opening_limit` (optional) ends a run's share of the
+  reserve, with room for abandoned stages; dispatch refuses past it. Two
+  drivers at once: spsa.yml's concurrency group is per stage (one shared
+  group serialised the lanes), and a push refused because the other driver
+  moved spsa-run is rebuilt on the new tip (3 tries, never forced).
 - **Never in SPSA:** the time-management parameters (the iteration rule and
   the time budget, refused by name) and the eval scale (not a parameter).
 - **Openings:** the tuning reserve, lines 2,000,001 to 2,632,036 of the
