@@ -730,7 +730,13 @@ TEST_CASE("pruning", "history ageing: still correct, and it changes a second sea
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
   CHECK(legal.contains(a.best));
-  CHECK_MSG(a.nodes != b.nodes, "history ageing left the second search unchanged: " << a.nodes);
+  // HistoryKeepQuarters 4 keeps every entry whole (v * 4 / 4): ageing is then
+  // a no-op, so the second search must be identical instead.
+  if (HistoryKeepQuarters < 4) {
+    CHECK_MSG(a.nodes != b.nodes, "history ageing left the second search unchanged: " << a.nodes);
+  } else {
+    CHECK_MSG(a.nodes == b.nodes, "keeping every entry whole changed the second search: " << a.nodes << " vs " << b.nodes);
+  }
   fx.searcher->switches = on;
   CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));

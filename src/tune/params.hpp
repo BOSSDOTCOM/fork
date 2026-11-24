@@ -40,25 +40,25 @@
 // the time budget.
 #define FORK_SEARCH_PARAMS(X)                  \
   X(AspirationMinDepth, 5, 2, 10, 1)           \
-  X(AspirationHalfWidth, 12, 8, 40, 1)         \
+  X(AspirationHalfWidth, 11, 8, 40, 1)         \
   X(IterationGrowthThirds, 5, 3, 10, 1)        \
   X(ForcedMoveFraction, 8, 4, 16, 1)           \
   X(RfpMaxDepth, 6, 3, 12, 1)                  \
-  X(RfpMargin, 55, 30, 160, 6)                 \
-  X(NullMinDepth, 3, 1, 6, 1)                  \
-  X(NullSurplusPerPly, 301, 150, 600, 23)      \
+  X(RfpMargin, 45, 30, 160, 6)                 \
+  X(NullMinDepth, 2, 1, 6, 1)                  \
+  X(NullSurplusPerPly, 296, 150, 600, 23)      \
   X(NullSurplusPliesMax, 2, 0, 6, 1)           \
   X(TableProbeMinDepth, 1, 1, 4, 1)            \
   X(LmrMinDepth, 3, 2, 6, 1)                   \
-  X(LmrMinMove, 4, 1, 8, 1)                    \
+  X(LmrMinMove, 3, 1, 8, 1)                    \
   X(LmrDivisorTenths, 45, 23, 90, 3)           \
   X(LmrCorrectionStrength, 64, 0, 128, 6)      \
-  X(LmpMaxDepth, 4, 1, 8, 1)                   \
-  X(LmpQuietAllowance, 8, 3, 24, 1)            \
-  X(LmpImprovingEighths, 1, 0, 4, 1)           \
-  X(FutilityMaxDepth, 6, 3, 12, 1)             \
-  X(FutilityOffset, 86, 30, 200, 8)            \
-  X(FutilityGrowth, 50, 25, 140, 5)            \
+  X(LmpMaxDepth, 5, 1, 8, 1)                   \
+  X(LmpQuietAllowance, 5, 3, 24, 1)            \
+  X(LmpImprovingEighths, 2, 0, 4, 1)           \
+  X(FutilityMaxDepth, 7, 3, 12, 1)             \
+  X(FutilityOffset, 88, 30, 200, 8)            \
+  X(FutilityGrowth, 47, 25, 140, 5)            \
   X(SeePruneMaxDepth, 6, 3, 12, 1)             \
   X(QuietSeeFloor, 60, 30, 120, 5)             \
   X(CaptureSeeFloor, 118, 50, 200, 8)          \
@@ -72,22 +72,22 @@
   X(CaptureProbeMinDepth, 9, 4, 18, 1)         \
   X(CaptureProbeReduction, 5, 2, 10, 1)        \
   X(CaptureProbeMargin, 80, 60, 200, 6)        \
-  X(QuiesceMoveCap, 2, 1, 6, 1)                \
+  X(QuiesceMoveCap, 3, 1, 6, 1)                \
   X(DriftWeightCap, 4, 2, 8, 1)                \
   X(DriftWeightTotal, 256, 128, 512, 19)       \
-  X(DriftLimit, 300, 150, 600, 23)             \
+  X(DriftLimit, 343, 150, 600, 23)             \
   X(PieceDriftShare, 64, 32, 128, 5)           \
-  X(MinorDriftShare, 32, 16, 64, 5)            \
+  X(MinorDriftShare, 38, 16, 64, 5)            \
   X(MajorDriftShare, 64, 32, 128, 5)           \
   X(ThreatDriftShare, 64, 32, 128, 5)          \
-  X(HistorySkipMaxDepth, 3, 1, 6, 1)           \
+  X(HistorySkipMaxDepth, 4, 1, 6, 1)           \
   X(HistorySkipPerPly, 700, 350, 4000, 183)    \
   X(HistoryBonusFactor, 25, 12, 50, 2)         \
   X(HistoryBonusCap, 1250, 625, 2500, 94)      \
-  X(LinearBonusPerPly, 125, 63, 250, 9)        \
-  X(HistoryKeepQuarters, 2, 0, 4, 1)           \
+  X(LinearBonusPerPly, 140, 63, 250, 9)        \
+  X(HistoryKeepQuarters, 4, 0, 4, 1)           \
   X(ReplyWeight, 6, 0, 12, 1)                  \
-  X(FollowWeight, 4, 0, 16, 1)                 \
+  X(FollowWeight, 5, 0, 16, 1)                 \
   X(TakeWeight, 4, 0, 16, 1)                   \
   X(DirectCheckBonus, 5000, 2500, 10000, 375)  \
   X(StaleDepthPerSearch, 2, 1, 4, 1)           \
