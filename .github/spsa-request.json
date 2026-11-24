@@ -4,9 +4,9 @@
  "games": 1600,
  "hash": 16,
  "iteration": 6,
- "label": "spsa-g1b",
- "openings": 2034401,
- "params": "LmpMaxDepth=5.398:1.000,LmpQuietAllowance=5.001:1.700,LmpImprovingEighths=2.218:1.000,SeePruneMaxDepth=6.469:1.000,QuiesceMoveCap=3.373:1.000",
+ "label": "spsa-g3",
+ "openings": 2021601,
+ "params": "LinearBonusPerPly=141.961:18.000,HistoryKeepQuarters=3.000:1.000,ReplyWeight=5.696:1.000,FollowWeight=4.956:1.000,TakeWeight=3.933:1.000,HistorySkipMaxDepth=3.917:1.000",
  "shards": 16,
  "stage": 6,
  "tc": "8+0.08"
