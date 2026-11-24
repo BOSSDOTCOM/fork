@@ -157,6 +157,22 @@ From config/tcec.json (verified 2026-10-23; KB competition.md, branch kb):
   regions cheaper first (perf-log's int8 rows, speed3/nnue-i4, halve the rows' bytes); a smaller one
   is recorded and r3kr1 stays.
 
+### 4. Thread overlap at 64-512 threads (owner, 2026-11-23)
+
+Measure how much the threads duplicate each other at TCEC's thread counts: unique nodes per thread and TT hits on
+entries written by other threads, at 64, 128, 256 and 512 threads. **Required before any SMP diversification work**
+(e.g. idea 84's diverse helpers).
+
+### 5. Autotuning the accumulator update kernel on the EPYC (owner, 2026-11-23)
+
+Tune the accumulator update kernel on the EPYC itself: tile sizes, int8 against int16 weights, x86-64-v3 against v4.
+The PC's Zen 4 measurements (DESIGN section 5.6, the speed sprints) may not hold on the server part.
+
+### 6. TT pressure at TCEC hash sizes and thread counts (owner, 2026-11-23)
+
+Measure TT pressure (occupancy, replacement rate, useful-hit rate) at TCEC's Hash sizes and thread counts. **Only if it
+is high:** a replacement priority using a few bits of log2(subtree nodes).
+
 ## Related open questions
 
 - KB competition.md question 7 (explicit huge pages, `MAP_HUGETLB`, 1 GiB pages) and question 8 (CPU

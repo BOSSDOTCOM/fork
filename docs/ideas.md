@@ -683,6 +683,8 @@ tuned by SPSA.
 - **2026-11-14 (owner): the revamp** (docs/research/idea23-revamp-2026-11-14.md) is recorded and placed as a **final pre-TCEC polish step**, after Lazy SMP, the removal round, the final retune and the TCEC fixes; traces from the final engine under TCEC-like conditions (many threads, long TC; ideally during the rented-hardware dry run); no engineering until then. Decisions: target order time management, then row-choice states, then the calibration layer only if idea 180 gains; simulator coefficient fitting approved for the time-management target only (candidates; games decide); the 12-arm one-stage screen batch with three predicted-loser arms approved; E2's clamp fix included in the simulator once its LTC decides; the stage-0 simulator validation reported before tokens or GitHub time are spent.
 - **2026-11-14 (owner, about 12:20 PM EST): E2 adopted** (`UseDeepTimeDepth` on, the time scale's depth clamped at 60, not 19; idea 185) under the non-regression standard, its LTC capped undecided at +2.16 ± 3.47 Elo; "Include it in idea 23's simulator when that work starts": the simulator's time-management model uses the clamp at 60 (the engine's rule since the adoption).
 - **2026-11-23 (owner): a note for the Phase 5 / idea 23 time-management plan.** Candidate inputs should be **scale-invariant**: the ratio of nodes between iterations, the best move's share of the root's nodes, the gap between the best and second root scores from the aspiration passes, PV volatility (best-move changes across iterations), and the fraction of the remaining time. **No multi-PV** (it costs speed). **Validate at long time controls and with threads**, not only at STC.
+- **2026-11-23 (owner): one more time-management input.** The odd/even iteration score swing: judge stability on the average of
+  the last two iterations, not on a single iteration's spike.
 
 ## 24. TT victim policy under real table pressure
 
@@ -1531,6 +1533,10 @@ the screens before use.
   then the fixed-node screen and the STC SPRT. **status:** untested (plan
   only, owner, 2026-11-07). **runtime cost:** none. **earliest phase:**
   Phase 4.
+- **2026-11-23 (owner): two pair sources and the loss.** A pairwise (Bradley-Terry style) ranking loss on **quiet** sibling
+  positions where Fork's deep search prefers one by a clear margin. Pair sources: (a) idea 224's inflection positions;
+  (b) "near misses" from Fork's own won and drawn games: positions where the static eval preferred a quiet sibling
+  that deep search shows is clearly worse. Trainer-only; whether bullet supports such a loss is UNVERIFIED.
 
 ## 50. Conformal pruning margins from an uncertainty estimate
 
@@ -2409,6 +2415,8 @@ whose weaknesses and data gaps decide their targets and order.
 - **status:** untested (designed; the prober installed and verified and the held-out set built 2026-11-11; data
   generation after the conversion-and-defense results and before 8c).
   **runtime cost:** none. **earliest phase:** Phase 4.
+- **2026-11-23 (owner): one capture from the tables.** Include 8-9-piece positions one capture away from a tablebase position,
+  labelled by Fork's search with the larger tables.
 
 ## 69. Class-weighted sampling in the trainer
 
@@ -3471,6 +3479,10 @@ proposal are placeholders, screened before use.
 ### 177. Banded first layer (proposal idea 3)
 - **idea:** each piece family writes to a band of hidden-layer sectors (structured sparsity), cutting update work.
 - **status:** **parked** (owner, 2026-11-14).
+- **2026-11-23 (owner): a "two-speed" variant (a long shot; the idea stays parked).** A piece bank updated every move and a pawn/king structure bank
+  updated only on pawn or king moves (cacheable by the pawn-king key). Main risk: losing the piece-structure
+  interaction inside the hidden layer (the novelty file's evidence E11). First a zero-weight speed prototype and a
+  fixed-node screen.
 
 ### 178. The stand-pat liabilities plane (proposal idea 4)
 - **idea:** the exposure rule applied to the side to move's pieces only, its rows confined to a 64-column block of
@@ -4163,8 +4175,8 @@ Common fields: **phase** after Phase 4; **source** ML frontier pipeline, 2026-11
   or queued now). **runtime cost:** none (data only).
 - **idea:** from **Fork-pure games only** (Fork against Fork, including odds sparring such as STC against LTC; never
   the SF19 games, which are test-only), find games where Fork's eval **slid steadily** (for example -0.4 to -2.0 over
-  10-15 moves) **with no single tactical drop**. Relabel backward from the collapse with a pinned Fork at 1,000,000
-  nodes plus Syzygy, and keep the **earliest positions where the deep label already shows the slide but the static
+  10-15 moves) **with no single tactical drop**. Relabel backward from the collapse with a pinned Fork at about **10,000,000
+  nodes** (owner, 2026-11-23; was 1,000,000) plus Syzygy, and keep the **earliest positions where the deep label already shows the slide but the static
   eval does not**.
 - **test:** train them as **one capped arm (1-2% of the snapshot)** beside a same-recipe control, **2 seeds**; the
   fixed-node screen, then STC [0, 5]; run the UHO diagnostic.
@@ -4177,6 +4189,7 @@ Common fields: **phase** after Phase 4; **source** ML frontier pipeline, 2026-11
   queens-on arm A2 (about -3 Elo, the owner's figure); the conversion-and-defense report
   (docs/research/conversion-defense/report.md on research/conversion-defense; DESIGN decisions log, 2026-11-10).
 - **status:** post-Phase-4 backlog (owner, 2026-11-23); not started.
+- **2026-11-23 (owner): the label budget is about 10M nodes per position** (pinned Fork plus Syzygy), not 1M.
 
 ### 225. Standing failure forensics after every gauntlet (TOOLING)
 - **type:** TOOLING. **phase:** after Phase 4; **may be built during Phase 4 on idle capacity only if it touches no
@@ -4189,3 +4202,27 @@ Common fields: **phase** after Phase 4; **source** ML frontier pipeline, 2026-11
 - **related:** idea 224 (its slide detector and relabelling can be shared); the gauntlet reports; the
   conversion-and-defense report.
 - **status:** post-Phase-4 backlog (owner, 2026-11-23); not started (building it early needs the owner's go).
+- **2026-11-23 (owner): a "closed position" tag** in the loss classification: rook/queen-reachable squares split into two or more
+  components by pawn chains, queens on; to test whether closedness is part of Fork's weakness. Cheap (no search).
+
+### 226. Cross-perspective product head (ELO, network)
+- **type:** ELO (network). **phase:** after Phase 4 (owner, 2026-11-23). **runtime cost:** about +50% on the output
+  pass (about 3-4% of cycles), so about -1.5% nps; break-even about +2.5 Elo at fixed nodes.
+- **idea:** add an element-wise product of the side-to-move and opponent accumulator halves (after activation) to the
+  output head, with its own 512 output weights per bucket. Both halves share weights, so unit i means the same concept
+  for both sides and the product means "both sides have concept i". With SCReLU's squares already in the head, the
+  squared difference (one-sided dominance) is a free linear combination.
+- **test:** warm start from the default with the new weights at zero (identical at step 0), one fine-tune arm, 2
+  seeds, beside a same-recipe control; the speed-adjusted fixed-node screen (DESIGN section 5.4's gate, priced as
+  decided on 2026-11-23), then STC [0, 5].
+- **note:** the network survey's "pairwise only pays with a deeper head" concerned within-side pairing (one
+  accumulator's two halves multiplied; docs/research/network-survey-2026-11/matrix.md); this cross-side form is
+  untested.
+- **status:** post-Phase-4 backlog (owner, 2026-11-23); not started.
+
+### 227. Aspiration windows fitted offline (ELO, search, low priority)
+- **type:** ELO (search). **phase:** after Phase 4, low priority (owner, 2026-11-23). **runtime cost:** none.
+- **idea:** fit the aspiration window's widths offline from logged iteration-to-iteration score changes, conditioned on
+  recent volatility and allowed to be asymmetric, chosen to minimise the expected re-search cost; then a design R SPRT.
+- **related:** idea 202 (root LMR keyed to the aspiration window); the final retune's AspirationHalfWidth (group G4).
+- **status:** post-Phase-4 backlog (owner, 2026-11-23); not started.
