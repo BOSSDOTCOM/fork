@@ -3575,6 +3575,9 @@ proposal are placeholders, screened before use.
 - **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
 - **status:** killed by its step-0 gate (2026-11-15).
 - **step 0 (2026-11-15):** killed at its CPU gate: r3kr1's body frozen, heads refit; against the phase refit on g4c: kings' wings +1.8e-6 +/- 2.1e-6, a self-chosen column +3.8e-6 +/- 1.9e-6 (does not transfer between sets), progress octiles 11% worse; on g4s2-val wings -4.0e-6 +/- 1.7e-6 (0.02% of the loss, opposite sign). No fixed-node screen built.
+- **2026-11-24 (owner), if routed or bucketed output heads are ever revived (post-Phase-4):** train them factorised, a shared base
+  plus per-bucket deltas folded into each bucket's weights at export, as r3kr1's king regions are trained; idea 204
+  plans the same for the phase heads.
 
 ### 188. Reply-square and square-fate auxiliary targets (vision ideas, 2026-11-14)
 - **type:** ELO. **phase:** 4. **runtime cost:** none (training only).
@@ -3718,6 +3721,7 @@ proposal are placeholders, screened before use.
 - **plan (owner, 2026-11-15):** in the next retrain's recipe as an arm (with its same-recipe control).
 - **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
 - **status:** planned (next retrain).
+- **2026-11-24 (owner):** the same factorised form applies to any routed or bucketed heads if they are revived (note in idea 187).
 
 ### 205. Correction updates toward the mean of the raw and corrected eval (rare-ideas survey rare.md RI-31)
 - **type:** ELO. **phase:** 4. **runtime cost:** possible.
@@ -3836,6 +3840,9 @@ Common fields: **phase** after Phase 4; **source** ML frontier pipeline, 2026-11
   **ORIGINALITY.md must credit it if this is ever built.**
 - **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 3, §3).
 - **status:** post-Phase-4 backlog (owner, 2026-11-17), before idea 181; not started.
+- **2026-11-24 (owner), a note beside the correction-table items (post-Phase-4):** try an opponent-queen-present bit in the
+  correction tables' key (the key doubles for that bit; whether the queen's presence changes what the tables should
+  learn is the question).
 
 ### 211. A longer label horizon: TD(0.97) (ML frontier idea 4)
 - **type:** ELO (training labels). **phase:** after Phase 4. **runtime cost:** none.
@@ -4226,3 +4233,28 @@ Common fields: **phase** after Phase 4; **source** ML frontier pipeline, 2026-11
   recent volatility and allowed to be asymmetric, chosen to minimise the expected re-search cost; then a design R SPRT.
 - **related:** idea 202 (root LMR keyed to the aspiration window); the final retune's AspirationHalfWidth (group G4).
 - **status:** post-Phase-4 backlog (owner, 2026-11-23); not started.
+
+### 228. Perspective-flip tempo gap (ELO, search and network, post-Phase-4)
+- **type:** ELO. **phase:** after Phase 4 (owner, 2026-11-24). **runtime cost:** one extra output-layer pass where it is
+  used (no accumulator work).
+- **idea:** swap the two accumulator halves and run only the output layer to get E(flipped), the static evaluation if
+  the side to move passed; tempo_gap = E(stm) + E(flipped). Hypothesis: a large gap, after controlling for phase and
+  eval band, marks positions where initiative is building, i.e. slide onsets (idea 224); there, relax LMR and LMP on
+  quiet moves.
+- **offline kill test first, thresholds declared before running:** positions quiet, not in check, queens on, static
+  eval in [-250, -50] (the conversion-and-defense analysis's positions, docs/research/conversion-defense/, may be used
+  as test data, never for training). (a) The AUROC of the residual gap for slide-onset against matched non-slide
+  positions: **kill below 0.55**. (b) The Spearman correlation of the residual gap with the forward 8-ply drift and
+  with |static - deep|: **kill below 0.1**. Both reported after controlling for the improving flag and the correction
+  size. **Only if (a) or (b) passes:** (c) whether a high gap predicts a wide gap between the best and the second-best
+  quiet move (needs sibling searches).
+- **related:** idea 224 (eval-slide inflection mining, the slide-onset labels), idea 225 (failure forensics).
+- **status:** post-Phase-4 backlog (owner, 2026-11-24); not started.
+
+### 229. Rescue-weighted history bonus (ELO, search, low priority)
+- **type:** ELO. **phase:** after Phase 4, low priority (owner, 2026-11-24). **runtime cost:** about none (one
+  difference at a cutoff).
+- **idea:** scale a quiet move's history bonus at a cutoff by how far the static evaluation was below the bound, so a
+  move that "rescued" a node the evaluation had given up on learns more than one that confirmed it.
+- **test:** one design R SPRT.
+- **status:** post-Phase-4 backlog (owner, 2026-11-24); not started.
