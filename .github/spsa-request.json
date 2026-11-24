@@ -3,11 +3,11 @@
  "draw_pairs": 1,
  "games": 1600,
  "hash": 16,
- "iteration": 8,
+ "iteration": 9,
  "label": "spsa-g1a",
- "openings": 2058401,
- "params": "RfpMaxDepth=6.652:1.000,RfpMargin=45.000:15.000,NullMinDepth=2.015:1.000,FutilityMaxDepth=7.020:1.000,FutilityOffset=92.202:18.200,FutilityGrowth=49.149:7.500,NullSurplusPerPly=297.321:7.800,AspirationHalfWidth=11,DriftLimit=343,FollowWeight=5,HistoryKeepQuarters=3,HistorySkipMaxDepth=4,LinearBonusPerPly=140,LmpImprovingEighths=2,LmpMaxDepth=5,LmpQuietAllowance=5,LmrMinDepth=3,LmrMinMove=3,MinorDriftShare=38,QuiesceMoveCap=3,ReplyWeight=6,SeePruneMaxDepth=6,TakeWeight=4",
+ "openings": 2059201,
+ "params": "RfpMaxDepth=6.496:1.000,RfpMargin=45.000:15.000,NullMinDepth=2.000:1.000,FutilityMaxDepth=7.136:1.000,FutilityOffset=90.817:18.200,FutilityGrowth=49.337:7.500,NullSurplusPerPly=296.910:7.800,AspirationHalfWidth=11,DriftLimit=343,FollowWeight=5,HistoryKeepQuarters=3,HistorySkipMaxDepth=4,LinearBonusPerPly=140,LmpImprovingEighths=2,LmpMaxDepth=5,LmpQuietAllowance=5,LmrMinDepth=3,LmrMinMove=3,MinorDriftShare=38,QuiesceMoveCap=3,ReplyWeight=6,SeePruneMaxDepth=6,TakeWeight=4",
  "shards": 16,
- "stage": 8,
+ "stage": 9,
  "tc": "8+0.08"
 }
