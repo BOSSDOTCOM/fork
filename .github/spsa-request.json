@@ -3,11 +3,11 @@
  "draw_pairs": 1,
  "games": 1600,
  "hash": 16,
- "iteration": 7,
- "label": "spsa-g3",
- "openings": 2022401,
- "params": "LinearBonusPerPly=136.989:18.000,HistoryKeepQuarters=3.000:1.000,ReplyWeight=5.576:1.000,FollowWeight=5.004:1.000,TakeWeight=3.913:1.000,HistorySkipMaxDepth=3.900:1.000",
+ "iteration": 8,
+ "label": "spsa-g1b",
+ "openings": 2036001,
+ "params": "LmpMaxDepth=5.041:1.000,LmpQuietAllowance=5.305:1.700,LmpImprovingEighths=2.304:1.000,SeePruneMaxDepth=6.126:1.000,QuiesceMoveCap=3.498:1.000",
  "shards": 16,
- "stage": 7,
+ "stage": 8,
  "tc": "8+0.08"
 }
