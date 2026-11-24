@@ -682,6 +682,7 @@ tuned by SPSA.
 
 - **2026-11-14 (owner): the revamp** (docs/research/idea23-revamp-2026-11-14.md) is recorded and placed as a **final pre-TCEC polish step**, after Lazy SMP, the removal round, the final retune and the TCEC fixes; traces from the final engine under TCEC-like conditions (many threads, long TC; ideally during the rented-hardware dry run); no engineering until then. Decisions: target order time management, then row-choice states, then the calibration layer only if idea 180 gains; simulator coefficient fitting approved for the time-management target only (candidates; games decide); the 12-arm one-stage screen batch with three predicted-loser arms approved; E2's clamp fix included in the simulator once its LTC decides; the stage-0 simulator validation reported before tokens or GitHub time are spent.
 - **2026-11-14 (owner, about 12:20 PM EST): E2 adopted** (`UseDeepTimeDepth` on, the time scale's depth clamped at 60, not 19; idea 185) under the non-regression standard, its LTC capped undecided at +2.16 ± 3.47 Elo; "Include it in idea 23's simulator when that work starts": the simulator's time-management model uses the clamp at 60 (the engine's rule since the adoption).
+- **2026-11-23 (owner): a note for the Phase 5 / idea 23 time-management plan.** Candidate inputs should be **scale-invariant**: the ratio of nodes between iterations, the best move's share of the root's nodes, the gap between the best and second root scores from the aspiration passes, PV volatility (best-move changes across iterations), and the fraction of the remaining time. **No multi-PV** (it costs speed). **Validate at long time controls and with threads**, not only at STC.
 
 ## 24. TT victim policy under real table pressure
 
@@ -4156,3 +4157,35 @@ Common fields: **phase** after Phase 4; **source** ML frontier pipeline, 2026-11
   searches"); the clang-stats preset is in no CI job, so the failures went unnoticed. The fix of those two cases is a
   separate task (owner, 2026-11-23).
 - **status:** post-Phase-4 backlog (owner, 2026-11-23); not started.
+
+### 224. Eval-slide inflection mining (ELO, training data)
+- **type:** ELO (training data). **phase:** after Phase 4 (owner, 2026-11-23; Phase 4's scope is frozen: nothing built
+  or queued now). **runtime cost:** none (data only).
+- **idea:** from **Fork-pure games only** (Fork against Fork, including odds sparring such as STC against LTC; never
+  the SF19 games, which are test-only), find games where Fork's eval **slid steadily** (for example -0.4 to -2.0 over
+  10-15 moves) **with no single tactical drop**. Relabel backward from the collapse with a pinned Fork at 1,000,000
+  nodes plus Syzygy, and keep the **earliest positions where the deep label already shows the slide but the static
+  eval does not**.
+- **test:** train them as **one capped arm (1-2% of the snapshot)** beside a same-recipe control, **2 seeds**; the
+  fixed-node screen, then STC [0, 5]; run the UHO diagnostic.
+- **cheapest first test:** a pilot of Fork-vs-Fork UHO games: count how many such inflection positions it yields, and
+  the static-versus-deep gap at them.
+- **definitions to fix before the pilot (coordinator's note, not decided):** the slide's thresholds; "no single
+  tactical drop" as a cap on any one-move eval change; how odds-sparring games mark the handicapped side; that the arm
+  is labelled by the deep score on the recipe's usual score/result blend.
+- **related:** idea 52 (ensemble-disagreement active learning: disagreement oversampling); retrain 8c's combined
+  queens-on arm A2 (about -3 Elo, the owner's figure); the conversion-and-defense report
+  (docs/research/conversion-defense/report.md on research/conversion-defense; DESIGN decisions log, 2026-11-10).
+- **status:** post-Phase-4 backlog (owner, 2026-11-23); not started.
+
+### 225. Standing failure forensics after every gauntlet (TOOLING)
+- **type:** TOOLING. **phase:** after Phase 4; **may be built during Phase 4 on idle capacity only if it touches no
+  engine code and needs no GitHub stages, and only after asking the owner** (owner, 2026-11-23).
+  **runtime cost:** none (offline analysis).
+- **idea:** after every gauntlet, automatically classify Fork's **lost games and draws from ahead**: horizon errors
+  (an eval jump right after a reduced quiet move), slow eval slides (the deep search diverging from the static eval
+  over many plies), time trouble, and endgame conversion failures. **Deep relabels and rules, no LLM.** Output a short
+  report beside the gauntlet report.
+- **related:** idea 224 (its slide detector and relabelling can be shared); the gauntlet reports; the
+  conversion-and-defense report.
+- **status:** post-Phase-4 backlog (owner, 2026-11-23); not started (building it early needs the owner's go).
