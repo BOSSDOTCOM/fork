@@ -4145,3 +4145,14 @@ Common fields: **phase** after Phase 4; **source** ML frontier pipeline, 2026-11
   if this is ever built.**
 - **sources:** ML frontier pipeline, 2026-11-16 (§4).
 - **status:** needs owner decision (owner, 2026-11-17); not started.
+
+### 223. A compile-only CI job for the stats build (TOOLING)
+- **type:** TOOLING. **phase:** after Phase 4 (owner, 2026-11-23: on the post-Phase-4 list). **runtime cost:** none
+  (CI only).
+- **idea:** build the clang-stats preset (FORK_SEARCH_STATS) in CI, compile only, so the stats build cannot break
+  unseen; its suite can follow once it passes.
+- **why:** on 2026-11-22 B1's agent found two search_stats cases failing on phase-4 3875ca9f before its own change
+  ("the feature stack's tally matches hand counts"; "X2 histograms add up, and history carries over between
+  searches"); the clang-stats preset is in no CI job, so the failures went unnoticed. The fix of those two cases is a
+  separate task (owner, 2026-11-23).
+- **status:** post-Phase-4 backlog (owner, 2026-11-23); not started.

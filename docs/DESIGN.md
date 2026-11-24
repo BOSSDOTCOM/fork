@@ -1632,6 +1632,21 @@ on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
   below 1 frozen as "screened flat"). The draws, shards, workflow and driver
   are the tune's, unchanged. The S1 spec: `tools/github/spsa-s1-screen.json`
   (32 class (a) candidates, 8 iterations of 1,600 STC games).
+- **The retune's group runs** (owner, 2026-11-22 and 2026-11-23; the groups
+  from S1): `tools/github/spsa-g3.json`, `spsa-g1b.json` (wave 1, one per
+  lane), `spsa-g2g4.json` (wave 2) and `spsa-g1a.json` (wave 3, with
+  NullSurplusPerPly), tune mode at the table's defaults, c as S1's,
+  iterations max(8, ceil(1.9 p)) of 1,600 games, A 10% of the pairs. A
+  later wave starts from the earlier waves' values by `spsa.py init ...
+  --carry EARLIER`: each named run must be a finished tune of the same
+  commit whose final.json is its log's result; its final values and the
+  fixed options it played become this run's fixed options (both sides), and
+  sources that disagree are refused; spec.json records each source's
+  final.json SHA-256. `opening_limit` (optional) ends a run's share of the
+  reserve, with room for abandoned stages; dispatch refuses past it. Two
+  drivers at once: spsa.yml's concurrency group is per stage (one shared
+  group serialised the lanes), and a push refused because the other driver
+  moved spsa-run is rebuilt on the new tip (3 tries, never forced).
 - **Never in SPSA:** the time-management parameters (the iteration rule and
   the time budget, refused by name) and the eval scale (not a parameter).
 - **Openings:** the tuning reserve, lines 2,000,001 to 2,632,036 of the
@@ -4204,7 +4219,8 @@ CI, orchestrator's ruling 2026-11-07) runs bench_parity and the
 The engine reads its report switches from environment variables once, at
 start-up: `FORK_STATS_REPORT` (a cumulative counter dump after each search),
 `FORK_ITERATION_TRACE` (one line per finished iteration), `FORK_PRUNE_LEDGER`
-(the decision ledger's sampling rate). Line formats:
+(the decision ledger's sampling rate; with `FORK_NULL_LEDGER` also its
+null-move rows, B1). Line formats:
 `tools/measure/engine_lines.py`. No allocation or exceptions in the
 recursion, even in stats builds; the dump's lines are integers only.
 
@@ -4268,6 +4284,23 @@ guards fails them). Rows: `prune_ledger` lines; analysis:
 `tools/measure/prune_ledger_fit.py` (I1's probit with a tail floor, by
 depth, with the declared reading in its docstring).
 
+**B1, the eval-error check (owner-approved 2026-11-22; for the final
+retune's group G1a).** With `FORK_NULL_LEDGER=1` beside
+`FORK_PRUNE_LEDGER=N` the ledger also samples the null move's candidates
+(every condition holds, so the null search is tried) and searches the node
+once more with the null move off there (`LedgerForce::NullOff`), before the
+real null search; a `prune_ledger null` row follows that search (the cut is
+wrong when the arm fails low, missed when the arm fails high and the null
+search did not cut). Without it the ledger prints exactly X10's rows. The
+counters `ledger_null_candidates` and `ledger_wide_windows` (ledger arms
+entered on a window wider than one point: 0 at the defaults, since every
+pruning site is a non-PV node on a zero window, so no arm returns an exact
+score). Analysis: `tools/measure/eval_error.py` (the pruning eval minus each
+arm's result, by site, bound and depth; the calls at today's margins and
+margin sweeps), results in docs/research/b1-eval-error-2026-11-22.md. Like
+every offline rule it informs the retune's ranges only (Testing setup,
+2026-11-12).
+
 **Idea 59 step 1, evaluations near the window** (owner's request,
 2026-11-07, for the Boundary Refiner's gate). At each static evaluation the
 stats build records the gap between the evaluation and the nearest finite
@@ -4311,6 +4344,7 @@ in its code comment, as the orchestrator asked on 2026-11-07):
 | X10 games and budget | 120 games (seed 20261109, disjoint from X2's and X6's), every test-engine position, 200,000 nodes | I1's cheapest first experiment (120 STC games at 200k) |
 | X10 gap bins | 20 cp for rates, 10 cp for the fit | 20 cp resolves the margin's neighbourhood (RFP's margin grows 80 cp per ply); the finer fit bins lose little to binning |
 | X10 bootstrap | 200 rounds for the margin rate, 50 for the fitted sigma, seed 20261109 | the sigma rounds each refit by Nelder-Mead in pure Python |
+| B1 sampling and positions | 1 in 8 candidates (`FORK_PRUNE_LEDGER=8`, `FORK_NULL_LEDGER=1`); the bench and 300 evolve positions (`random.Random(20261122).sample` of the split "evolve" of tools/evolve/positions.jsonl, file order) at depth 12, cleared state, Hash 16, one thread, no tablebases | audit-1's "300 evolve positions at depth 12" set is not recorded, so a stated seeded rule replaces it; 1 in 8 gave 1,475,175 rows in about 3 minutes (2026-11-22) |
 | X10 arm score clamp | +-2,000 cp, mate and tablebase arms flagged | only the side of beta matters; the clamp keeps the rows integer and short |
 | Idea 59 gap bins | 1 cp to 255, 64 cp to 4,095, one overflow bin (317) | every margin up to 255 cp counts exactly (the owner's 10, 25, 50, 100 among them); the coarse bins keep the tail's shape |
 | Idea 59 window | the node's alpha and beta at the evaluation (main search: after mate distance pruning) | the window a gate would compare against at that moment; mate and tablebase bounds give no gate |
@@ -4804,6 +4838,7 @@ models are scored on the half of the games they were not fitted on.
 | 2026-11-22 | **The final retune's open questions answered (owner, 2026-11-22, accepting the coordinator's recommendations; docs/research/final-retune-expansion-2026-11-15.md §6).** (1) **Freeze the default network (r3kr1) before step 19:** G1a and G4 are eval-scale dependent, and no network bet is ready to beat r3kr1 before TCEC. **Added by the owner: a later promotion (e.g. the 8d retrain) needs a short re-check of the net-sensitive margin constants (G1a's eval margins and G4's correction and aspiration terms) before it is adopted, not a full retune.** (2) **Screen S1** (one zero-gain SPSA over the 32 class (a) candidates, c_screen = min(2c, distance to the bound), theta fixed, 8 STC stages): one run of about 2.4 lane-hours decides the groups, and it reuses spsa.yml's per-pair draws. (3) **c by the declared fallback** (1 unit for integers, 2 table steps for margins), no firing counters: c is a tuner setting, not a value, and counters would mean an engine build for 33 parameters. (4) **ε 0.5 Elo per group:** R14's validated setting, on which the cost totals rest. (5) **LmrCheckRelief frozen** (it stays a literal; converting it is an engine change for one dimension). **HistoryKeepQuarters, LmpImprovingEighths and QuiesceMoveCap keep today's units** (the coordinator's default, **approved by the owner 2026-11-22**: finer units are new parameters and engine changes). (6) **HistoryBonusFactor and LmrCorrectionStrength out (inert); CutNodeLmrSixtyFourths in** (with LmrNotImprovingSixtyFourths, converted 2026-11-15). (7) FR §8's open items (the coordinator's defaults, **approved by the owner 2026-11-22**): **LmrDivisorTenths in the LTC pass** (R24's list; class (b) in the inventory); **the validation SPRTs on design R** (as R14 ran); **no R24 extra dimensions** (the batch-4 dimensions were dropped 2026-11-15; shapes, multiplier and malus ratio would add dimensions and cost before a gain is shown). (8) **G5 split over the two lanes** (G5a extensions and IIR, G5b LMR divisor, history and ProbCut): about 10.7 h of wall time against 18.7 h on one lane. (9) **The VLTC check runs beside the LTC SPRT:** saves about 8 h of wall time; wasted only if the LTC SPRT fails. (10) **No separate LTC check of HistoryKeepQuarters** (the coordinator's default, **approved by the owner 2026-11-22**); the validation's LTC sign guard and the VLTC check already test the STC pass's values at longer time controls, and a VLTC warning names it as a revert candidate. (11) **The VLTC check at 1 thread per engine,** as planned (the retune runs at Threads 1; whether class (a) optima hold at TCEC's thread counts stays UNVERIFIED). **Group order (owner, 2026-11-22): the groups holding the RFP, futility and null-move margins (G1a) run last among the STC groups**, after B1's offline check of eval-versus-search error by bound level at those sites (stats build only): wave 1 G3 (lane A, 18 iterations) and G1b (lane B, 14), wave 2 G2 and G4 in parallel (8 each), wave 3 G1a (16; G1b still precedes G1a, as §3.3 wanted for futility and LMP). Cost (expected case, before the screen trims groups; iter_g = max(8, ceil(1.9 p)), iterations of 800 pairs, about one STC stage each): critical path 18 + 8 + 16 = 42 iterations against the plan's 18 + 16 = 34, about 8 iterations or 2.5 h more wall time at about 19 min an iteration, with the same lane-hours (the second lane is free during wave 3, about 5 h, for other work such as idea 212). |
 | 2026-11-22 | **The owner's other decisions after the 10:25 AM power-off (2026-11-22).** (1) **Idea 212's time odds:** the per-engine time-control harness change is built now by its own agent (branch tools/per-engine-tc); time odds (the same engine, full time against half: 8+0.08 vs 4+0.04, then 40+0.4 vs 20+0.2) run on lane B tonight while S1 runs on lane A; **the retune takes priority on any lane conflict.** (2) **g4e is standard data;** its adjudication (the standard 700 cp over 8 plies, not g4d's 1,500 over 16) is recorded in its manifest and the data notes. (3) **The VM filler output on r3kr1 stays on the stopped VM** (fork-worker-1 TERMINATED 10:59 AM, its 30 GB disk kept) and is pulled home by 2027-01-25, before the trial ends. (4) **The 30-minute sweep is committed** (tools/jobs/sweep.sh, 06743236): it leaves the VM to gcp.py sweep, which never restarts a VM wanted stopped. (5) Disk: deletions are measured and listed first; nothing is deleted without the owner. (6) The ghost gauntlet run 43098344274 (queued, 0 jobs since 2026-11-11) cannot be cancelled, force-cancelled or deleted (GitHub: "completed", "not queued yet", HTTP 403); left as is, the drivers ignore it. |
 | 2026-11-22 | **Per-side time controls in the GitHub SPRT path (owner's order, for idea 212's time odds, plan M2: the same engine at full time against half time).** Before, tools/cloud/run_shard.sh passed `-each tc=TC` to fastchess, which overrides an engine's own `tc=`, so both sides always played one clock. Now a `tc=SECONDS+INCREMENT` among BASE_OPTS or TEST_OPTS (at most one each; the custom form's existing per-side options, as idea 212's node odds passed `nodes=N`) is that engine's own clock: run_shard.sh then puts no tc in `-each`, gives the other engine `tc=TC`, and records `base_tc` and `test_tc` in each shard's meta; malformed or doubled values are refused before fastchess starts. sprt.yml is unchanged apart from its input descriptions (the clocks travel in base_opts and test_opts). tools/github/sprt_run.sh (every kind but the tuning build): parses and checks them, names them in the log's header, records them through the declared design's base_opts and test_opts, refuses the dispatch when REF's run_shard.sh lacks the line `# capability: per-engine-tc` (it would play TC on both sides), and stops a stage, unmerged, whose shards do not record both clocks. TC still names a kind's time control class (games, Hash, caps). **Without a tc= in either nothing changes:** the fastchess command line is byte for byte the one before (tools/cloud/test_run_shard.sh compares it with the list taken from 8d186ea8's run_shard.sh) and so is the dispatch (tools/github/test_sprt_run.sh). A real check (fastchess 1.8.2-alpha f618e34, the cloud's pinned build, through run_shard.sh, 4 games, base tc=1+0.01 against test 2+0.02): every PGN records WhiteTimeControl/BlackTimeControl per side as asked, mean move time base 0.025 s against test 0.054 s, no time losses. Branch tools/per-engine-tc. |
+| 2026-11-23 | **Idea 212's speed gate, the retune's groups, and B1 (owner, 2026-11-23).** (1) **Speed gate, from idea 212's result** (time odds: Elo per time doubling STC +118.50 +/- 6.67, LTC +95.79 +/- 6.06; against the fixed pair S512ppr2 vs S512+PP, STC +15.86, LTC +25.52, the ratio fell from 7.47 to 3.75, 49.8%, past the pre-registered 25% line): **a net within about 10% of today's speed is judged at LTC directly** (no speed-gate pricing); **screening prices speed at about 96 Elo per doubling** (the LTC figure) instead of 118. A VLTC point is a later confirmation, not a blocker. (2) **The retune's groups after screen S1** (spsa-s1-screen on 3875ca9f, 6,400 pairs; docs: MORNING 2026-11-23): approved in the order **G3 + G1b, then G2 + G4 (merged: G2 had 2 members), then G1a**; the specs are built and dry-run, and the runs start once C: is back above its 20 GB reserve. **NullSurplusPerPly joins G1a as a 7th member** (screened ambiguous, z -1.47, frozen only by the group-size rule; B1 found it coupled to RfpMargin and RfpMaxDepth). Before G1a starts, the coordinator reports B1's main finding (eval-versus-search error at the RFP, futility and null-move sites by bound level, after correction history) to the owner. (3) **HistoryKeepQuarters is tuned within 0-4** (screen z +11.8, today's 2 two steps below the top); if the SPSA ends at 4, the coordinator explains what 4 means for history ageing and runs a head-to-head SPRT against today's value before adopting. (4) B1's measurement script renames `RFP_MARGIN` (an exact name match in Berserk) to `CURRENT_RFP_MARGIN` before B1 merges with the next CI. (5) The two failing stats-build cases get a small fix task; a compile-only CI job for the stats build joins the post-Phase-4 backlog (ideas.md idea 223). |
 
 ## 7. Performance doctrine (governs every phase)
 

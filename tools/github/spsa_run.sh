@@ -22,7 +22,8 @@
 # only after scripts/scan-push.sh, the push gate, passes it), and the run is the one whose head commit is
 # that request commit and whose title matches; dispatch uses workflow_dispatch with the same inputs. A
 # restart with a recorded push (push_sha) and no recorded run adopts that commit's run, or pushes the same
-# commit again.
+# commit again. Two SPSAs may drive at once (two lanes share spsa-run): a push refused because the other
+# driver moved spsa-run is rebuilt on the new tip and pushed again (3 tries, never forced).
 #
 # Rules, as tools/github/sprt_run.sh's (2026-11-02 and 2026-11-05):
 # - it runs only under the job supervisor (tools/jobs/jobctl.py start github NAME -- ...); started any
@@ -203,10 +204,22 @@ while :; do
       if [ -z "$sha" ]; then
         sha=$(push_request "$folder" "$title") || stop "stage $stage: the request commit could not be built"
       fi
-      bash scripts/scan-push.sh "$sha" >>"$data/driver.log" 2>&1 ||
-        stop "stage $stage: the push gate (scripts/scan-push.sh) blocks $sha"
-      git push -q "$remote" "$sha:refs/heads/spsa-run" >>"$data/driver.log" 2>&1 ||
-        stop "stage $stage: pushing $sha to $remote's spsa-run failed (never forced)"
+      # Two SPSAs on two lanes share spsa-run (the final retune's wave 1, owner 2026-11-22): the other driver
+      # may move it between this request's build and its push, which is then refused as not a fast-forward.
+      # A refused request is rebuilt on the new tip (never forced) and pushed again, up to 3 tries; one that
+      # landed after all (the tip contains it) is not pushed again.
+      for try in 1 2 3; do
+        bash scripts/scan-push.sh "$sha" >>"$data/driver.log" 2>&1 ||
+          stop "stage $stage: the push gate (scripts/scan-push.sh) blocks $sha"
+        git push -q "$remote" "$sha:refs/heads/spsa-run" >>"$data/driver.log" 2>&1 && break
+        if git fetch -q "$remote" refs/heads/spsa-run 2>/dev/null &&
+          git merge-base --is-ancestor "$sha" FETCH_HEAD 2>/dev/null; then
+          break
+        fi
+        [ "$try" -lt 3 ] || stop "stage $stage: pushing $sha to $remote's spsa-run failed 3 times (never forced)"
+        say "stage $stage: the push of $sha was refused (spsa-run moved on?): the request is rebuilt on the tip"
+        sha=$(push_request "$folder" "$title") || stop "stage $stage: the request commit could not be rebuilt"
+      done
       for _ in $(seq 30); do
         sleep $((POLL < 10 ? POLL : 10))
         mine=$(titled "$title" 0 "$sha")

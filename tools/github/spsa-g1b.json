@@ -1,0 +1,26 @@
+{
+ "source": "The final retune, G1b (move-count and SEE pruning), wave 1, lane B (owner 2026-11-23: the screen's G1b; screen S1, spsa-s1-screen on 3875ca9f, 6,400 pairs). Tune mode. Starts and bounds: the table's defaults and ranges at the tuned commit (src/tune/params.hpp; none given here, so init reads them at the commit; at 3875ca9f, the screen's commit and phase-4's engine on 2026-11-23: LmpMaxDepth 4 (1-8, 1), LmpQuietAllowance 8 (3-24, 1; c calibrated), LmpImprovingEighths 1 (0-4, 1), SeePruneMaxDepth 6 (3-12, 1), QuiesceMoveCap 2 (1-6, 1)). c: exactly the screen's (tools/github/spsa-s1-screen.json): spsa_calibrate.py's 2026-11-08 values on e5dbaab where a firing counter exists, else the declared fallback (owner 2026-11-22): 1 unit for a step-1 parameter, 2 table steps otherwise. Settings (final-retune-expansion-2026-11-15.md section 3.2, owner 2026-11-22): loss_budget 0.5 Elo per group, pair_sd 0.204 (STC), iterations max(8, ceil(1.9 p)) of 1,600 games (16 shards x 100, 800 pairs), stability_offset 10% of the run's pairs, alpha 0.602, c fixed, steps clamped to 0.5 c, STC 8+0.08, Hash 16, Threads 1. Openings: the tuning reserve after the screen (spsa-s1-screen's state.json cursor 2,016,801), the four groups' shares consecutive in wave order (G3, G1b, G2G4, G1a), each its planned pairs plus 3,200 spare lines (4 abandoned stages), opening_limit its share's last line. No carry (wave 1).",
+ "params": [
+  {"name": "LmpMaxDepth", "c": 1},
+  {"name": "LmpQuietAllowance", "c": 1.7},
+  {"name": "LmpImprovingEighths", "c": 1},
+  {"name": "SeePruneMaxDepth", "c": 1},
+  {"name": "QuiesceMoveCap", "c": 1}
+ ],
+ "fixed": {},
+ "iterations": 10,
+ "games": 1600,
+ "shards": 16,
+ "draw_pairs": 1,
+ "tc": "8+0.08",
+ "hash": 16,
+ "loss_budget": 0.5,
+ "pair_sd": 0.204,
+ "gain_exponent": 0.602,
+ "stability_offset": 800,
+ "clamp_c": 0.5,
+ "c_decay": 0.0,
+ "average_tail": 0.3,
+ "opening_reserve": 2029601,
+ "opening_limit": 2040800
+}

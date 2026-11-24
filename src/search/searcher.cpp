@@ -25,6 +25,7 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
   if (const char* trace = std::getenv("FORK_ITERATION_TRACE"))
     trace_iterations_ = trace[0] && trace[0] != '0';
   if (const char* every = std::getenv("FORK_PRUNE_LEDGER")) ledger_every_ = std::strtoull(every, nullptr, 10);
+  if (const char* null = std::getenv("FORK_NULL_LEDGER")) null_ledger_ = null[0] && null[0] != '0';
   if (const char* drift = std::getenv("FORK_DRIFT_REPORT")) drift_report_ = drift[0] && drift[0] != '0';
   if (const char* sites = std::getenv("FORK_EVAL_SITES")) {
     char* rest = nullptr;
@@ -546,9 +547,31 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // Null move pruning (T13): if passing still fails high on a reduced
   // search, the node is taken to fail high.
   if (switches.use_nmp && can_prune_node && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
-      prune_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
+      prune_eval >= beta &&
+      has_non_pawn_material(pos, pos.side_to_move()) FORK_STAT_GATE(&&force != LedgerForce::NullOff)) {
     const int surplus_plies = std::min((prune_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
-    const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
+    const int null_depth = depth / 2 - 1 - surplus_plies;  // 0 or less: the quiescence search
+#ifdef FORK_SEARCH_STATS
+    // B1, the ledger's null-move rows (FORK_NULL_LEDGER): at a sampled
+    // candidate (every condition holds, so the null search is tried), the
+    // node is first searched with the null move off here; the cut (taken
+    // when the null search below reaches beta) is wrong when that search
+    // fails low, and a missed cut when it fails high. The row follows the
+    // real null search, which the side search leaves as it was.
+    bool null_row = false;
+    int null_arm = 0;
+    std::uint64_t null_arm_nodes = 0;
+    if (null_ledger_ && ledger_every_ && !ledger_active_) {
+      ++counters.ledger_null_candidates;
+      if (ledger_sampled(key)) {
+        const int saved_eval = f.static_eval;
+        null_arm = ledger_side_search(alpha, beta, depth, ply, LedgerForce::NullOff, null_arm_nodes);
+        f.static_eval = saved_eval;
+        if (stopped_) return 0;
+        null_row = true;
+      }
+    }
+#endif
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)
     play_null(ply);
     frames_[ply + 1].after_null = true;
@@ -558,6 +581,17 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     frames_[ply + 1].after_null = false;
     pos.unmake_null();
     if (stopped_) return 0;
+#ifdef FORK_SEARCH_STATS
+    if (null_row) {
+      std::fprintf(stderr, "prune_ledger null|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%llu|%d\n", depth, ply,
+                   prune_eval - beta, f.static_eval - beta, null_depth,
+                   tt_hit ? static_cast<int>(hit.bound) : 0, tt_hit ? static_cast<int>(hit.depth) : -1,
+                   game_phase(pos), score >= beta ? 1 : 0, std::clamp(score - beta, -2000, 2000),
+                   std::clamp(null_arm - beta, -2000, 2000), static_cast<unsigned long long>(null_arm_nodes),
+                   is_tb_or_mate(null_arm) || is_tb_or_mate(score) ? 1 : 0);
+      ++counters.ledger_rows;
+    }
+#endif
     if (score >= beta) {
       FORK_STAT(++counters.null_cuts);
       return is_tb_or_mate(score) ? beta : score;  // a mate found after passing is not trusted
@@ -1338,6 +1372,7 @@ int Searcher::ledger_side_search(int alpha, int beta, int depth, int ply, Ledger
   features_.set_tally(ledger_saved_tally_);
 #endif
   counters.ledger_side_nodes += side_nodes;
+  counters.ledger_wide_windows += beta - alpha > 1;  // B1: an arm that could return an exact score
   return score;
 }
 #endif
