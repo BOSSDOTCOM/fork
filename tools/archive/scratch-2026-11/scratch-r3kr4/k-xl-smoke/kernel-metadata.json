@@ -1,0 +1,22 @@
+{
+  "id": "bossdotcom/fork-bakeoff-r3-xl-smoke",
+  "title": "fork-bakeoff-r3-xl-smoke",
+  "code_file": "bakeoff_r3.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "bossdotcom/fork-g3bcd",
+    "bossdotcom/fork-r8b-blend-1",
+    "bossdotcom/fork-g4b",
+    "bossdotcom/fork-r8c-td",
+    "bossdotcom/fork-r8c-filler",
+    "bossdotcom/fork-slice1b",
+    "bossdotcom/fork-r8b-g4",
+    "bossdotcom/fork-r3-kr4-init"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
