@@ -127,7 +127,8 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
    check itself: a separate research subagent shallow-clones the engines
    into a temporary folder, reports only "match / no match" per name
    (never code lines), and deletes the clones immediately. No engine
-   source, copied file or identifier dump is kept on this machine.
+   source, copied file or identifier dump is kept in Fork's repository,
+   its worktrees, or any folder a Fork session works in.
    **Every search constant needs a recorded justification** (reasoning,
    quick sweep or measurement, in the phase spec's "Search constants"
    table), and the originality-checker screens new or changed constants
