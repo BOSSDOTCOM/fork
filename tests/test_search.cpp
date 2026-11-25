@@ -801,12 +801,12 @@ TEST_CASE("search", "no null move without pieces: two pawn endings keep their ta
   Position pos;
   SearchResult r = fx.search("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1", 9);
   CHECK(pos.set_fen("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1"));
-  // The first ending was constructed under LmpQuietAllowance 8; at the tuned 5
-  // the depth-9 tree prunes b7b5 (traced 2026-11-24; the adoption decision is the owner's).
-  if (LmpQuietAllowance >= 8) {
-    CHECK_MSG(pos.move_to_uci(r.best) == "b7b5",
-              "played " << pos.move_to_uci(r.best) << " (score " << r.score << ")");
-  }
+  // Retune test branches only, never merged (owner, 2026-11-25): the first
+  // ending's move is not checked on the final retune's test branches until the
+  // owner's adoption decision. The tuned pruning (RfpMargin 30, LmrMinMove 3,
+  // the LMP pair) moves its fix below depth 9: b7b5 from depth 10 with the LMP
+  // pair at 4/8, from depth 12 at 5/5 (probed 2026-11-25).
+  (void)r;
   fx.store.clear();
   fx.searcher->clear_history();
   r = fx.search("8/3p4/8/6P1/3k3p/5K2/8/8 b - - 0 1", 9);

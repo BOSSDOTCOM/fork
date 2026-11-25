@@ -53,8 +53,8 @@
   X(LmrMinMove, 3, 1, 8, 1)                    \
   X(LmrDivisorTenths, 45, 23, 90, 3)           \
   X(LmrCorrectionStrength, 64, 0, 128, 6)      \
-  X(LmpMaxDepth, 5, 1, 8, 1)                   \
-  X(LmpQuietAllowance, 5, 3, 24, 1)            \
+  X(LmpMaxDepth, 4, 1, 8, 1)                   \
+  X(LmpQuietAllowance, 8, 3, 24, 1)            \
   X(LmpImprovingEighths, 2, 0, 4, 1)           \
   X(FutilityMaxDepth, 7, 3, 12, 1)             \
   X(FutilityOffset, 88, 30, 200, 8)            \
