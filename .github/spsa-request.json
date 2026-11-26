@@ -3,11 +3,11 @@
  "draw_pairs": 1,
  "games": 1664,
  "hash": 64,
- "iteration": 2,
- "label": "spsa-g5a",
- "openings": 2068065,
- "params": "SingularMinDepth=6.448:1.000,SingularEntrySlack=2.294:1.000,SingularMarginPerPly=6.180:1.000,NoMoveReduceMinDepth=7.519:1.000",
+ "iteration": 3,
+ "label": "spsa-g5b",
+ "openings": 2078049,
+ "params": "LmrDivisorTenths=42.150:6.000,LmrHistoryPerPly=8270.580:1500.000,CaptureProbeMinDepth=9.540:1.000,CaptureProbeReduction=4.358:1.000,CaptureProbeMargin=75.945:12.000",
  "shards": 16,
- "stage": 2,
+ "stage": 3,
  "tc": "40+0.4"
 }
