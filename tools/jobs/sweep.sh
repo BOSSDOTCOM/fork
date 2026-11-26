@@ -32,23 +32,12 @@ pending() {  # LANE_FOLDER: every item without a .done marker, SKIPPED ones mark
 }
 
 echo "== $(TZ=EST5 date '+%I:%M %p EST')  free RAM $(powershell.exe -NoProfile -Command '[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)' | tr -d '\r') GB, C: free $(df -B1 /c | awk 'NR==2{printf "%.1f", $4/1e9}') GB"
-# Kernel memory (owner, 2026-11-22): the paged pool reached 10.4 GB after 15 days without a real restart (fast
-# startup keeps the kernel's state), and the system-managed pagefile then grew into C:'s reserve. Logged every run;
-# an ALERT line when the paged pool passes PAGED_POOL_ALERT_GB.
-PAGED_POOL_ALERT_GB=2
-mem=$(powershell.exe -NoProfile -Command '$c = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory; $p = Get-CimInstance Win32_PageFileUsage | Measure-Object AllocatedBaseSize, CurrentUsage -Sum; "{0:N2} {1:N2} {2:N2} {3:N2} {4:N2} {5:N2}" -f ($c.PoolPagedBytes/1e9), ($c.PoolNonpagedBytes/1e9), ($p[0].Sum/1000), ($p[1].Sum/1000), ($c.CommittedBytes/1e9), ($c.CommitLimit/1e9)' | tr -d '\r')
-read -r paged nonpaged pf_alloc pf_used commit limit <<<"$mem"
-echo "== kernel memory: paged pool ${paged:-?} GB, nonpaged ${nonpaged:-?} GB; pagefile ${pf_alloc:-?} GB allocated, ${pf_used:-?} GB in use; commit ${commit:-?} of ${limit:-?} GB"
-# The token objects (pool tag Toke; tools/jobs/pool_tags.ps1): about 2.0 million, 4.1 GB, before the 2026-11-22
-# restart; logged every run for the owner's 24-hour check of whether they grow with process starts.
-toke=$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$F/tools/jobs/pool_tags.ps1" -Tag Toke 2>/dev/null | tr -d '\r')
-read -r _ toke_mb toke_live <<<"$toke"
-echo "   tokens (pool tag Toke): ${toke_live:-?} live, ${toke_mb:-?} MB; Windows up since $(powershell.exe -NoProfile -Command '(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString("yyyy-MM-dd hh:mm tt")' | tr -d '\r')"
-if [ -z "${paged:-}" ]; then
-  echo "   ATTENTION: the kernel memory counters could not be read"
-elif awk -v p="${paged//,/}" -v t="$PAGED_POOL_ALERT_GB" 'BEGIN { exit !(p > t) }'; then
-  echo "   ALERT: kernel paged pool ${paged} GB is above ${PAGED_POOL_ALERT_GB} GB (a leak; a real Restart clears it)"
-fi
+# The WSL disk files on C: (owner, 2026-11-24): they only grow until compacted, so the sweep logs their sizes.
+echo "   WSL disks (vhdx on C:): $(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$F/tools/jobs/wsl_disks.ps1" 2>/dev/null | tr -d '\r')"
+# The pagefile lives on C: and once grew into its 20 GB reserve (2026-11-22), so its size is logged with C: free.
+mem=$(powershell.exe -NoProfile -Command '$c = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory; $p = Get-CimInstance Win32_PageFileUsage | Measure-Object AllocatedBaseSize, CurrentUsage -Sum; "{0:N2} {1:N2} {2:N2} {3:N2}" -f ($p[0].Sum/1000), ($p[1].Sum/1000), ($c.CommittedBytes/1e9), ($c.CommitLimit/1e9)' | tr -d '\r')
+read -r pf_alloc pf_used commit limit <<<"$mem"
+echo "   pagefile ${pf_alloc:-?} GB allocated, ${pf_used:-?} GB in use; commit ${commit:-?} of ${limit:-?} GB"
 echo "== jobctl (live)"; "$PY" -I "$F/tools/jobs/jobctl.py" status 2>&1 | grep -vE "ended|stopped" | cut -c1-140
 echo "== jobs ended in the last 2 h"
 for f in $(find "$J" -name '*.json' -mmin -120 2>/dev/null); do

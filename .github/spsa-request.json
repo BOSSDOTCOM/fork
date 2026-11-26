@@ -1,13 +1,13 @@
 {
- "commit": "3875ca9f2a105fbecc2b65e56f2cdc80ad682d68",
+ "commit": "c51114974fa190af2ad53614b0ad97ec336c5f6e",
  "draw_pairs": 1,
- "games": 1600,
- "hash": 16,
- "iteration": 13,
- "label": "spsa-g1a",
- "openings": 2062401,
- "params": "RfpMaxDepth=6.339:1.000,RfpMargin=45.000:15.000,NullMinDepth=2.011:1.000,FutilityMaxDepth=6.876:1.000,FutilityOffset=86.539:18.200,FutilityGrowth=45.485:7.500,NullSurplusPerPly=296.227:7.800,AspirationHalfWidth=11,DriftLimit=343,FollowWeight=5,HistoryKeepQuarters=3,HistorySkipMaxDepth=4,LinearBonusPerPly=140,LmpImprovingEighths=2,LmpMaxDepth=5,LmpQuietAllowance=5,LmrMinDepth=3,LmrMinMove=3,MinorDriftShare=38,QuiesceMoveCap=3,ReplyWeight=6,SeePruneMaxDepth=6,TakeWeight=4",
+ "games": 1664,
+ "hash": 64,
+ "iteration": 0,
+ "label": "spsa-g5a",
+ "openings": 2066401,
+ "params": "SingularMinDepth=6.000:1.000,SingularEntrySlack=3.000:1.000,SingularMarginPerPly=6.000:1.000,NoMoveReduceMinDepth=8.000:1.000",
  "shards": 16,
- "stage": 13,
- "tc": "8+0.08"
+ "stage": 0,
+ "tc": "40+0.4"
 }

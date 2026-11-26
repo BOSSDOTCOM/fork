@@ -220,3 +220,10 @@ two SPRTs. Step 12's existing queue is about 40 GitHub-hours (DESIGN.md
 - Whether Fork's SEE handles pins (F12).
 - Whether Fork's eval cost makes F3's gain small (X1 measures it).
 - The step-12 budget figure is the think tank's estimate.
+
+## Owner's notes
+
+- **C15, correction size in reductions and pruning (owner, 2026-11-23; post-Phase-4).** Two variants after the
+  size-based form: (a) the running variance of the correction error per table bucket; (b) a second output head trained
+  to predict |static - deep| on existing deep labels (one extra dot product). Either is used to reduce less where the
+  expected error is high.

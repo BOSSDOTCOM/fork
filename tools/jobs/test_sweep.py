@@ -27,19 +27,24 @@ class SweepScript(unittest.TestCase):
     def test_vm_goes_through_gcp_sweep(self):
         self.assertIn('tools/gcp/gcp.py" sweep', SWEEP.read_text(encoding='utf-8'))
 
-    def test_paged_pool_alert_at_2_gb(self):
-        """Owner, 2026-11-22: log the paged pool and the pagefile every run; alert above 2 GB."""
-        text = SWEEP.read_text(encoding='utf-8')
-        self.assertIn('PAGED_POOL_ALERT_GB=2\n', text)
-        self.assertIn('PoolPagedBytes', text)
-        self.assertIn('Win32_PageFileUsage', text)
-        self.assertIn('ALERT: kernel paged pool', text)
+    def test_pagefile_logged(self):
+        """The pagefile sits on C: and once grew into its reserve: logged with C: free every run."""
+        self.assertIn('Win32_PageFileUsage', SWEEP.read_text(encoding='utf-8'))
 
-    def test_token_count_logged(self):
-        """Owner, 2026-11-22: the Toke count every run, for the 24-hour process-start check."""
+    def test_no_token_or_paged_pool_checks(self):
+        """Owner, 2026-11-24: the token leak gets no restart rule; the token and paged-pool checks are gone."""
         text = SWEEP.read_text(encoding='utf-8')
-        self.assertIn('pool_tags.ps1" -Tag Toke', text)
-        self.assertTrue((HERE / 'pool_tags.ps1').is_file())
+        for gone in ('PAGED_POOL_ALERT_GB', 'PoolPagedBytes', 'pool_tags.ps1', 'Toke'):
+            self.assertNotIn(gone, text)
+        self.assertFalse((HERE / 'pool_tags.ps1').exists())
+
+    def test_wsl_disk_sizes_logged(self):
+        """Owner, 2026-11-24: track C: and the Ubuntu vhdx size in the sweep; the distros come from the registry."""
+        text = SWEEP.read_text(encoding='utf-8')
+        self.assertIn('tools/jobs/wsl_disks.ps1"', text)
+        ps1 = (HERE / 'wsl_disks.ps1').read_text(encoding='utf-8')
+        self.assertIn('CurrentVersion\\Lxss', ps1)
+        self.assertNotRegex(ps1, r'(?i)c:\\users\\[a-z0-9]')   # no user path written in
 
 
 class GcpSweepWanted(unittest.TestCase):

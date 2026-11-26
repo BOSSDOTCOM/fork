@@ -780,35 +780,46 @@ TEST_CASE("search", "a TT upper bound cuts when it is at or below alpha, never a
 }
 
 // Audit-1 Q-7: the null move's zugzwang guard (no null move for a side with
-// only pawns: pawn endings are where passing is most often best). Dropping
-// it was caught only by bench parity (mutant M18b). Two constructed king and
-// pawn endings where the depth-9 search with the guard keeps the tables'
-// result and the search without it does not (found by comparing the two
-// builds over random pawn endings). The moves' results are from the lichess
+// only pawns: pawn endings are where passing is most often best). Mutant M18b
+// removes it (tests/mutants/m18b-null-zugzwang-guard.patch, applied only on
+// demand). Without the guard, elementary_mates and bench parity fail too
+// (checked 2026-11-25); this case fails on the guard alone.
+//
+// Two king and pawn endings found by tools/guard_positions/find_guard_positions.py
+// (seeds 20261125 and 20261126; its README), each with one move that keeps the
+// tables' result, from the local Syzygy 3-4-5 WDL tables and the lichess
 // tablebase API (https://tablebase.lichess.ovh/standard?fen=..., fetched
-// 2026-10-27; Syzygy WDL, the fifty-move rule counted):
-// - 8/1p6/8/6k1/8/8/4P3/7K b: a win for Black only by b7b5 (b7b6 and every
-//   king move draw);
-// - 8/3p4/8/6P1/3k3p/5K2/8/8 b: a draw only by d4d5 or d4e5 (every other
-//   move loses).
-TEST_CASE("search", "no null move without pieces: two pawn endings keep their tablebase result") {
-  Fixture fx;
-  // The two endings were found with B9's LMP use off (it did not exist yet);
-  // with it on, the first ending's depth-9 search plays g5f4 with the guard
-  // in place (2026-11-13), so the case pins it off: it tests the guard on
-  // the trees it was built for.
-  fx.searcher->switches.use_improving_lmp = false;
-  Position pos;
-  SearchResult r = fx.search("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1", 9);
-  CHECK(pos.set_fen("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1"));
-  CHECK_MSG(pos.move_to_uci(r.best) == "b7b5",
-            "played " << pos.move_to_uci(r.best) << " (score " << r.score << ")");
-  fx.store.clear();
-  fx.searcher->clear_history();
-  r = fx.search("8/3p4/8/6P1/3k3p/5K2/8/8 b - - 0 1", 9);
-  CHECK(pos.set_fen("8/3p4/8/6P1/3k3p/5K2/8/8 b - - 0 1"));
-  const std::string played = pos.move_to_uci(r.best);
-  CHECK_MSG(played == "d4d5" || played == "d4e5", "played " << played << " (score " << r.score << ")");
+// 2026-11-25; the two agree):
+// - 8/8/8/8/4k1P1/8/4pKP1/8 w: White wins only by g2g3 (f2e2, f2e1, g4g5
+//   draw; f2g3, f2g1 lose);
+// - 8/8/8/2pP2p1/8/8/8/4k2K b: Black wins only by e1f2 (e1f1, g5g4, c5c4
+//   draw; e1e2, e1d2, e1d1 lose).
+// Each is searched to a node budget, not a depth (the depth-9 case of
+// 2026-10-27 stopped testing the guard once pruning constants moved): 25,000
+// and 155,000 nodes, set (owner's rule, 2026-11-25) over the untuned base
+// 3875ca9f, the final retune's candidate c5111497 and its LMP arm 5d4682ee.
+// The guarded engine plays the move at the budget in all three (worst need
+// 10,887 and 77,065 nodes); M18b still plays f2e2 and c5c4 at four times it.
+// The engine's default switches: improving LMP stays on (nothing needs it off).
+TEST_CASE("search", "the zugzwang guard: two pawn endings keep their tablebase move within a node budget") {
+  struct Ending {
+    const char* fen;
+    const char* move;
+    std::uint64_t nodes;
+  };
+  const Ending endings[] = {{"8/8/8/8/4k1P1/8/4pKP1/8 w - - 0 1", "g2g3", 25000},
+                            {"8/8/8/2pP2p1/8/8/8/4k2K b - - 0 1", "e1f2", 155000}};
+  for (const Ending& e : endings) {
+    Fixture fx;
+    Position pos;
+    CHECK(pos.set_fen(e.fen));
+    Position root = pos;
+    SearchQuota limits;
+    limits.nodes = e.nodes;
+    const SearchResult r = fx.search(root, limits);
+    CHECK_MSG(pos.move_to_uci(r.best) == e.move, e.fen << ": played " << pos.move_to_uci(r.best) << " (score "
+                                                     << r.score << ", " << r.nodes << " nodes)");
+  }
 }
 
 // DESIGN.md §5.2 deliverable 4: quiescence values on constructed exchanges,
