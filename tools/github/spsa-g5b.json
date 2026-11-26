@@ -1,0 +1,26 @@
+{
+ "source": "The final retune, G5b (the LMR divisor, LMR history and ProbCut), the LTC pass, lane B (owner 2026-11-22, DESIGN.md decisions log item 8: G5 split over the two lanes, G5b the LMR divisor, history and ProbCut; item 7: LmrDivisorTenths in the LTC pass; final-retune-expansion-2026-11-15.md section 3.1's G5 row, class (b) of section 1.2). Tune mode, at LTC on the STC-tuned engine. The tuned commit: the validated candidate c51114974fa190af2ad53614b0ad97ec336c5f6e (branch retune/final-rfp30: every STC group's tuned values, HistoryKeepQuarters 4, LmrMinDepth 3, NullMinDepth 2, RfpMargin 30; bench 3,131,668 / a13b19084ec74fcf), whose defaults ARE the STC pass's values, so no carry: both sides play its defaults outside the group. Starts and bounds: the table's defaults and ranges at the tuned commit (src/tune/params.hpp; none given here, so init reads them at the commit; at c5111497: LmrDivisorTenths 45 (23-90, 3; a placeholder), LmrHistoryPerPly 10000 (5000-20000, 750), CaptureProbeMinDepth 9 (4-18, 1), CaptureProbeReduction 5 (2-10, 1), CaptureProbeMargin 80 (60-200, 6)). c: the STC groups' rule (the screen's, tools/github/spsa-s1-screen.json): spsa_calibrate.py's 2026-11-08 values where a firing counter exists (none of these five has one), else the declared fallback (owner 2026-11-22): 1 unit for a step-1 parameter, 2 table steps otherwise: LmrDivisorTenths 6, LmrHistoryPerPly 1500, CaptureProbeMargin 12, the step-1 three 1. Settings (final-retune-expansion-2026-11-15.md section 3.2, owner 2026-11-22): loss_budget 0.5 Elo per group, pair_sd 0.1845 (LTC, the median of 14 LTC SPRTs), iterations max(6, ceil(1.9 p / 1.22)) = 8 for p = 5 (section 5.2's split row: 7 + 8) of 1,664 games (16 shards x 104, 832 pairs), stability_offset 10% of the run's pairs (6,656), alpha 0.602, c fixed, steps clamped to 0.5 c, LTC 40+0.4, Hash 64 (the LTC tests' hash, DESIGN.md section 5.2), Threads 1. Openings: the tuning reserve after the STC groups (spsa-g1a's opening_limit 2,066,400), G5a's then G5b's shares consecutive, each its planned pairs plus 3,328 spare lines (4 abandoned LTC stages of 832), opening_limit its share's last line. No carry.",
+ "params": [
+  {"name": "LmrDivisorTenths", "c": 6},
+  {"name": "LmrHistoryPerPly", "c": 1500},
+  {"name": "CaptureProbeMinDepth", "c": 1},
+  {"name": "CaptureProbeReduction", "c": 1},
+  {"name": "CaptureProbeMargin", "c": 12}
+ ],
+ "fixed": {},
+ "iterations": 8,
+ "games": 1664,
+ "shards": 16,
+ "draw_pairs": 1,
+ "tc": "40+0.4",
+ "hash": 64,
+ "loss_budget": 0.5,
+ "pair_sd": 0.1845,
+ "gain_exponent": 0.602,
+ "stability_offset": 665,
+ "clamp_c": 0.5,
+ "c_decay": 0.0,
+ "average_tail": 0.3,
+ "opening_reserve": 2075553,
+ "opening_limit": 2085536
+}
