@@ -4,9 +4,9 @@
  "games": 1664,
  "hash": 64,
  "iteration": 0,
- "label": "spsa-g5a",
- "openings": 2066401,
- "params": "SingularMinDepth=6.000:1.000,SingularEntrySlack=3.000:1.000,SingularMarginPerPly=6.000:1.000,NoMoveReduceMinDepth=8.000:1.000",
+ "label": "spsa-g5b",
+ "openings": 2075553,
+ "params": "LmrDivisorTenths=45.000:6.000,LmrHistoryPerPly=10000.000:1500.000,CaptureProbeMinDepth=9.000:1.000,CaptureProbeReduction=5.000:1.000,CaptureProbeMargin=80.000:12.000",
  "shards": 16,
  "stage": 0,
  "tc": "40+0.4"
